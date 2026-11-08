@@ -59,7 +59,7 @@ async function authorize(request: HttpRequest): Promise<HttpResponse | undefined
 
 function directLocal(_request: HttpRequest): boolean {
   const peer = peerIdentity();
-  return Boolean(peer?.direct && isLocalOrTailscaleIp(peer.clientIp));
+  return Boolean(peer && (peer.direct || peer.localPairing) && isLocalOrTailscaleIp(peer.clientIp));
 }
 
 async function dispatch(request: HttpRequest, context: Context) {

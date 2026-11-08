@@ -42,6 +42,7 @@ ${realip?'    real_ip_header X-Forwarded-For;\n    real_ip_recursive on;':''}
         proxy_set_header CF-Connecting-IP "";
         proxy_set_header X-HomeStream-Socket "";
         proxy_set_header X-HomeStream-Proof "";
+        proxy_set_header X-HomeStream-Local-Pairing "";
         proxy_buffering off;
         proxy_request_buffering off;
         proxy_read_timeout 180s;

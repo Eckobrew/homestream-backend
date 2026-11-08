@@ -25,6 +25,7 @@ export function createApp() {
   app.addHook('onRequest', async (request, reply) => { reply.header('x-request-id', randomUUID()); apiMetrics.requests++; (request as unknown as { started: number }).started = Date.now(); });
   app.addHook('onResponse', async (request, reply) => { apiMetrics.totalDurationMs += Date.now() - (request as unknown as { started: number }).started; if (reply.statusCode >= 500) apiMetrics.errors++; });
   const trustedProxies = (process.env.HOMESTREAM_TRUSTED_PROXIES || '').split(',').map(ip => ip.trim()).filter(Boolean);
+  const allowProxyPairing = process.env.HOMESTREAM_ALLOW_PROXY_PAIRING === 'true';
   // Validate proxy configuration before listening.
   resolvePeer('127.0.0.1', new Headers(), trustedProxies);
   app.addHook('preClose', async () => { shutdownConversions(); });
@@ -54,7 +55,7 @@ export function createApp() {
         for (const [name, value] of Object.entries(incoming.headers)) {
           if (value !== undefined) headers.set(name, Array.isArray(value) ? value.join(', ') : value);
         }
-        const peer = resolvePeer(incoming.raw.socket.remoteAddress || '', headers, trustedProxies);
+        const peer = resolvePeer(incoming.raw.socket.remoteAddress || '', headers, trustedProxies, allowProxyPairing);
         headers.set('x-request-id',String(reply.getHeader('x-request-id')));
         headers.delete('x-homestream-socket'); headers.delete('x-homestream-proof');
         const controller = new AbortController();

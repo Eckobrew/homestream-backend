@@ -37,6 +37,16 @@ test('standalone API keeps compatibility, authorization, discovery and direct pa
     const throughProxy = await app.inject({ url: '/api/mobile/v1/auth/pair', method: 'POST', remoteAddress: '172.28.0.2', headers: { 'x-forwarded-for': '192.168.1.9' }, payload: { deviceId: 'bad-device' } });
     assert.equal(throughProxy.statusCode, 403);
     assert.equal((await app.inject({ url: '/api/mobile/v1/discovery', method: 'HEAD' })).body, '');
+    process.env.HOMESTREAM_ALLOW_PROXY_PAIRING = 'true';
+    const pairingApp = createApp();
+    try {
+      const headers = { 'x-forwarded-for': '192.168.1.9', 'x-homestream-local-pairing': '1' };
+      const request = { url: '/api/mobile/v1/auth/pair', method: 'POST' as const, remoteAddress: '172.28.0.2', headers, payload: { deviceId: 'lan-through-gateway' } };
+      assert.equal((await pairingApp.inject(request)).statusCode, 200);
+      assert.equal((await pairingApp.inject({ ...request, headers: { ...headers, 'x-forwarded-for': '203.0.113.9' } })).statusCode, 403);
+      assert.equal((await pairingApp.inject({ ...request, remoteAddress: '203.0.113.9' })).statusCode, 403);
+      assert.equal((await app.inject(request)).statusCode, 403, 'Default app does not permit asserted gateway pairing');
+    } finally { await pairingApp.close(); delete process.env.HOMESTREAM_ALLOW_PROXY_PAIRING; }
     const spec = (await app.inject('/openapi.json')).json();
     assert.equal(spec.info.version, '1.1.0');
     assert.ok(spec.paths['/api/v1/media/{id}']);

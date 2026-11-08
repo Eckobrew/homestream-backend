@@ -64,3 +64,9 @@ After checking out tested revisions in both repositories, `scripts/update-lxc.sh
 6. On failure, stop the new backend, restore the saved configuration/image and data backup, and start the old deployment. Never run both writers simultaneously.
 
 The Docker prerelease was deployed and validated in LXC 111 on 8 November 2026 with local fixes; see [Docker upgrade fixes](docker-upgrade-fixes.md). Main image publication is now automated; deployments remain deliberate.
+
+## Optional Android pairing through the gateway
+
+For clients restricted to discovery/pairing on port 3000, the backend can opt in with `HOMESTREAM_ALLOW_PROXY_PAIRING=true`. Only an explicitly trusted gateway socket can assert `X-HomeStream-Local-Pairing: 1`, with exactly one valid forwarded client address; that client must still be a local address. Default deployments reject proxied pairing.
+
+The gateway MUST overwrite this header on every API request. Set it to `1` only for direct connections from the verified home LAN to the LAN IP host, with no incoming forwarding headers, excluding every upstream reverse-proxy socket. Keep it empty for public hostnames, upstream proxies and all other requests. Use the original socket (`$realip_remote_addr`), not the client address rewritten by nginx realip, for this decision. Do not enable the backend option with an unconfigured gateway or trust broad network ranges as proxies.

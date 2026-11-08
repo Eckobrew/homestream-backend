@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { HttpRequest, RequestCookies } from './http';
-export type PeerIdentity = { clientIp: string; socketIp: string; direct: boolean };
+export type PeerIdentity = { clientIp: string; socketIp: string; direct: boolean; localPairing?: boolean };
 const context = new AsyncLocalStorage<{ request: HttpRequest; peer: PeerIdentity }>();
 export function runRequest<T>(request: HttpRequest, peer: PeerIdentity, action: () => T): T {
   return context.run({ request, peer }, action);

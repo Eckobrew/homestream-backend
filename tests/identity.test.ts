@@ -18,3 +18,14 @@ test('trusted proxies resolve from the right and never permit direct pairing', (
   assert.equal(resolvePeer('172.28.0.2', new Headers(), ['172.28.0.2']).clientIp, '');
   assert.equal(resolvePeer('172.28.0.2', new Headers({ 'x-forwarded-for': 'bad' }), ['172.28.0.2']).clientIp, '');
 });
+
+test('gateway pairing assertion requires explicit opt-in, a trusted socket and one valid client hop', () => {
+  const h = new Headers({ 'x-forwarded-for': '192.168.1.9', 'x-homestream-local-pairing': '1' });
+  assert.equal(resolvePeer('172.28.0.2', h, ['172.28.0.2']).localPairing, undefined);
+  assert.equal(resolvePeer('172.28.0.2', h, ['172.28.0.2'], true).localPairing, true);
+  assert.equal(resolvePeer('203.0.113.9', h, ['172.28.0.2'], true).localPairing, undefined);
+  h.set('x-forwarded-for', '192.168.1.9, 203.0.113.9');
+  assert.equal(resolvePeer('172.28.0.2', h, ['172.28.0.2'], true).localPairing, undefined);
+  h.set('x-forwarded-for', 'bad');
+  assert.equal(resolvePeer('172.28.0.2', h, ['172.28.0.2'], true).localPairing, undefined);
+});
