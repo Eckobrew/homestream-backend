@@ -1,3 +1,4 @@
+import { withProfileTransaction } from './storage';
 import { ratingForBirthDate } from './parental-age';
 import { isKids, KIDS_LIMITS, KidsRating, parentPinConfigured, requireParentPin } from './parental-store';
 import crypto from 'crypto';
@@ -13,7 +14,7 @@ let writes: Promise<unknown> = Promise.resolve();
 
 /** Serialize profile edits so simultaneous phone/TV changes do not overwrite one another. */
 export function manageProfile(body: Record<string, unknown>, ownUserId?: string, ownName?: string): Promise<{ profile?: UserProfile; passwordMode?: string }> {
-  const result = writes.then(async () => {
+  const result = writes.then(() => withProfileTransaction(async () => {
     const profiles = await getHomeflixProfiles();
     const requestedKids = body.isKids === true;
     const requestedRating = requestedKids ? ratingForBirthDate(body.kidsDateOfBirth) : null;
@@ -96,7 +97,7 @@ export function manageProfile(body: Record<string, unknown>, ownUserId?: string,
     profile.isKids = requestedKids; profile.kidsRating = requestedKids ? requestedRating as KidsRating : undefined;
     await saveHomeflixProfiles([...profiles, profile]);
     return { profile, passwordMode };
-  });
+  }));
   writes = result.then(() => undefined, () => undefined);
   return result;
 }

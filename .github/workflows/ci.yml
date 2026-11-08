@@ -1,0 +1,37 @@
+name: Backend
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: npm run lint
+      - run: npm run build
+      - run: npm test
+      - run: npm run test:mobile
+      - run: npm run test:torrent
+      - run: npm run test:playback
+      - run: npm run contract:check
+      - run: npm run contract:test
+      - run: npm run contract:kotlin
+      - run: git diff --exit-code -- contract/kotlin
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: ./gradlew compileKotlin --no-daemon
+        working-directory: contract/kotlin
+      - run: npm run contract:pack
+      - uses: actions/upload-artifact@v4
+        with:
+          name: homestream-api
+          path: '*.tgz'
+      - run: docker build -t homestream-backend:test .

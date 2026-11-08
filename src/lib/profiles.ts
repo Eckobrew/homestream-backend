@@ -1,45 +1,24 @@
+import { readState, writeState } from '@/state/database';
+import { log } from '@/log';
+import { withProfileTransaction } from './storage';
 import { ratingForBirthDate } from './parental-age';
 import { getServerConfig } from './config';
-import fs from 'fs';
-import path from 'path';
 import { UserProfile } from '@/types';
 import { JellyfinClient } from './jellyfin';
 import { PROFILE_PALETTES, getInitials } from './profile-constants';
 
 export { PROFILE_PALETTES, getInitials };
 
-export function getProfilesFilePath(): string {
-  const custom = process.env.DATA_DIR;
-  let targetDir = custom || path.join(process.cwd(), 'data');
-
-  try {
-    if (!fs.existsSync(targetDir)) {
-      fs.mkdirSync(targetDir, { recursive: true });
-    }
-    fs.accessSync(targetDir, fs.constants.W_OK);
-    return path.join(targetDir, 'profiles.json');
-  } catch {
-    if (custom) throw new Error('Profile storage is unavailable; refusing temporary fallback');
-    const fallbackDir = path.join('/tmp', 'homeflix-data');
-    if (!fs.existsSync(fallbackDir)) {
-      fs.mkdirSync(fallbackDir, { recursive: true });
-    }
-    return path.join(fallbackDir, 'profiles.json');
-  }
-}
-
 /**
  * Load decoupled HomeFlix profiles from persistent storage.
  * Returns an empty array on first run when no profiles have been created or imported yet.
  */
 let birthdayUpdate: Promise<void> | undefined;
-export async function getHomeflixProfiles(): Promise<UserProfile[]> {
-  const filePath = getProfilesFilePath();
+async function getHomeflixProfilesInternal(): Promise<UserProfile[]> {
 
   try {
-    if (fs.existsSync(filePath)) {
-      const content = fs.readFileSync(filePath, 'utf-8');
-      const parsed: UserProfile[] = JSON.parse(content);
+    {
+      const parsed = readState<UserProfile[]>('profiles', []);
       if (!Array.isArray(parsed) || parsed.some(p => !p || typeof p.id !== 'string' || (p.isKids && !['U', 'PG', '12', '15', '18'].includes(p.kidsRating || '')))) throw new Error('Invalid profile storage');
       if (Array.isArray(parsed)) {
         if (birthdayUpdate) { await birthdayUpdate; return getHomeflixProfiles(); }
@@ -61,7 +40,7 @@ export async function getHomeflixProfiles(): Promise<UserProfile[]> {
       }
     }
   } catch (err) {
-    console.error('Failed reading profiles.json:', err);
+    log.error('Failed reading profile state:', err);
     throw new Error('Profile storage unavailable');
   }
 
@@ -72,10 +51,7 @@ export async function getHomeflixProfiles(): Promise<UserProfile[]> {
  * Save full list of profiles to disk.
  */
 export async function saveHomeflixProfiles(profiles: UserProfile[]): Promise<void> {
-  const filePath = getProfilesFilePath();
-  const temporary = `${filePath}.${process.pid}.tmp`;
-  fs.writeFileSync(temporary, JSON.stringify(profiles, null, 2), { encoding: 'utf-8', mode: 0o600 });
-  fs.renameSync(temporary, filePath);
+  writeState('profiles', profiles);
 }
 
 /**
@@ -87,7 +63,7 @@ export async function getAvailableJellyfinUsers(): Promise<UserProfile[]> {
   try {
     return await jellyfin.getUsers();
   } catch (err) {
-    console.error('Failed fetching available Jellyfin users:', err);
+    log.error('Failed fetching available Jellyfin users:', err);
     return [];
   }
 }
@@ -95,7 +71,7 @@ export async function getAvailableJellyfinUsers(): Promise<UserProfile[]> {
 /**
  * Import selected profile(s) from Jellyfin into HomeFlix.
  */
-export async function importProfilesFromJellyfin(userIds: string[]): Promise<UserProfile[]> {
+async function importProfilesFromJellyfinInternal(userIds: string[]): Promise<UserProfile[]> {
   if (!Array.isArray(userIds) || userIds.length === 0) {
     return await getHomeflixProfiles();
   }
@@ -133,7 +109,7 @@ export async function importProfilesFromJellyfin(userIds: string[]): Promise<Use
  * Add a new decoupled profile to HomeFlix.
  * If user does not exist in Jellyfin, creates them in Jellyfin via /Users/New.
  */
-export async function addHomeflixProfile(
+async function addHomeflixProfileInternal(
   name: string,
   paletteIndex?: number
 ): Promise<UserProfile> {
@@ -169,7 +145,7 @@ export async function addHomeflixProfile(
         }
       }
     } catch (e) {
-      console.warn('Jellyfin user sync warning during profile creation:', e);
+      log.warn('Jellyfin user sync warning during profile creation:', e);
     }
   }
 
@@ -200,7 +176,7 @@ export async function addHomeflixProfile(
 /**
  * Delete a profile from HomeFlix profiles.
  */
-export async function deleteHomeflixProfile(profileId: string): Promise<boolean> {
+async function deleteHomeflixProfileInternal(profileId: string): Promise<boolean> {
   const currentProfiles = await getHomeflixProfiles();
   if (currentProfiles.length <= 1) {
     // Prevent deleting the last profile
@@ -225,3 +201,11 @@ export async function resolveJellyfinUserId(profileId?: string): Promise<string>
   const matched = currentProfiles.find((p) => p.id === profileId);
   return matched?.jellyfinUserId || profileId;
 }
+
+export function getHomeflixProfiles(): Promise<UserProfile[]> { return withProfileTransaction(() => getHomeflixProfilesInternal()); }
+
+export function importProfilesFromJellyfin(userIds: string[]): Promise<UserProfile[]> { return withProfileTransaction(() => importProfilesFromJellyfinInternal(userIds)); }
+
+export function addHomeflixProfile(name: string, paletteIndex?: number): Promise<UserProfile> { return withProfileTransaction(() => addHomeflixProfileInternal(name, paletteIndex)); }
+
+export function deleteHomeflixProfile(profileId: string): Promise<boolean> { return withProfileTransaction(() => deleteHomeflixProfileInternal(profileId)); }

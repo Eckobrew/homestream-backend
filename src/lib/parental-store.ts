@@ -1,25 +1,26 @@
+import { readState, writeState } from '@/state/database';
 import crypto from 'crypto';
-import fs from 'fs';
-import path from 'path';
 import { promisify } from 'util';
-import { getProfilesFilePath, getHomeflixProfiles } from './profiles';
+import { getHomeflixProfiles } from './profiles';
 import { UserProfile } from '@/types';
 
 export const KIDS_LIMITS = { U: 0, PG: 8, '12': 12, '15': 15, '18': 18 } as const;
 export type KidsRating = keyof typeof KIDS_LIMITS;
 const scrypt = promisify(crypto.scrypt);
-const file = () => path.join(path.dirname(getProfilesFilePath()), 'parental-controls.json');
 type Controls = { salt: string; hash: string; policies: Record<string, unknown> };
 let failedAttempts: number[] = [];
-function load(): Controls | null { try { return JSON.parse(fs.readFileSync(file(), 'utf8')); } catch (e) { if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null; throw e; } }
-function save(value: Controls) {
-  const tmp = `${file()}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(value), { mode: 0o600 }); fs.renameSync(tmp, file());
+function load(): Controls | null { return readState<Controls | null>('parental', null); }
+function save(value: Controls) { writeState('parental', value); }
+function storedKidsProfiles(): boolean {
+  const profiles = readState<UserProfile[]>('profiles', []);
+  if (!Array.isArray(profiles)) throw new Error('Invalid profile storage');
+  return profiles.some(isKids);
 }
 export function parentPinConfigured() { return Boolean(load()?.hash); }
 async function verifyParentPin(pin: unknown, initialize = false): Promise<void> {
   const state = load();
-  if (!state && (await getHomeflixProfiles()).some(isKids)) throw new Error('Parent PIN storage unavailable; ask the server administrator to restore it');
+  // Read the stored policy without taking the profile transaction lock while a PIN check is queued.
+  if (!state && storedKidsProfiles()) throw new Error('Parent PIN storage unavailable; ask the server administrator to restore it');
   if (!state && !initialize) return;
   if (typeof pin !== 'string' || !/^\d{4,8}$/.test(pin)) throw new Error(state ? 'Enter the parent PIN' : 'Set a parent PIN of 4–8 digits');
   const now = Date.now(); failedAttempts = failedAttempts.filter(time => now - time < 15 * 60 * 1000);

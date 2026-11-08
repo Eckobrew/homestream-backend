@@ -40,3 +40,14 @@ next-env.d.ts
 /data/
 
 .next-mobile-test/
+
+# Standalone backend build and contract artifacts
+dist/
+*.tgz
+
+contract/kotlin/.gradle/
+contract/kotlin/build/
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm

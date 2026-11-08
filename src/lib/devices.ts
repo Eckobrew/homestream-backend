@@ -1,135 +1,37 @@
-import fs from 'fs';
-import path from 'path';
-import crypto from 'crypto';
-
+import crypto from 'node:crypto';
+import { readDevices, writeDevices, deviceHash } from '@/state/database';
 export interface PairedDevice {
-  token: string;
-  deviceId: string;
-  deviceName: string;
-  client: string;
-  pairedAt: string;
-  lastSeen: string;
-  pairedLocally: boolean;
-  activeProfileId?: string;
+  deviceId: string; deviceName: string; client: string; pairedAt: string; lastSeen: string;
+  pairedLocally: boolean; activeProfileId?: string;
 }
-
-function getDevicesFilePath(): string {
-  const custom = process.env.DATA_DIR;
-  const targetDir = custom || path.join(process.cwd(), 'data');
-
-  try {
-    if (!fs.existsSync(targetDir)) {
-      fs.mkdirSync(targetDir, { recursive: true });
-    }
-    fs.accessSync(targetDir, fs.constants.W_OK);
-    return path.join(targetDir, 'devices.json');
-  } catch {
-    if (custom) throw new Error('Device storage is unavailable; refusing temporary fallback');
-    const fallbackDir = path.join('/tmp', 'homeflix-data');
-    if (!fs.existsSync(fallbackDir)) {
-      fs.mkdirSync(fallbackDir, { recursive: true });
-    }
-    return path.join(fallbackDir, 'devices.json');
-  }
-}
-
-export function loadDevices(): Record<string, PairedDevice> {
-  const filePath = getDevicesFilePath();
-  try {
-    if (fs.existsSync(filePath)) {
-      const content = fs.readFileSync(filePath, 'utf-8');
-      return JSON.parse(content) || {};
-    }
-  } catch (e) {
-    console.error('Failed reading devices.json:', e);
-    throw new Error('Device storage unavailable');
-  }
-  return {};
-}
-
-export function saveDevices(devices: Record<string, PairedDevice>): void {
-  const filePath = getDevicesFilePath();
-  try {
-    const tmp = `${filePath}.tmp.${Date.now()}`;
-    fs.writeFileSync(tmp, JSON.stringify(devices, null, 2), { encoding: 'utf-8', mode: 0o600 });
-    fs.renameSync(tmp, filePath);
-  } catch (e) {
-    console.error('Failed saving devices.json:', e);
-    throw new Error('Device storage unavailable');
-  }
-}
-
-export function registerDevice(
-  deviceId: string,
-  deviceName: string,
-  client = 'android',
-  pairedLocally = true,
-  forceNew = false
-): PairedDevice {
-  const devices = loadDevices();
-  const cleanId = (deviceId || '').trim();
-
-  // If this device was already paired, update its record
-  for (const dev of Object.values(devices)) {
-    if (!forceNew && dev.deviceId === cleanId && cleanId.length > 0) {
-      dev.deviceName = deviceName || dev.deviceName;
-      dev.client = client;
-      dev.pairedLocally = pairedLocally;
-      dev.lastSeen = new Date().toISOString();
-      saveDevices(devices);
-      return dev;
-    }
-  }
-
-  // Generate a cryptographically secure token
+const valid = (token: string) => /^hst_dev_[a-f0-9]{48}$/.test(token);
+export const loadDevices = () => readDevices<PairedDevice>();
+export const saveDevices = (devices: Record<string, PairedDevice>) => writeDevices(devices);
+export function registerDevice(deviceId: string, deviceName: string, client = 'android', pairedLocally = true, _forceNew = false): PairedDevice & { token: string } {
+  // Raw credentials are returned once. Re-pairing issues a fresh credential.
   const token = `hst_dev_${crypto.randomBytes(24).toString('hex')}`;
   const now = new Date().toISOString();
-  const newDevice: PairedDevice = {
-    token,
-    deviceId: cleanId || crypto.randomUUID(),
-    deviceName: deviceName || 'HomeStream Mobile Device',
-    client,
-    pairedAt: now,
-    lastSeen: now,
-    pairedLocally,
-  };
-
-  devices[token] = newDevice;
-  saveDevices(devices);
-  return newDevice;
-}
-
-export function isValidDeviceToken(token: string): boolean {
-  if (!token || typeof token !== 'string' || !/^hst_dev_[a-f0-9]{48}$/.test(token)) return false;
+  const device: PairedDevice = { deviceId: deviceId.trim() || crypto.randomUUID(), deviceName: deviceName || 'HomeStream Mobile Device', client, pairedAt: now, lastSeen: now, pairedLocally };
   const devices = loadDevices();
-  const dev = Object.prototype.hasOwnProperty.call(devices, token) ? devices[token] : undefined;
-  if (dev && dev.token === token && dev.client !== 'android-jellyfin') {
-    // Avoid rewriting device credentials for every image or progress request.
-    if (Date.now() - Date.parse(dev.lastSeen) > 60000) {
-      dev.lastSeen = new Date().toISOString();
-      saveDevices(devices);
-    }
-    return true;
-  }
-  return false;
+  devices[deviceHash(token)] = device; saveDevices(devices);
+  return { ...device, token };
 }
-
-/** Household profiles belong only to devices provisioned by direct local pairing. */
-export function isLocallyPairedDeviceToken(token: string): boolean {
-  if (!/^hst_dev_[a-f0-9]{48}$/.test(token)) return false;
-  const devices = loadDevices();
-  const device = Object.prototype.hasOwnProperty.call(devices, token) ? devices[token] : undefined;
-  return Boolean(device && device.token === token && device.pairedLocally === true && device.client !== 'android-jellyfin');
-}
-
 export function registeredDevice(token: string): PairedDevice | undefined {
-  if (!/^hst_dev_[a-f0-9]{48}$/.test(token)) return;
-  const devices = loadDevices();
-  const device = Object.hasOwn(devices, token) ? devices[token] : undefined;
-  return device?.token === token && device.client !== 'android-jellyfin' ? device : undefined;
+  if (!valid(token)) return;
+  const device = loadDevices()[deviceHash(token)];
+  return device?.client !== 'android-jellyfin' ? device : undefined;
 }
+export function isValidDeviceToken(token: string): boolean {
+  const device = registeredDevice(token);
+  if (!device) return false;
+  if (Date.now() - Date.parse(device.lastSeen) > 60000) {
+    const devices = loadDevices(); device.lastSeen = new Date().toISOString(); devices[deviceHash(token)] = device; saveDevices(devices);
+  }
+  return true;
+}
+export const isLocallyPairedDeviceToken = (token: string) => registeredDevice(token)?.pairedLocally === true;
 export function selectDeviceProfile(token: string, profileId: string) {
-  const devices = loadDevices();
-  if (!Object.hasOwn(devices, token) || devices[token].token !== token) throw new Error('Device not registered');
-  devices[token].activeProfileId = profileId; saveDevices(devices);
+  const device = registeredDevice(token);
+  if (!device) throw new Error('Device not registered');
+  const devices = loadDevices(); device.activeProfileId = profileId; devices[deviceHash(token)] = device; saveDevices(devices);
 }

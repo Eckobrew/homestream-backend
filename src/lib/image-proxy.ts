@@ -1,7 +1,8 @@
+import { fetch } from '@/upstream';
 import { getHomeflixProfiles } from './profiles';
 import { isKids } from './parental-store';
 import { activeProfile, guardKidsRequest } from './parental-controls';
-import { NextRequest } from 'next/server';
+import { HttpRequest } from '@/http';
 import { getServerConfig } from './config';
 import { requestJellyfinSession } from './jellyfin-session';
 
@@ -27,7 +28,7 @@ async function image(url: string, headers: Record<string, string> = {}): Promise
 }
 
 /** Public image-only proxy for native artwork and the default Cast receiver. */
-export async function handleImage(request: NextRequest): Promise<Response> {
+export async function handleImage(request: HttpRequest): Promise<Response> {
   if ((await getHomeflixProfiles()).some(isKids)) {
     try {
       const profile = await activeProfile(request);

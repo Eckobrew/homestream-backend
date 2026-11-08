@@ -1,3 +1,5 @@
+import { fetch, registerDependency } from '@/upstream';
+import { log } from '@/log';
 import { requestParentalProfile } from './parental-runtime';
 import { backupPolicy, backedUpPolicy, KidsRating } from './parental-store';
 import { TvVideoCapability } from './tv-playback-profile';
@@ -81,7 +83,7 @@ export interface JellyfinItem {
 }
 
 export class JellyfinClient {
-  private url: string;
+  readonly url: string;
   private apiKey: string;
   private userId: string;
 
@@ -89,11 +91,12 @@ export class JellyfinClient {
     const config = getServerConfig();
     this.url = (url || config.jellyfinUrl).replace(/\/+$/, '');
     const session = !url && !apiKey ? requestJellyfinSession() : null;
+    registerDependency('jellyfin', this.url);
     this.apiKey = session?.accessToken || apiKey || config.jellyfinApiKey;
     this.userId = requestParentalProfile()?.jellyfinUserId || session?.id || userId || config.jellyfinUserId;
   }
 
-  private fetch(input: string, options: RequestInit & { next?: { revalidate?: number } } = {}) {
+  private fetch(input: string, options: RequestInit = {}) {
     return fetch(input, { ...options, redirect: 'error', signal: options.signal || AbortSignal.timeout(15000) });
   }
 
@@ -101,7 +104,7 @@ export class JellyfinClient {
     return Boolean(this.url && this.apiKey);
   }
 
-  private getHeaders(): Record<string, string> {
+  getHeaders(): Record<string, string> {
     return {
       'Accept': 'application/json',
       'X-Emby-Token': this.apiKey,
@@ -117,8 +120,7 @@ export class JellyfinClient {
     try {
       const res = await this.fetch(`${this.url}/System/Info/Public`, {
         headers: this.getHeaders(),
-        next: { revalidate: 0 },
-      });
+        });
 
       if (!res.ok) {
         return { success: false, error: `HTTP ${res.status}: ${res.statusText}` };
@@ -150,7 +152,7 @@ export class JellyfinClient {
         }
       }
     } catch (e) {
-      console.error('Failed to get Jellyfin users', e);
+      log.error('Failed to get Jellyfin users', e);
     }
     return '';
   }
@@ -178,7 +180,7 @@ export class JellyfinClient {
       }
       return null;
     } catch (e) {
-      console.error('Error finding Jellyfin user by name:', e);
+      log.error('Error finding Jellyfin user by name:', e);
       return null;
     }
   }
@@ -199,7 +201,7 @@ export class JellyfinClient {
         if (item) return item.Id;
       }
     } catch (e) {
-      console.error(`Error finding Jellyfin item by TMDB ID ${tmdbId}:`, e);
+      log.error(`Error finding Jellyfin item by TMDB ID ${tmdbId}:`, e);
     }
     return null;
   }
@@ -211,14 +213,14 @@ export class JellyfinClient {
     try {
       const uid = await this.getFirstUserId();
       const response = await this.fetch(`${this.url}/Users/${encodeURIComponent(uid)}/Items?Recursive=true&IncludeItemTypes=${type === 'movie' ? 'Movie' : 'Series'}&Fields=ProviderIds,LocationType&EnableImages=false&EnableUserData=false`,
-        { headers: this.getHeaders(), next: { revalidate: 120 }, signal: AbortSignal.timeout(10000) });
+        { headers: this.getHeaders(), signal: AbortSignal.timeout(10000) });
       if (!response.ok) return matches;
       const data = await response.json();
       for (const item of data.Items || []) {
         const tmdb = Number(item.ProviderIds?.Tmdb || item.ProviderIds?.tmdb);
         if (wanted.has(tmdb) && item.Id && item.LocationType !== 'Virtual') matches.set(tmdb, item.Id);
       }
-    } catch { console.warn('Could not match recommendation availability'); }
+    } catch { log.warn('Could not match recommendation availability'); }
     return matches;
   }
 
@@ -256,13 +258,13 @@ export class JellyfinClient {
       });
       if (!res.ok) {
         const text = await res.text();
-        console.error(`Failed to create Jellyfin user (${res.status}):`, text);
+        log.error(`Failed to create Jellyfin user (${res.status}):`, text);
         return null;
       }
       const data = await res.json();
       return { id: data.Id, name: data.Name };
     } catch (e) {
-      console.error('Error creating Jellyfin user:', e);
+      log.error('Error creating Jellyfin user:', e);
       return null;
     }
   }
@@ -309,7 +311,7 @@ export class JellyfinClient {
       });
       return res.ok;
     } catch (e) {
-      console.error('Error deleting Jellyfin user:', e);
+      log.error('Error deleting Jellyfin user:', e);
       return false;
     }
   }
@@ -339,8 +341,7 @@ export class JellyfinClient {
     try {
       const res = await this.fetch(`${this.url}/Users`, {
         headers: this.getHeaders(),
-        next: { revalidate: 60 },
-      });
+        });
 
       if (!res.ok) {
         return [];
@@ -394,7 +395,7 @@ export class JellyfinClient {
         };
       });
     } catch (e) {
-      console.error('Error fetching Jellyfin users:', e);
+      log.error('Error fetching Jellyfin users:', e);
       return [];
     }
   }
@@ -560,7 +561,7 @@ export class JellyfinClient {
         }
       }
     } catch (e) {
-      console.error(`Error negotiating playback for item ${itemId}:`, e);
+      log.error(`Error negotiating playback for item ${itemId}:`, e);
     }
 
     return { streamUrl: '', isTranscoding: false, error: 'Jellyfin did not provide a compatible playback stream' };
@@ -672,7 +673,7 @@ export class JellyfinClient {
         src: `/api/subtitles?itemId=${itemId}&mediaSourceId=${mediaSourceId}&index=${s.Index}`,
       }));
     } catch (e) {
-      console.error(`Error fetching subtitles for item ${itemId}:`, e);
+      log.error(`Error fetching subtitles for item ${itemId}:`, e);
       return [];
     }
   }
@@ -780,7 +781,7 @@ export class JellyfinClient {
     return { resolution, videoQuality, audioQuality, hasHdr };
   }
 
-  private mapJellyfinItem(item: JellyfinItem): MediaItem {
+  mapJellyfinItem(item: JellyfinItem): MediaItem {
     const isSeries = item.Type === 'Series';
     const isEpisode = item.Type === 'Episode';
     const isMovie = item.Type === 'Movie';
@@ -854,7 +855,7 @@ export class JellyfinClient {
       // 1. Fetch Resume items (weight: 3)
       const resumeRes = await this.fetch(
         `${this.url}/UserItems/Resume?userId=${uid}&Limit=20&Fields=Genres`,
-        { headers: this.getHeaders(), next: { revalidate: 30 } }
+        { headers: this.getHeaders(), }
       );
       if (resumeRes.ok) {
         const resumeData = await resumeRes.json();
@@ -868,7 +869,7 @@ export class JellyfinClient {
       // 2. Fetch Played / Watched items (weight: 1)
       const playedRes = await this.fetch(
         `${this.url}/Users/${uid}/Items?SortBy=DatePlayed&SortOrder=Descending&Filters=IsPlayed&Limit=30&Recursive=true&Fields=Genres`,
-        { headers: this.getHeaders(), next: { revalidate: 60 } }
+        { headers: this.getHeaders(), }
       );
       if (playedRes.ok) {
         const playedData = await playedRes.json();
@@ -884,7 +885,7 @@ export class JellyfinClient {
         .sort((a, b) => b[1] - a[1])
         .map(([genre]) => genre);
     } catch (e) {
-      console.error('Failed fetching user top genres from Jellyfin:', e);
+      log.error('Failed fetching user top genres from Jellyfin:', e);
       return [];
     }
   }
@@ -907,7 +908,7 @@ export class JellyfinClient {
       const uid = await this.getFirstUserId();
       const res = await this.fetch(
         `${this.url}/UserItems/Resume?userId=${uid}&Limit=16&Fields=Overview,Genres,OfficialRating,CommunityRating,People,RunTimeTicks,LocationType,MediaStreams,Width,Height,MediaSources,SeriesId,SeriesName,SeasonId,IndexNumber,ParentIndexNumber`,
-        { headers: this.getHeaders(), ...(strict ? { cache: 'no-store' as const } : { next: { revalidate: 30 } }) }
+        { headers: this.getHeaders(), ...(strict ? { cache: 'no-store' as const } : { }) }
       );
       if (!res.ok) { if (strict) throw new Error(`Resume history unavailable (${res.status})`); return []; }
       const data = await res.json();
@@ -918,7 +919,7 @@ export class JellyfinClient {
       const mapped = validItems.map((item: JellyfinItem) => this.mapJellyfinItem(item));
       return await this.attachPlayableStreamsToItems(mapped);
     } catch (e) {
-      console.error('Error fetching resume items from Jellyfin:', e);
+      log.error('Error fetching resume items from Jellyfin:', e);
       if (strict) throw e;
       return [];
     }
@@ -930,7 +931,7 @@ export class JellyfinClient {
       const uid = await this.getFirstUserId();
       const res = await this.fetch(
         `${this.url}/Users/${uid}/Items?IncludeItemTypes=${type}&SortBy=DateCreated&SortOrder=Descending&Limit=${limit}&Recursive=true&Fields=Overview,Genres,OfficialRating,CommunityRating,People,BackdropImageTags,ChildCount,RunTimeTicks,LocationType,MediaStreams,Width,Height,MediaSources`,
-        { headers: this.getHeaders(), next: { revalidate: 60 } }
+        { headers: this.getHeaders(), }
       );
       if (!res.ok) return [];
       const data = await res.json();
@@ -941,7 +942,7 @@ export class JellyfinClient {
       }
       return mapped;
     } catch (e) {
-      console.error(`Error fetching latest ${type} from Jellyfin:`, e);
+      log.error(`Error fetching latest ${type} from Jellyfin:`, e);
       return [];
     }
   }
@@ -952,7 +953,7 @@ export class JellyfinClient {
       const uid = await this.getFirstUserId();
       const res = await this.fetch(
         `${this.url}/Users/${uid}/Items?IncludeItemTypes=Movie,Series&SortBy=CommunityRating&SortOrder=Descending&Limit=${limit}&Recursive=true&Fields=Overview,Genres,OfficialRating,CommunityRating,People,BackdropImageTags,ChildCount,RunTimeTicks,LocationType,MediaStreams,Width,Height,MediaSources`,
-        { headers: this.getHeaders(), next: { revalidate: 120 } }
+        { headers: this.getHeaders(), }
       );
       if (!res.ok) return [];
       const data = await res.json();
@@ -960,7 +961,7 @@ export class JellyfinClient {
       const mapped = validItems.map((item: JellyfinItem) => this.mapJellyfinItem(item));
       return await this.attachPlayableStreamsToItems(mapped);
     } catch (e) {
-      console.error('Error fetching top rated from Jellyfin:', e);
+      log.error('Error fetching top rated from Jellyfin:', e);
       return [];
     }
   }
@@ -972,7 +973,7 @@ export class JellyfinClient {
       // First check NextUp for this specific series
       const nextUpRes = await this.fetch(
         `${this.url}/Shows/NextUp?SeriesId=${seriesId}&UserId=${uid}&Limit=1`,
-        { headers: this.getHeaders(), next: { revalidate: 60 } }
+        { headers: this.getHeaders(), }
       );
       if (nextUpRes.ok) {
         const nextUpData = await nextUpRes.json();
@@ -983,7 +984,7 @@ export class JellyfinClient {
       // Fallback: fetch non-missing episodes of the series, skipping Virtual or Specials
       const epRes = await this.fetch(
         `${this.url}/Shows/${seriesId}/Episodes?UserId=${uid}&IsMissing=false&Limit=30&Fields=LocationType,ParentIndexNumber,IndexNumber`,
-        { headers: this.getHeaders(), next: { revalidate: 120 } }
+        { headers: this.getHeaders(), }
       );
       if (epRes.ok) {
         const epData = await epRes.json();
@@ -994,7 +995,7 @@ export class JellyfinClient {
         if (realEps.length > 0) return realEps[0].Id;
       }
     } catch (e) {
-      console.error(`Error resolving first episode for series ${seriesId}:`, e);
+      log.error(`Error resolving first episode for series ${seriesId}:`, e);
     }
     return undefined;
   }
@@ -1008,7 +1009,7 @@ export class JellyfinClient {
       const uid = await this.getFirstUserId();
       const nextUpRes = await this.fetch(
         `${this.url}/Shows/NextUp?UserId=${uid}&Limit=100`,
-        { headers: this.getHeaders(), next: { revalidate: 60 } }
+        { headers: this.getHeaders(), }
       );
       const nextUpMap = new Map<string, { epId: string; positionTicks?: number; totalTicks?: number }>();
       if (nextUpRes.ok) {
@@ -1042,7 +1043,7 @@ export class JellyfinClient {
         })
       );
     } catch (e) {
-      console.error('Error attaching series stream URLs:', e);
+      log.error('Error attaching series stream URLs:', e);
     }
 
     return items;
@@ -1089,7 +1090,7 @@ export class JellyfinClient {
 
       return media;
     } catch (e) {
-      console.error('Error fetching item details from Jellyfin:', e);
+      log.error('Error fetching item details from Jellyfin:', e);
       return null;
     }
   }
@@ -1099,7 +1100,7 @@ export class JellyfinClient {
     try {
       const uid = await this.getFirstUserId();
       const response = await this.fetch(`${this.url}/Users/${encodeURIComponent(uid)}/Items/${encodeURIComponent(itemId)}?Fields=ProviderIds,Genres,People,Overview,SeriesId,SeriesName,LocationType`,
-        { headers: this.getHeaders(), next: { revalidate: 120 }, signal: AbortSignal.timeout(8000) });
+        { headers: this.getHeaders(), signal: AbortSignal.timeout(8000) });
       return response.ok ? this.mapJellyfinItem(await response.json()) : null;
     } catch { return null; }
   }
@@ -1110,14 +1111,14 @@ export class JellyfinClient {
       const uid = await this.getFirstUserId();
       const res = await this.fetch(
         `${this.url}/Items/${itemId}/Similar?userId=${uid}&limit=${limit}&Fields=Overview,Genres,OfficialRating,CommunityRating,People,BackdropImageTags,RunTimeTicks,ProviderIds,LocationType`,
-        { headers: this.getHeaders(), next: { revalidate: 300 } }
+        { headers: this.getHeaders(), }
       );
       if (!res.ok) return [];
       const data = await res.json();
       const validItems = (data.Items || []).filter((item: JellyfinItem) => item.LocationType !== 'Virtual');
       return validItems.map((item: JellyfinItem) => this.mapJellyfinItem(item));
     } catch (e) {
-      console.error('Error fetching similar items from Jellyfin:', e);
+      log.error('Error fetching similar items from Jellyfin:', e);
       return [];
     }
   }
@@ -1256,7 +1257,7 @@ export class JellyfinClient {
 
       return seasons;
     } catch (e) {
-      console.error('Error fetching seasons from Jellyfin:', e);
+      log.error('Error fetching seasons from Jellyfin:', e);
       return [];
     }
   }
@@ -1285,7 +1286,7 @@ export class JellyfinClient {
       }
       return [];
     } catch (e) {
-      console.error('Error fetching movie collection from Jellyfin:', e);
+      log.error('Error fetching movie collection from Jellyfin:', e);
       return [];
     }
   }

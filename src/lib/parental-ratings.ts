@@ -1,3 +1,4 @@
+import { fetch } from '@/upstream';
 import { getServerConfig } from './config';
 import { JellyfinClient } from './jellyfin';
 import { KIDS_LIMITS, KidsRating } from './parental-store';
@@ -33,8 +34,7 @@ export async function catalogCertification(id: number, type: 'movie' | 'tv'): Pr
     if (!config.seerrUrl || !config.seerrApiKey || !Number.isSafeInteger(id) || id <= 0) return null;
     try {
       const response = await fetch(`${config.seerrUrl}/api/v1/${type}/${id}`, {
-        headers: { 'X-Api-Key': config.seerrApiKey }, signal: AbortSignal.timeout(5000), next: { revalidate: 3600 },
-      });
+        headers: { 'X-Api-Key': config.seerrApiKey }, signal: AbortSignal.timeout(5000), });
       if (!response.ok) return keep(key, null);
       const data = await response.json();
       if (data.adult === true) return keep(key, null);

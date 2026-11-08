@@ -1,0 +1,1741 @@
+[
+  {
+    "path": "/api/auth",
+    "status": 200,
+    "body": {
+      "requiresAuth": true,
+      "isLocalOrTailscale": false,
+      "isAuthenticated": false,
+      "clientIp": "",
+      "reason": "Authentication required"
+    }
+  },
+  {
+    "path": "/api/mobile/v1/capabilities",
+    "status": 200,
+    "body": {
+      "apiVersion": 1,
+      "appName": "HomeStream",
+      "cast": true,
+      "jellyfinLogin": true
+    }
+  },
+  {
+    "path": "/api/mobile/v1/home",
+    "status": 200,
+    "body": {
+      "hero": {
+        "id": "hero-1",
+        "title": "Stranger Things",
+        "overview": "When a young boy vanishes, a small town uncovers a mystery involving secret experiments, terrifying supernatural forces and one strange little girl with telekinetic powers.",
+        "type": "Series",
+        "posterUrl": "https://image.tmdb.org/t/p/w500/49WJfeN0moxb9IPfGn8AIqMGskD.jpg",
+        "backdropUrl": "https://image.tmdb.org/t/p/original/56v2KjBlU4XaOv9rVYEQypROD7P.jpg",
+        "year": 2024,
+        "rating": "TV-MA",
+        "matchPercentage": 99,
+        "communityRating": 8.7,
+        "genres": [
+          "Sci-Fi & Fantasy",
+          "Drama",
+          "Mystery"
+        ],
+        "seasonsCount": 4,
+        "source": "demo",
+        "status": "available",
+        "resolution": "4K UHD",
+        "audioQuality": "Dolby Atmos",
+        "hasHdr": true,
+        "cast": [
+          {
+            "name": "Millie Bobby Brown",
+            "role": "Eleven"
+          },
+          {
+            "name": "Finn Wolfhard",
+            "role": "Mike Wheeler"
+          },
+          {
+            "name": "David Harbour",
+            "role": "Jim Hopper"
+          },
+          {
+            "name": "Winona Ryder",
+            "role": "Joyce Byers"
+          }
+        ],
+        "director": "The Duffer Brothers",
+        "seasons": [
+          {
+            "id": "s1",
+            "seasonNumber": 1,
+            "name": "Season 1",
+            "episodeCount": 8,
+            "overview": "When a young boy vanishes, a small town uncovers a mystery involving secret experiments, terrifying supernatural forces and one strange little girl.",
+            "episodes": [
+              {
+                "id": "st-e1",
+                "seasonNumber": 1,
+                "episodeNumber": 1,
+                "name": "Chapter One: The Vanishing of Will Byers",
+                "overview": "On his way home from a friend's house, young Will sees something terrifying. Nearby, a sinister secret lurks in the depths of a government lab.",
+                "durationMinutes": 49,
+                "thumbnailUrl": "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=800&auto=format&fit=crop&q=80"
+              },
+              {
+                "id": "st-e2",
+                "seasonNumber": 1,
+                "episodeNumber": 2,
+                "name": "Chapter Two: The Weirdo on Maple Street",
+                "overview": "Lucas, Mike and Dustin try to talk to the girl they found in the woods. Hopper questions an anxious Joyce about an unsettling phone call.",
+                "durationMinutes": 56,
+                "thumbnailUrl": "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800&auto=format&fit=crop&q=80"
+              },
+              {
+                "id": "st-e3",
+                "seasonNumber": 1,
+                "episodeNumber": 3,
+                "name": "Chapter Three: Holly, Jolly",
+                "overview": "An increasingly concerned Nancy looks for Barb and finds out what Jonathan's been up to. Joyce is convinced Will is trying to talk to her.",
+                "durationMinutes": 52,
+                "thumbnailUrl": "https://images.unsplash.com/photo-1578328819058-b69f3a3b0f6b?w=800&auto=format&fit=crop&q=80"
+              },
+              {
+                "id": "st-e4",
+                "seasonNumber": 1,
+                "episodeNumber": 4,
+                "name": "Chapter Four: The Body",
+                "overview": "Refusing to believe Will is dead, Joyce tries to connect with her son. The boys give Eleven a makeover so she can search for Will.",
+                "durationMinutes": 51,
+                "thumbnailUrl": "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=800&auto=format&fit=crop&q=80"
+              }
+            ]
+          },
+          {
+            "id": "s2",
+            "seasonNumber": 2,
+            "name": "Season 2",
+            "episodeCount": 9,
+            "overview": "It's been nearly a year since Will's strange disappearance and return, but supernatural darkness still lingers over Hawkins.",
+            "episodes": [
+              {
+                "id": "st-s2-e1",
+                "seasonNumber": 2,
+                "episodeNumber": 1,
+                "name": "Chapter One: MADMAX",
+                "overview": "As the town preps for Halloween, a high-scoring rival shakes things up at the arcade, and a skeptical Hopper inspects a field of rotting pumpkins.",
+                "durationMinutes": 48,
+                "thumbnailUrl": "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800&auto=format&fit=crop&q=80"
+              }
+            ]
+          }
+        ],
+        "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+      },
+      "heroItems": [
+        {
+          "id": "hero-1",
+          "title": "Stranger Things",
+          "overview": "When a young boy vanishes, a small town uncovers a mystery involving secret experiments, terrifying supernatural forces and one strange little girl with telekinetic powers.",
+          "type": "Series",
+          "posterUrl": "https://image.tmdb.org/t/p/w500/49WJfeN0moxb9IPfGn8AIqMGskD.jpg",
+          "backdropUrl": "https://image.tmdb.org/t/p/original/56v2KjBlU4XaOv9rVYEQypROD7P.jpg",
+          "year": 2024,
+          "rating": "TV-MA",
+          "matchPercentage": 99,
+          "communityRating": 8.7,
+          "genres": [
+            "Sci-Fi & Fantasy",
+            "Drama",
+            "Mystery"
+          ],
+          "seasonsCount": 4,
+          "source": "demo",
+          "status": "available",
+          "resolution": "4K UHD",
+          "audioQuality": "Dolby Atmos",
+          "hasHdr": true,
+          "cast": [
+            {
+              "name": "Millie Bobby Brown",
+              "role": "Eleven"
+            },
+            {
+              "name": "Finn Wolfhard",
+              "role": "Mike Wheeler"
+            },
+            {
+              "name": "David Harbour",
+              "role": "Jim Hopper"
+            },
+            {
+              "name": "Winona Ryder",
+              "role": "Joyce Byers"
+            }
+          ],
+          "director": "The Duffer Brothers",
+          "seasons": [
+            {
+              "id": "s1",
+              "seasonNumber": 1,
+              "name": "Season 1",
+              "episodeCount": 8,
+              "overview": "When a young boy vanishes, a small town uncovers a mystery involving secret experiments, terrifying supernatural forces and one strange little girl.",
+              "episodes": [
+                {
+                  "id": "st-e1",
+                  "seasonNumber": 1,
+                  "episodeNumber": 1,
+                  "name": "Chapter One: The Vanishing of Will Byers",
+                  "overview": "On his way home from a friend's house, young Will sees something terrifying. Nearby, a sinister secret lurks in the depths of a government lab.",
+                  "durationMinutes": 49,
+                  "thumbnailUrl": "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=800&auto=format&fit=crop&q=80"
+                },
+                {
+                  "id": "st-e2",
+                  "seasonNumber": 1,
+                  "episodeNumber": 2,
+                  "name": "Chapter Two: The Weirdo on Maple Street",
+                  "overview": "Lucas, Mike and Dustin try to talk to the girl they found in the woods. Hopper questions an anxious Joyce about an unsettling phone call.",
+                  "durationMinutes": 56,
+                  "thumbnailUrl": "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800&auto=format&fit=crop&q=80"
+                },
+                {
+                  "id": "st-e3",
+                  "seasonNumber": 1,
+                  "episodeNumber": 3,
+                  "name": "Chapter Three: Holly, Jolly",
+                  "overview": "An increasingly concerned Nancy looks for Barb and finds out what Jonathan's been up to. Joyce is convinced Will is trying to talk to her.",
+                  "durationMinutes": 52,
+                  "thumbnailUrl": "https://images.unsplash.com/photo-1578328819058-b69f3a3b0f6b?w=800&auto=format&fit=crop&q=80"
+                },
+                {
+                  "id": "st-e4",
+                  "seasonNumber": 1,
+                  "episodeNumber": 4,
+                  "name": "Chapter Four: The Body",
+                  "overview": "Refusing to believe Will is dead, Joyce tries to connect with her son. The boys give Eleven a makeover so she can search for Will.",
+                  "durationMinutes": 51,
+                  "thumbnailUrl": "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=800&auto=format&fit=crop&q=80"
+                }
+              ]
+            },
+            {
+              "id": "s2",
+              "seasonNumber": 2,
+              "name": "Season 2",
+              "episodeCount": 9,
+              "overview": "It's been nearly a year since Will's strange disappearance and return, but supernatural darkness still lingers over Hawkins.",
+              "episodes": [
+                {
+                  "id": "st-s2-e1",
+                  "seasonNumber": 2,
+                  "episodeNumber": 1,
+                  "name": "Chapter One: MADMAX",
+                  "overview": "As the town preps for Halloween, a high-scoring rival shakes things up at the arcade, and a skeptical Hopper inspects a field of rotting pumpkins.",
+                  "durationMinutes": 48,
+                  "thumbnailUrl": "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800&auto=format&fit=crop&q=80"
+                }
+              ]
+            }
+          ],
+          "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+        },
+        {
+          "id": "cw-1",
+          "title": "Dune: Part Two",
+          "overview": "Paul Atreides unites with Chani and the Fremen while seeking revenge against the conspirators who destroyed his family.",
+          "type": "Movie",
+          "posterUrl": "https://image.tmdb.org/t/p/w500/1pdfLvkbY9ohJlCjQH2CZjjYVvJ.jpg",
+          "backdropUrl": "https://image.tmdb.org/t/p/original/xOMo8BRK7PfcJv9JCnx7s5200bm.jpg",
+          "year": 2024,
+          "rating": "PG-13",
+          "matchPercentage": 98,
+          "communityRating": 8.5,
+          "durationMinutes": 166,
+          "genres": [
+            "Sci-Fi",
+            "Adventure"
+          ],
+          "source": "demo",
+          "status": "available",
+          "progressPercent": 68,
+          "playbackPositionTicks": 68000000000,
+          "totalDurationTicks": 100000000000,
+          "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
+        },
+        {
+          "id": "cw-2",
+          "title": "Severance",
+          "overview": "Mark leads a team of office workers whose memories have been surgically divided between their work and personal lives.",
+          "type": "Series",
+          "posterUrl": "https://image.tmdb.org/t/p/w500/b1x5Qe06180kO1984K9hS85XQ1U.jpg",
+          "backdropUrl": "https://image.tmdb.org/t/p/original/bUOBkYc8w9j6x0w3h5nK4j8e4kG.jpg",
+          "year": 2024,
+          "rating": "TV-MA",
+          "matchPercentage": 97,
+          "communityRating": 8.7,
+          "genres": [
+            "Sci-Fi",
+            "Drama",
+            "Thriller"
+          ],
+          "seasonsCount": 2,
+          "source": "demo",
+          "status": "available",
+          "progressPercent": 42,
+          "playbackPositionTicks": 42000000000,
+          "totalDurationTicks": 100000000000,
+          "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"
+        },
+        {
+          "id": "mov-1",
+          "title": "Oppenheimer",
+          "overview": "The story of J. Robert Oppenheimer's role in the development of the atomic bomb during World War II.",
+          "type": "Movie",
+          "posterUrl": "https://image.tmdb.org/t/p/w500/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg",
+          "backdropUrl": "https://image.tmdb.org/t/p/original/fm6KqXpk3M2HVveHwCrBSSBaO0V.jpg",
+          "year": 2023,
+          "rating": "R",
+          "matchPercentage": 95,
+          "communityRating": 8.9,
+          "durationMinutes": 180,
+          "genres": [
+            "Biography",
+            "Drama",
+            "History"
+          ],
+          "source": "demo",
+          "status": "available",
+          "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+        },
+        {
+          "id": "ser-1",
+          "title": "The Bear",
+          "overview": "A young chef from the fine dining world comes home to Chicago to run his family Italian beef sandwich shop after a tragic loss.",
+          "type": "Series",
+          "posterUrl": "https://image.tmdb.org/t/p/w500/619W31cQpB41Z5B7R4x1V4c5mJb.jpg",
+          "backdropUrl": "https://image.tmdb.org/t/p/original/n2kY1N8bM2q5d8B0G1O5c4kG8s.jpg",
+          "year": 2024,
+          "rating": "TV-MA",
+          "matchPercentage": 98,
+          "communityRating": 8.8,
+          "genres": [
+            "Drama",
+            "Comedy"
+          ],
+          "seasonsCount": 3,
+          "source": "demo",
+          "status": "available",
+          "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+        }
+      ],
+      "sections": [
+        {
+          "id": "continue-watching",
+          "title": "Continue Watching",
+          "items": [
+            {
+              "id": "cw-1",
+              "title": "Dune: Part Two",
+              "overview": "Paul Atreides unites with Chani and the Fremen while seeking revenge against the conspirators who destroyed his family.",
+              "type": "Movie",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/1pdfLvkbY9ohJlCjQH2CZjjYVvJ.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/xOMo8BRK7PfcJv9JCnx7s5200bm.jpg",
+              "year": 2024,
+              "rating": "PG-13",
+              "matchPercentage": 98,
+              "communityRating": 8.5,
+              "durationMinutes": 166,
+              "genres": [
+                "Sci-Fi",
+                "Adventure"
+              ],
+              "source": "demo",
+              "status": "available",
+              "progressPercent": 68,
+              "playbackPositionTicks": 68000000000,
+              "totalDurationTicks": 100000000000,
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
+            },
+            {
+              "id": "cw-2",
+              "title": "Severance",
+              "overview": "Mark leads a team of office workers whose memories have been surgically divided between their work and personal lives.",
+              "type": "Series",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/b1x5Qe06180kO1984K9hS85XQ1U.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/bUOBkYc8w9j6x0w3h5nK4j8e4kG.jpg",
+              "year": 2024,
+              "rating": "TV-MA",
+              "matchPercentage": 97,
+              "communityRating": 8.7,
+              "genres": [
+                "Sci-Fi",
+                "Drama",
+                "Thriller"
+              ],
+              "seasonsCount": 2,
+              "source": "demo",
+              "status": "available",
+              "progressPercent": 42,
+              "playbackPositionTicks": 42000000000,
+              "totalDurationTicks": 100000000000,
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"
+            },
+            {
+              "id": "cw-3",
+              "title": "Arcane",
+              "overview": "Amid the stark discord of twin cities Piltover and Zaun, two sisters fight on rival sides of a war between magic technologies and incompatible convictions.",
+              "type": "Series",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/fqldf2t8ztc9aiwn397rDit3YR3.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/uDgy6hyPd82kOHh6I95FLtLnj6p.jpg",
+              "year": 2024,
+              "rating": "TV-14",
+              "matchPercentage": 99,
+              "communityRating": 9,
+              "genres": [
+                "Animation",
+                "Action",
+                "Sci-Fi"
+              ],
+              "seasonsCount": 2,
+              "source": "demo",
+              "status": "available",
+              "progressPercent": 85,
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+            },
+            {
+              "id": "cw-4",
+              "title": "Interstellar",
+              "overview": "A team of explorers travel through a wormhole in space in an attempt to ensure humanity's survival.",
+              "type": "Movie",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/rAiYTsqJJR0KP8UN8vCn8q9rfsr.jpg",
+              "year": 2014,
+              "rating": "PG-13",
+              "matchPercentage": 96,
+              "communityRating": 8.6,
+              "durationMinutes": 169,
+              "genres": [
+                "Sci-Fi",
+                "Drama"
+              ],
+              "source": "demo",
+              "status": "available",
+              "progressPercent": 23,
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
+            }
+          ]
+        },
+        {
+          "id": "top-10",
+          "title": "Top 10 on HomeFlix Today",
+          "items": [
+            {
+              "id": "hero-1",
+              "title": "Stranger Things",
+              "overview": "When a young boy vanishes, a small town uncovers a mystery involving secret experiments, terrifying supernatural forces and one strange little girl with telekinetic powers.",
+              "type": "Series",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/49WJfeN0moxb9IPfGn8AIqMGskD.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/56v2KjBlU4XaOv9rVYEQypROD7P.jpg",
+              "year": 2024,
+              "rating": "TV-MA",
+              "matchPercentage": 99,
+              "communityRating": 8.7,
+              "genres": [
+                "Sci-Fi & Fantasy",
+                "Drama",
+                "Mystery"
+              ],
+              "seasonsCount": 4,
+              "source": "demo",
+              "status": "available",
+              "resolution": "4K UHD",
+              "audioQuality": "Dolby Atmos",
+              "hasHdr": true,
+              "cast": [
+                {
+                  "name": "Millie Bobby Brown",
+                  "role": "Eleven"
+                },
+                {
+                  "name": "Finn Wolfhard",
+                  "role": "Mike Wheeler"
+                },
+                {
+                  "name": "David Harbour",
+                  "role": "Jim Hopper"
+                },
+                {
+                  "name": "Winona Ryder",
+                  "role": "Joyce Byers"
+                }
+              ],
+              "director": "The Duffer Brothers",
+              "seasons": [
+                {
+                  "id": "s1",
+                  "seasonNumber": 1,
+                  "name": "Season 1",
+                  "episodeCount": 8,
+                  "overview": "When a young boy vanishes, a small town uncovers a mystery involving secret experiments, terrifying supernatural forces and one strange little girl.",
+                  "episodes": [
+                    {
+                      "id": "st-e1",
+                      "seasonNumber": 1,
+                      "episodeNumber": 1,
+                      "name": "Chapter One: The Vanishing of Will Byers",
+                      "overview": "On his way home from a friend's house, young Will sees something terrifying. Nearby, a sinister secret lurks in the depths of a government lab.",
+                      "durationMinutes": 49,
+                      "thumbnailUrl": "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=800&auto=format&fit=crop&q=80"
+                    },
+                    {
+                      "id": "st-e2",
+                      "seasonNumber": 1,
+                      "episodeNumber": 2,
+                      "name": "Chapter Two: The Weirdo on Maple Street",
+                      "overview": "Lucas, Mike and Dustin try to talk to the girl they found in the woods. Hopper questions an anxious Joyce about an unsettling phone call.",
+                      "durationMinutes": 56,
+                      "thumbnailUrl": "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800&auto=format&fit=crop&q=80"
+                    },
+                    {
+                      "id": "st-e3",
+                      "seasonNumber": 1,
+                      "episodeNumber": 3,
+                      "name": "Chapter Three: Holly, Jolly",
+                      "overview": "An increasingly concerned Nancy looks for Barb and finds out what Jonathan's been up to. Joyce is convinced Will is trying to talk to her.",
+                      "durationMinutes": 52,
+                      "thumbnailUrl": "https://images.unsplash.com/photo-1578328819058-b69f3a3b0f6b?w=800&auto=format&fit=crop&q=80"
+                    },
+                    {
+                      "id": "st-e4",
+                      "seasonNumber": 1,
+                      "episodeNumber": 4,
+                      "name": "Chapter Four: The Body",
+                      "overview": "Refusing to believe Will is dead, Joyce tries to connect with her son. The boys give Eleven a makeover so she can search for Will.",
+                      "durationMinutes": 51,
+                      "thumbnailUrl": "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=800&auto=format&fit=crop&q=80"
+                    }
+                  ]
+                },
+                {
+                  "id": "s2",
+                  "seasonNumber": 2,
+                  "name": "Season 2",
+                  "episodeCount": 9,
+                  "overview": "It's been nearly a year since Will's strange disappearance and return, but supernatural darkness still lingers over Hawkins.",
+                  "episodes": [
+                    {
+                      "id": "st-s2-e1",
+                      "seasonNumber": 2,
+                      "episodeNumber": 1,
+                      "name": "Chapter One: MADMAX",
+                      "overview": "As the town preps for Halloween, a high-scoring rival shakes things up at the arcade, and a skeptical Hopper inspects a field of rotting pumpkins.",
+                      "durationMinutes": 48,
+                      "thumbnailUrl": "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800&auto=format&fit=crop&q=80"
+                    }
+                  ]
+                }
+              ],
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+            },
+            {
+              "id": "cw-1",
+              "title": "Dune: Part Two",
+              "overview": "Paul Atreides unites with Chani and the Fremen while seeking revenge against the conspirators who destroyed his family.",
+              "type": "Movie",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/1pdfLvkbY9ohJlCjQH2CZjjYVvJ.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/xOMo8BRK7PfcJv9JCnx7s5200bm.jpg",
+              "year": 2024,
+              "rating": "PG-13",
+              "matchPercentage": 98,
+              "communityRating": 8.5,
+              "durationMinutes": 166,
+              "genres": [
+                "Sci-Fi",
+                "Adventure"
+              ],
+              "source": "demo",
+              "status": "available",
+              "progressPercent": 68,
+              "playbackPositionTicks": 68000000000,
+              "totalDurationTicks": 100000000000,
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
+            },
+            {
+              "id": "cw-2",
+              "title": "Severance",
+              "overview": "Mark leads a team of office workers whose memories have been surgically divided between their work and personal lives.",
+              "type": "Series",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/b1x5Qe06180kO1984K9hS85XQ1U.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/bUOBkYc8w9j6x0w3h5nK4j8e4kG.jpg",
+              "year": 2024,
+              "rating": "TV-MA",
+              "matchPercentage": 97,
+              "communityRating": 8.7,
+              "genres": [
+                "Sci-Fi",
+                "Drama",
+                "Thriller"
+              ],
+              "seasonsCount": 2,
+              "source": "demo",
+              "status": "available",
+              "progressPercent": 42,
+              "playbackPositionTicks": 42000000000,
+              "totalDurationTicks": 100000000000,
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"
+            },
+            {
+              "id": "cw-3",
+              "title": "Arcane",
+              "overview": "Amid the stark discord of twin cities Piltover and Zaun, two sisters fight on rival sides of a war between magic technologies and incompatible convictions.",
+              "type": "Series",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/fqldf2t8ztc9aiwn397rDit3YR3.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/uDgy6hyPd82kOHh6I95FLtLnj6p.jpg",
+              "year": 2024,
+              "rating": "TV-14",
+              "matchPercentage": 99,
+              "communityRating": 9,
+              "genres": [
+                "Animation",
+                "Action",
+                "Sci-Fi"
+              ],
+              "seasonsCount": 2,
+              "source": "demo",
+              "status": "available",
+              "progressPercent": 85,
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+            },
+            {
+              "id": "cw-4",
+              "title": "Interstellar",
+              "overview": "A team of explorers travel through a wormhole in space in an attempt to ensure humanity's survival.",
+              "type": "Movie",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/rAiYTsqJJR0KP8UN8vCn8q9rfsr.jpg",
+              "year": 2014,
+              "rating": "PG-13",
+              "matchPercentage": 96,
+              "communityRating": 8.6,
+              "durationMinutes": 169,
+              "genres": [
+                "Sci-Fi",
+                "Drama"
+              ],
+              "source": "demo",
+              "status": "available",
+              "progressPercent": 23,
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
+            },
+            {
+              "id": "mov-1",
+              "title": "Oppenheimer",
+              "overview": "The story of J. Robert Oppenheimer's role in the development of the atomic bomb during World War II.",
+              "type": "Movie",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/fm6KqXpk3M2HVveHwCrBSSBaO0V.jpg",
+              "year": 2023,
+              "rating": "R",
+              "matchPercentage": 95,
+              "communityRating": 8.9,
+              "durationMinutes": 180,
+              "genres": [
+                "Biography",
+                "Drama",
+                "History"
+              ],
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+            },
+            {
+              "id": "mov-2",
+              "title": "Spider-Man: Across the Spider-Verse",
+              "overview": "Miles Morales catapults across the Multiverse, where he encounters a team of Spider-People charged with protecting its very existence.",
+              "type": "Movie",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/8Vt6mWEReuy4Of61Lnj5Xj704m8.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/4HodYYKEIsGOdinkGi2Ucz6X9i0.jpg",
+              "year": 2023,
+              "rating": "PG",
+              "matchPercentage": 98,
+              "communityRating": 8.7,
+              "durationMinutes": 140,
+              "genres": [
+                "Animation",
+                "Action",
+                "Adventure"
+              ],
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
+            },
+            {
+              "id": "mov-3",
+              "title": "Blade Runner 2049",
+              "overview": "Young Blade Runner K's discovery of a long-buried secret leads him to track down former Blade Runner Rick Deckard, who's been missing for thirty years.",
+              "type": "Movie",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/gajva2L0rPYkEWjzgFlBXCAVBE5.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/sAtoMqDVhNDQBc3QJL3RF6hlxGq.jpg",
+              "year": 2017,
+              "rating": "R",
+              "matchPercentage": 94,
+              "communityRating": 8.5,
+              "durationMinutes": 164,
+              "genres": [
+                "Sci-Fi",
+                "Mystery"
+              ],
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"
+            },
+            {
+              "id": "mov-4",
+              "title": "The Batman",
+              "overview": "In his second year of fighting crime, Batman uncovers corruption in Gotham City that connects to his own family while facing a serial killer known as the Riddler.",
+              "type": "Movie",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/74xTEgt7R36Fpooo50r9T25onhq.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/5P8SmMzSNYikXpxil6BYzJ16611.jpg",
+              "year": 2022,
+              "rating": "PG-13",
+              "matchPercentage": 93,
+              "communityRating": 8.2,
+              "durationMinutes": 176,
+              "genres": [
+                "Action",
+                "Crime",
+                "Drama"
+              ],
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+            },
+            {
+              "id": "mov-5",
+              "title": "Top Gun: Maverick",
+              "overview": "After thirty years, Maverick is still pushing the envelope as a top naval aviator, but must confront ghosts of his past when he leads TOP GUN's elite graduates.",
+              "type": "Movie",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/62HCnUTziyWcpDaBO2i1DX17ljH.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/odJ4hx6g6vBt4lBWKFD1tI8WS4x.jpg",
+              "year": 2022,
+              "rating": "PG-13",
+              "matchPercentage": 97,
+              "communityRating": 8.3,
+              "durationMinutes": 130,
+              "genres": [
+                "Action",
+                "Drama"
+              ],
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
+            }
+          ],
+          "isTop10": true
+        },
+        {
+          "id": "recent-movies",
+          "title": "Recently Added Movies",
+          "items": [
+            {
+              "id": "mov-1",
+              "title": "Oppenheimer",
+              "overview": "The story of J. Robert Oppenheimer's role in the development of the atomic bomb during World War II.",
+              "type": "Movie",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/fm6KqXpk3M2HVveHwCrBSSBaO0V.jpg",
+              "year": 2023,
+              "rating": "R",
+              "matchPercentage": 95,
+              "communityRating": 8.9,
+              "durationMinutes": 180,
+              "genres": [
+                "Biography",
+                "Drama",
+                "History"
+              ],
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+            },
+            {
+              "id": "mov-2",
+              "title": "Spider-Man: Across the Spider-Verse",
+              "overview": "Miles Morales catapults across the Multiverse, where he encounters a team of Spider-People charged with protecting its very existence.",
+              "type": "Movie",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/8Vt6mWEReuy4Of61Lnj5Xj704m8.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/4HodYYKEIsGOdinkGi2Ucz6X9i0.jpg",
+              "year": 2023,
+              "rating": "PG",
+              "matchPercentage": 98,
+              "communityRating": 8.7,
+              "durationMinutes": 140,
+              "genres": [
+                "Animation",
+                "Action",
+                "Adventure"
+              ],
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
+            },
+            {
+              "id": "mov-3",
+              "title": "Blade Runner 2049",
+              "overview": "Young Blade Runner K's discovery of a long-buried secret leads him to track down former Blade Runner Rick Deckard, who's been missing for thirty years.",
+              "type": "Movie",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/gajva2L0rPYkEWjzgFlBXCAVBE5.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/sAtoMqDVhNDQBc3QJL3RF6hlxGq.jpg",
+              "year": 2017,
+              "rating": "R",
+              "matchPercentage": 94,
+              "communityRating": 8.5,
+              "durationMinutes": 164,
+              "genres": [
+                "Sci-Fi",
+                "Mystery"
+              ],
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"
+            },
+            {
+              "id": "mov-4",
+              "title": "The Batman",
+              "overview": "In his second year of fighting crime, Batman uncovers corruption in Gotham City that connects to his own family while facing a serial killer known as the Riddler.",
+              "type": "Movie",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/74xTEgt7R36Fpooo50r9T25onhq.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/5P8SmMzSNYikXpxil6BYzJ16611.jpg",
+              "year": 2022,
+              "rating": "PG-13",
+              "matchPercentage": 93,
+              "communityRating": 8.2,
+              "durationMinutes": 176,
+              "genres": [
+                "Action",
+                "Crime",
+                "Drama"
+              ],
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+            },
+            {
+              "id": "mov-5",
+              "title": "Top Gun: Maverick",
+              "overview": "After thirty years, Maverick is still pushing the envelope as a top naval aviator, but must confront ghosts of his past when he leads TOP GUN's elite graduates.",
+              "type": "Movie",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/62HCnUTziyWcpDaBO2i1DX17ljH.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/odJ4hx6g6vBt4lBWKFD1tI8WS4x.jpg",
+              "year": 2022,
+              "rating": "PG-13",
+              "matchPercentage": 97,
+              "communityRating": 8.3,
+              "durationMinutes": 130,
+              "genres": [
+                "Action",
+                "Drama"
+              ],
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
+            },
+            {
+              "id": "mov-6",
+              "title": "Everything Everywhere All at Once",
+              "overview": "A middle-aged Chinese immigrant is swept up into an insane adventure in which she alone can save existence by exploring other universes.",
+              "type": "Movie",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/w3LxiVYPqrlexP07sbTlsqZ2YqU.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/ss0JVbuat0utkL8tlZ7NF2SC6Dp.jpg",
+              "year": 2022,
+              "rating": "R",
+              "matchPercentage": 96,
+              "communityRating": 8.4,
+              "durationMinutes": 139,
+              "genres": [
+                "Action",
+                "Adventure",
+                "Sci-Fi"
+              ],
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"
+            }
+          ]
+        },
+        {
+          "id": "recent-series",
+          "title": "Recently Added TV Shows",
+          "items": [
+            {
+              "id": "ser-1",
+              "title": "The Bear",
+              "overview": "A young chef from the fine dining world comes home to Chicago to run his family Italian beef sandwich shop after a tragic loss.",
+              "type": "Series",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/619W31cQpB41Z5B7R4x1V4c5mJb.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/n2kY1N8bM2q5d8B0G1O5c4kG8s.jpg",
+              "year": 2024,
+              "rating": "TV-MA",
+              "matchPercentage": 98,
+              "communityRating": 8.8,
+              "genres": [
+                "Drama",
+                "Comedy"
+              ],
+              "seasonsCount": 3,
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+            },
+            {
+              "id": "ser-2",
+              "title": "The Last of Us",
+              "overview": "After a global pandemic destroys civilization, a hardened survivor takes charge of a 14-year-old girl who may be humanity's last hope.",
+              "type": "Series",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/uKvVjHNqB5VmOrdxqMis2SYqAOX.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/uDgy6hyPd82kOHh6I95FLtLnj6p.jpg",
+              "year": 2023,
+              "rating": "TV-MA",
+              "matchPercentage": 97,
+              "communityRating": 8.8,
+              "genres": [
+                "Drama",
+                "Sci-Fi",
+                "Adventure"
+              ],
+              "seasonsCount": 1,
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
+            },
+            {
+              "id": "ser-3",
+              "title": "Succession",
+              "overview": "The Roy family is known for controlling the biggest media and entertainment company in the world. However, their world will change when their aging father steps down.",
+              "type": "Series",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/7udZXnhP7h254z23oA07R1W8uL2.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/eCgO84kF1y3D0v5v6KqG0V4M.jpg",
+              "year": 2023,
+              "rating": "TV-MA",
+              "matchPercentage": 96,
+              "communityRating": 8.9,
+              "genres": [
+                "Drama"
+              ],
+              "seasonsCount": 4,
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"
+            },
+            {
+              "id": "ser-4",
+              "title": "Fallout",
+              "overview": "In a future, post-apocalyptic Los Angeles brought about by nuclear decimation, citizens must live in underground bunkers to protect themselves from radiation, mutants and bandits.",
+              "type": "Series",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/ansFb0z1u23e0y4w6a8d6C9d6F2.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/i5O1v9z9y4v8t2K2F3l4w8u8k.jpg",
+              "year": 2024,
+              "rating": "TV-MA",
+              "matchPercentage": 95,
+              "communityRating": 8.5,
+              "genres": [
+                "Sci-Fi",
+                "Action",
+                "Adventure"
+              ],
+              "seasonsCount": 1,
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+            },
+            {
+              "id": "ser-5",
+              "title": "Breaking Bad",
+              "overview": "A chemistry teacher diagnosed with inoperable lung cancer turns to manufacturing and selling methamphetamine with a former student in order to secure his family's future.",
+              "type": "Series",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/ztkUQFLlC19CCMYHW9o1zWhJRNq.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/tsRy63Mu5cu8etL1X7ZLyf7UP1M.jpg",
+              "year": 2013,
+              "rating": "TV-MA",
+              "matchPercentage": 99,
+              "communityRating": 9.5,
+              "genres": [
+                "Crime",
+                "Drama",
+                "Thriller"
+              ],
+              "seasonsCount": 5,
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
+            }
+          ]
+        },
+        {
+          "id": "trending-seerr",
+          "title": "Popular on Streaming",
+          "items": [
+            {
+              "id": "mov-6",
+              "title": "Everything Everywhere All at Once",
+              "overview": "A middle-aged Chinese immigrant is swept up into an insane adventure in which she alone can save existence by exploring other universes.",
+              "type": "Movie",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/w3LxiVYPqrlexP07sbTlsqZ2YqU.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/ss0JVbuat0utkL8tlZ7NF2SC6Dp.jpg",
+              "year": 2022,
+              "rating": "R",
+              "matchPercentage": 96,
+              "communityRating": 8.4,
+              "durationMinutes": 139,
+              "genres": [
+                "Action",
+                "Adventure",
+                "Sci-Fi"
+              ],
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"
+            },
+            {
+              "id": "mov-5",
+              "title": "Top Gun: Maverick",
+              "overview": "After thirty years, Maverick is still pushing the envelope as a top naval aviator, but must confront ghosts of his past when he leads TOP GUN's elite graduates.",
+              "type": "Movie",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/62HCnUTziyWcpDaBO2i1DX17ljH.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/odJ4hx6g6vBt4lBWKFD1tI8WS4x.jpg",
+              "year": 2022,
+              "rating": "PG-13",
+              "matchPercentage": 97,
+              "communityRating": 8.3,
+              "durationMinutes": 130,
+              "genres": [
+                "Action",
+                "Drama"
+              ],
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
+            },
+            {
+              "id": "mov-4",
+              "title": "The Batman",
+              "overview": "In his second year of fighting crime, Batman uncovers corruption in Gotham City that connects to his own family while facing a serial killer known as the Riddler.",
+              "type": "Movie",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/74xTEgt7R36Fpooo50r9T25onhq.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/5P8SmMzSNYikXpxil6BYzJ16611.jpg",
+              "year": 2022,
+              "rating": "PG-13",
+              "matchPercentage": 93,
+              "communityRating": 8.2,
+              "durationMinutes": 176,
+              "genres": [
+                "Action",
+                "Crime",
+                "Drama"
+              ],
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+            },
+            {
+              "id": "mov-3",
+              "title": "Blade Runner 2049",
+              "overview": "Young Blade Runner K's discovery of a long-buried secret leads him to track down former Blade Runner Rick Deckard, who's been missing for thirty years.",
+              "type": "Movie",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/gajva2L0rPYkEWjzgFlBXCAVBE5.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/sAtoMqDVhNDQBc3QJL3RF6hlxGq.jpg",
+              "year": 2017,
+              "rating": "R",
+              "matchPercentage": 94,
+              "communityRating": 8.5,
+              "durationMinutes": 164,
+              "genres": [
+                "Sci-Fi",
+                "Mystery"
+              ],
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"
+            },
+            {
+              "id": "mov-2",
+              "title": "Spider-Man: Across the Spider-Verse",
+              "overview": "Miles Morales catapults across the Multiverse, where he encounters a team of Spider-People charged with protecting its very existence.",
+              "type": "Movie",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/8Vt6mWEReuy4Of61Lnj5Xj704m8.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/4HodYYKEIsGOdinkGi2Ucz6X9i0.jpg",
+              "year": 2023,
+              "rating": "PG",
+              "matchPercentage": 98,
+              "communityRating": 8.7,
+              "durationMinutes": 140,
+              "genres": [
+                "Animation",
+                "Action",
+                "Adventure"
+              ],
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
+            },
+            {
+              "id": "mov-1",
+              "title": "Oppenheimer",
+              "overview": "The story of J. Robert Oppenheimer's role in the development of the atomic bomb during World War II.",
+              "type": "Movie",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/fm6KqXpk3M2HVveHwCrBSSBaO0V.jpg",
+              "year": 2023,
+              "rating": "R",
+              "matchPercentage": 95,
+              "communityRating": 8.9,
+              "durationMinutes": 180,
+              "genres": [
+                "Biography",
+                "Drama",
+                "History"
+              ],
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+            }
+          ]
+        }
+      ],
+      "requestSections": [
+        {
+          "id": "requests-recommended",
+          "title": "Recommended for You",
+          "items": [
+            {
+              "id": "cw-1",
+              "title": "Dune: Part Two",
+              "overview": "Paul Atreides unites with Chani and the Fremen while seeking revenge against the conspirators who destroyed his family.",
+              "type": "Movie",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/1pdfLvkbY9ohJlCjQH2CZjjYVvJ.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/xOMo8BRK7PfcJv9JCnx7s5200bm.jpg",
+              "year": 2024,
+              "rating": "PG-13",
+              "matchPercentage": 98,
+              "communityRating": 8.5,
+              "durationMinutes": 166,
+              "genres": [
+                "Sci-Fi",
+                "Adventure"
+              ],
+              "source": "demo",
+              "status": "available",
+              "progressPercent": 68,
+              "playbackPositionTicks": 68000000000,
+              "totalDurationTicks": 100000000000,
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
+            },
+            {
+              "id": "cw-2",
+              "title": "Severance",
+              "overview": "Mark leads a team of office workers whose memories have been surgically divided between their work and personal lives.",
+              "type": "Series",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/b1x5Qe06180kO1984K9hS85XQ1U.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/bUOBkYc8w9j6x0w3h5nK4j8e4kG.jpg",
+              "year": 2024,
+              "rating": "TV-MA",
+              "matchPercentage": 97,
+              "communityRating": 8.7,
+              "genres": [
+                "Sci-Fi",
+                "Drama",
+                "Thriller"
+              ],
+              "seasonsCount": 2,
+              "source": "demo",
+              "status": "available",
+              "progressPercent": 42,
+              "playbackPositionTicks": 42000000000,
+              "totalDurationTicks": 100000000000,
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"
+            },
+            {
+              "id": "cw-3",
+              "title": "Arcane",
+              "overview": "Amid the stark discord of twin cities Piltover and Zaun, two sisters fight on rival sides of a war between magic technologies and incompatible convictions.",
+              "type": "Series",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/fqldf2t8ztc9aiwn397rDit3YR3.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/uDgy6hyPd82kOHh6I95FLtLnj6p.jpg",
+              "year": 2024,
+              "rating": "TV-14",
+              "matchPercentage": 99,
+              "communityRating": 9,
+              "genres": [
+                "Animation",
+                "Action",
+                "Sci-Fi"
+              ],
+              "seasonsCount": 2,
+              "source": "demo",
+              "status": "available",
+              "progressPercent": 85,
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+            },
+            {
+              "id": "cw-4",
+              "title": "Interstellar",
+              "overview": "A team of explorers travel through a wormhole in space in an attempt to ensure humanity's survival.",
+              "type": "Movie",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/rAiYTsqJJR0KP8UN8vCn8q9rfsr.jpg",
+              "year": 2014,
+              "rating": "PG-13",
+              "matchPercentage": 96,
+              "communityRating": 8.6,
+              "durationMinutes": 169,
+              "genres": [
+                "Sci-Fi",
+                "Drama"
+              ],
+              "source": "demo",
+              "status": "available",
+              "progressPercent": 23,
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
+            }
+          ]
+        },
+        {
+          "id": "requests-popular",
+          "title": "Popular Titles",
+          "items": [
+            {
+              "id": "mov-1",
+              "title": "Oppenheimer",
+              "overview": "The story of J. Robert Oppenheimer's role in the development of the atomic bomb during World War II.",
+              "type": "Movie",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/fm6KqXpk3M2HVveHwCrBSSBaO0V.jpg",
+              "year": 2023,
+              "rating": "R",
+              "matchPercentage": 95,
+              "communityRating": 8.9,
+              "durationMinutes": 180,
+              "genres": [
+                "Biography",
+                "Drama",
+                "History"
+              ],
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+            },
+            {
+              "id": "mov-2",
+              "title": "Spider-Man: Across the Spider-Verse",
+              "overview": "Miles Morales catapults across the Multiverse, where he encounters a team of Spider-People charged with protecting its very existence.",
+              "type": "Movie",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/8Vt6mWEReuy4Of61Lnj5Xj704m8.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/4HodYYKEIsGOdinkGi2Ucz6X9i0.jpg",
+              "year": 2023,
+              "rating": "PG",
+              "matchPercentage": 98,
+              "communityRating": 8.7,
+              "durationMinutes": 140,
+              "genres": [
+                "Animation",
+                "Action",
+                "Adventure"
+              ],
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
+            },
+            {
+              "id": "mov-3",
+              "title": "Blade Runner 2049",
+              "overview": "Young Blade Runner K's discovery of a long-buried secret leads him to track down former Blade Runner Rick Deckard, who's been missing for thirty years.",
+              "type": "Movie",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/gajva2L0rPYkEWjzgFlBXCAVBE5.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/sAtoMqDVhNDQBc3QJL3RF6hlxGq.jpg",
+              "year": 2017,
+              "rating": "R",
+              "matchPercentage": 94,
+              "communityRating": 8.5,
+              "durationMinutes": 164,
+              "genres": [
+                "Sci-Fi",
+                "Mystery"
+              ],
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"
+            },
+            {
+              "id": "mov-4",
+              "title": "The Batman",
+              "overview": "In his second year of fighting crime, Batman uncovers corruption in Gotham City that connects to his own family while facing a serial killer known as the Riddler.",
+              "type": "Movie",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/74xTEgt7R36Fpooo50r9T25onhq.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/5P8SmMzSNYikXpxil6BYzJ16611.jpg",
+              "year": 2022,
+              "rating": "PG-13",
+              "matchPercentage": 93,
+              "communityRating": 8.2,
+              "durationMinutes": 176,
+              "genres": [
+                "Action",
+                "Crime",
+                "Drama"
+              ],
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+            },
+            {
+              "id": "mov-5",
+              "title": "Top Gun: Maverick",
+              "overview": "After thirty years, Maverick is still pushing the envelope as a top naval aviator, but must confront ghosts of his past when he leads TOP GUN's elite graduates.",
+              "type": "Movie",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/62HCnUTziyWcpDaBO2i1DX17ljH.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/odJ4hx6g6vBt4lBWKFD1tI8WS4x.jpg",
+              "year": 2022,
+              "rating": "PG-13",
+              "matchPercentage": 97,
+              "communityRating": 8.3,
+              "durationMinutes": 130,
+              "genres": [
+                "Action",
+                "Drama"
+              ],
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
+            },
+            {
+              "id": "mov-6",
+              "title": "Everything Everywhere All at Once",
+              "overview": "A middle-aged Chinese immigrant is swept up into an insane adventure in which she alone can save existence by exploring other universes.",
+              "type": "Movie",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/w3LxiVYPqrlexP07sbTlsqZ2YqU.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/ss0JVbuat0utkL8tlZ7NF2SC6Dp.jpg",
+              "year": 2022,
+              "rating": "R",
+              "matchPercentage": 96,
+              "communityRating": 8.4,
+              "durationMinutes": 139,
+              "genres": [
+                "Action",
+                "Adventure",
+                "Sci-Fi"
+              ],
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"
+            },
+            {
+              "id": "ser-1",
+              "title": "The Bear",
+              "overview": "A young chef from the fine dining world comes home to Chicago to run his family Italian beef sandwich shop after a tragic loss.",
+              "type": "Series",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/619W31cQpB41Z5B7R4x1V4c5mJb.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/n2kY1N8bM2q5d8B0G1O5c4kG8s.jpg",
+              "year": 2024,
+              "rating": "TV-MA",
+              "matchPercentage": 98,
+              "communityRating": 8.8,
+              "genres": [
+                "Drama",
+                "Comedy"
+              ],
+              "seasonsCount": 3,
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+            },
+            {
+              "id": "ser-2",
+              "title": "The Last of Us",
+              "overview": "After a global pandemic destroys civilization, a hardened survivor takes charge of a 14-year-old girl who may be humanity's last hope.",
+              "type": "Series",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/uKvVjHNqB5VmOrdxqMis2SYqAOX.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/uDgy6hyPd82kOHh6I95FLtLnj6p.jpg",
+              "year": 2023,
+              "rating": "TV-MA",
+              "matchPercentage": 97,
+              "communityRating": 8.8,
+              "genres": [
+                "Drama",
+                "Sci-Fi",
+                "Adventure"
+              ],
+              "seasonsCount": 1,
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
+            },
+            {
+              "id": "ser-3",
+              "title": "Succession",
+              "overview": "The Roy family is known for controlling the biggest media and entertainment company in the world. However, their world will change when their aging father steps down.",
+              "type": "Series",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/7udZXnhP7h254z23oA07R1W8uL2.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/eCgO84kF1y3D0v5v6KqG0V4M.jpg",
+              "year": 2023,
+              "rating": "TV-MA",
+              "matchPercentage": 96,
+              "communityRating": 8.9,
+              "genres": [
+                "Drama"
+              ],
+              "seasonsCount": 4,
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"
+            },
+            {
+              "id": "ser-4",
+              "title": "Fallout",
+              "overview": "In a future, post-apocalyptic Los Angeles brought about by nuclear decimation, citizens must live in underground bunkers to protect themselves from radiation, mutants and bandits.",
+              "type": "Series",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/ansFb0z1u23e0y4w6a8d6C9d6F2.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/i5O1v9z9y4v8t2K2F3l4w8u8k.jpg",
+              "year": 2024,
+              "rating": "TV-MA",
+              "matchPercentage": 95,
+              "communityRating": 8.5,
+              "genres": [
+                "Sci-Fi",
+                "Action",
+                "Adventure"
+              ],
+              "seasonsCount": 1,
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+            },
+            {
+              "id": "ser-5",
+              "title": "Breaking Bad",
+              "overview": "A chemistry teacher diagnosed with inoperable lung cancer turns to manufacturing and selling methamphetamine with a former student in order to secure his family's future.",
+              "type": "Series",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/ztkUQFLlC19CCMYHW9o1zWhJRNq.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/tsRy63Mu5cu8etL1X7ZLyf7UP1M.jpg",
+              "year": 2013,
+              "rating": "TV-MA",
+              "matchPercentage": 99,
+              "communityRating": 9.5,
+              "genres": [
+                "Crime",
+                "Drama",
+                "Thriller"
+              ],
+              "seasonsCount": 5,
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
+            }
+          ]
+        },
+        {
+          "id": "requests-top-movies",
+          "title": "Top Movies",
+          "items": [
+            {
+              "id": "mov-1",
+              "title": "Oppenheimer",
+              "overview": "The story of J. Robert Oppenheimer's role in the development of the atomic bomb during World War II.",
+              "type": "Movie",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/fm6KqXpk3M2HVveHwCrBSSBaO0V.jpg",
+              "year": 2023,
+              "rating": "R",
+              "matchPercentage": 95,
+              "communityRating": 8.9,
+              "durationMinutes": 180,
+              "genres": [
+                "Biography",
+                "Drama",
+                "History"
+              ],
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+            },
+            {
+              "id": "mov-2",
+              "title": "Spider-Man: Across the Spider-Verse",
+              "overview": "Miles Morales catapults across the Multiverse, where he encounters a team of Spider-People charged with protecting its very existence.",
+              "type": "Movie",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/8Vt6mWEReuy4Of61Lnj5Xj704m8.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/4HodYYKEIsGOdinkGi2Ucz6X9i0.jpg",
+              "year": 2023,
+              "rating": "PG",
+              "matchPercentage": 98,
+              "communityRating": 8.7,
+              "durationMinutes": 140,
+              "genres": [
+                "Animation",
+                "Action",
+                "Adventure"
+              ],
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
+            },
+            {
+              "id": "mov-3",
+              "title": "Blade Runner 2049",
+              "overview": "Young Blade Runner K's discovery of a long-buried secret leads him to track down former Blade Runner Rick Deckard, who's been missing for thirty years.",
+              "type": "Movie",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/gajva2L0rPYkEWjzgFlBXCAVBE5.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/sAtoMqDVhNDQBc3QJL3RF6hlxGq.jpg",
+              "year": 2017,
+              "rating": "R",
+              "matchPercentage": 94,
+              "communityRating": 8.5,
+              "durationMinutes": 164,
+              "genres": [
+                "Sci-Fi",
+                "Mystery"
+              ],
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"
+            },
+            {
+              "id": "mov-4",
+              "title": "The Batman",
+              "overview": "In his second year of fighting crime, Batman uncovers corruption in Gotham City that connects to his own family while facing a serial killer known as the Riddler.",
+              "type": "Movie",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/74xTEgt7R36Fpooo50r9T25onhq.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/5P8SmMzSNYikXpxil6BYzJ16611.jpg",
+              "year": 2022,
+              "rating": "PG-13",
+              "matchPercentage": 93,
+              "communityRating": 8.2,
+              "durationMinutes": 176,
+              "genres": [
+                "Action",
+                "Crime",
+                "Drama"
+              ],
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+            },
+            {
+              "id": "mov-5",
+              "title": "Top Gun: Maverick",
+              "overview": "After thirty years, Maverick is still pushing the envelope as a top naval aviator, but must confront ghosts of his past when he leads TOP GUN's elite graduates.",
+              "type": "Movie",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/62HCnUTziyWcpDaBO2i1DX17ljH.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/odJ4hx6g6vBt4lBWKFD1tI8WS4x.jpg",
+              "year": 2022,
+              "rating": "PG-13",
+              "matchPercentage": 97,
+              "communityRating": 8.3,
+              "durationMinutes": 130,
+              "genres": [
+                "Action",
+                "Drama"
+              ],
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
+            },
+            {
+              "id": "mov-6",
+              "title": "Everything Everywhere All at Once",
+              "overview": "A middle-aged Chinese immigrant is swept up into an insane adventure in which she alone can save existence by exploring other universes.",
+              "type": "Movie",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/w3LxiVYPqrlexP07sbTlsqZ2YqU.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/ss0JVbuat0utkL8tlZ7NF2SC6Dp.jpg",
+              "year": 2022,
+              "rating": "R",
+              "matchPercentage": 96,
+              "communityRating": 8.4,
+              "durationMinutes": 139,
+              "genres": [
+                "Action",
+                "Adventure",
+                "Sci-Fi"
+              ],
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"
+            }
+          ]
+        },
+        {
+          "id": "requests-top-tv",
+          "title": "Top TV Shows",
+          "items": [
+            {
+              "id": "ser-1",
+              "title": "The Bear",
+              "overview": "A young chef from the fine dining world comes home to Chicago to run his family Italian beef sandwich shop after a tragic loss.",
+              "type": "Series",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/619W31cQpB41Z5B7R4x1V4c5mJb.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/n2kY1N8bM2q5d8B0G1O5c4kG8s.jpg",
+              "year": 2024,
+              "rating": "TV-MA",
+              "matchPercentage": 98,
+              "communityRating": 8.8,
+              "genres": [
+                "Drama",
+                "Comedy"
+              ],
+              "seasonsCount": 3,
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+            },
+            {
+              "id": "ser-2",
+              "title": "The Last of Us",
+              "overview": "After a global pandemic destroys civilization, a hardened survivor takes charge of a 14-year-old girl who may be humanity's last hope.",
+              "type": "Series",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/uKvVjHNqB5VmOrdxqMis2SYqAOX.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/uDgy6hyPd82kOHh6I95FLtLnj6p.jpg",
+              "year": 2023,
+              "rating": "TV-MA",
+              "matchPercentage": 97,
+              "communityRating": 8.8,
+              "genres": [
+                "Drama",
+                "Sci-Fi",
+                "Adventure"
+              ],
+              "seasonsCount": 1,
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
+            },
+            {
+              "id": "ser-3",
+              "title": "Succession",
+              "overview": "The Roy family is known for controlling the biggest media and entertainment company in the world. However, their world will change when their aging father steps down.",
+              "type": "Series",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/7udZXnhP7h254z23oA07R1W8uL2.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/eCgO84kF1y3D0v5v6KqG0V4M.jpg",
+              "year": 2023,
+              "rating": "TV-MA",
+              "matchPercentage": 96,
+              "communityRating": 8.9,
+              "genres": [
+                "Drama"
+              ],
+              "seasonsCount": 4,
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4"
+            },
+            {
+              "id": "ser-4",
+              "title": "Fallout",
+              "overview": "In a future, post-apocalyptic Los Angeles brought about by nuclear decimation, citizens must live in underground bunkers to protect themselves from radiation, mutants and bandits.",
+              "type": "Series",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/ansFb0z1u23e0y4w6a8d6C9d6F2.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/i5O1v9z9y4v8t2K2F3l4w8u8k.jpg",
+              "year": 2024,
+              "rating": "TV-MA",
+              "matchPercentage": 95,
+              "communityRating": 8.5,
+              "genres": [
+                "Sci-Fi",
+                "Action",
+                "Adventure"
+              ],
+              "seasonsCount": 1,
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+            },
+            {
+              "id": "ser-5",
+              "title": "Breaking Bad",
+              "overview": "A chemistry teacher diagnosed with inoperable lung cancer turns to manufacturing and selling methamphetamine with a former student in order to secure his family's future.",
+              "type": "Series",
+              "posterUrl": "https://image.tmdb.org/t/p/w500/ztkUQFLlC19CCMYHW9o1zWhJRNq.jpg",
+              "backdropUrl": "https://image.tmdb.org/t/p/original/tsRy63Mu5cu8etL1X7ZLyf7UP1M.jpg",
+              "year": 2013,
+              "rating": "TV-MA",
+              "matchPercentage": 99,
+              "communityRating": 9.5,
+              "genres": [
+                "Crime",
+                "Drama",
+                "Thriller"
+              ],
+              "seasonsCount": 5,
+              "source": "demo",
+              "status": "available",
+              "videoStreamUrl": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
+            }
+          ]
+        }
+      ],
+      "isDemoMode": true,
+      "jellyfinConnected": false,
+      "seerrConnected": false
+    }
+  },
+  {
+    "path": "/api/mobile/v1/library/movies",
+    "status": 200,
+    "body": {
+      "type": "movies",
+      "title": "Movies",
+      "items": [],
+      "totalCount": 0,
+      "filteredCount": 0,
+      "availableLetters": []
+    }
+  },
+  {
+    "path": "/api/mobile/v1/library/tv",
+    "status": 200,
+    "body": {
+      "type": "tv",
+      "title": "TV Shows",
+      "items": [],
+      "totalCount": 0,
+      "filteredCount": 0,
+      "availableLetters": []
+    }
+  },
+  {
+    "path": "/api/mobile/v1/search?q=example",
+    "status": 200,
+    "body": {
+      "results": [],
+      "isDemoMode": true
+    }
+  },
+  {
+    "path": "/api/mobile/v1/downloads",
+    "status": 200,
+    "body": {
+      "configured": false,
+      "items": []
+    }
+  },
+  {
+    "path": "/api/mobile/v1/playback",
+    "status": 400,
+    "body": {
+      "error": "itemId is required"
+    }
+  },
+  {
+    "path": "/api/mobile/v1/media/invalid-id",
+    "status": 404,
+    "body": {
+      "error": "Media not found"
+    }
+  },
+  {
+    "path": "/api/mobile/v1/not-found",
+    "status": 404,
+    "body": {
+      "error": "Unknown mobile endpoint"
+    }
+  }
+]

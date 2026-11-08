@@ -1,0 +1,7 @@
+services:
+  backend:
+    devices:
+      - /dev/dri:/dev/dri
+    group_add:
+      - ${HOMESTREAM_RENDER_GID:-109}
+      - ${HOMESTREAM_VIDEO_GID:-44}

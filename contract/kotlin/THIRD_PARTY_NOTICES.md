@@ -1,0 +1,1 @@
+The Gradle wrapper scripts and JAR are distributed under the Apache License 2.0 by Gradle and retain their upstream notices. Kotlin, kotlinx.serialization and OkHttp are external dependencies under their respective licenses. HomeStream-generated bindings are MIT licensed; see the repository LICENSE.

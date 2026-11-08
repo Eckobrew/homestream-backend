@@ -1,0 +1,31 @@
+{
+  "name": "@eckobrew/homestream-api",
+  "version": "1.1.0",
+  "type": "module",
+  "main": "./dist/client.js",
+  "types": "./dist/client.d.ts",
+  "files": [
+    "dist",
+    "openapi.json",
+    "models.ts",
+    "paths.d.ts",
+    "client.ts",
+    "LICENSE",
+    "kotlin/src",
+    "kotlin/build.gradle",
+    "kotlin/settings.gradle",
+    "kotlin/gradlew",
+    "kotlin/gradlew.bat",
+    "kotlin/gradle/wrapper",
+    "kotlin/README.md",
+    "kotlin/THIRD_PARTY_NOTICES.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/client.d.ts",
+      "import": "./dist/client.js"
+    },
+    "./openapi.json": "./openapi.json"
+  },
+  "license": "MIT"
+}

@@ -1,37 +1,49 @@
 {
-  "name": "homestream",
-  "version": "0.1.0",
+  "name": "@eckobrew/homestream-backend",
+  "version": "1.1.0",
   "private": true,
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/Eckobrew/HomeStream.git"
+  "type": "module",
+  "engines": {
+    "node": ">=22.21"
   },
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
-    "test:mobile": "node scripts/test-mobile-api.mjs",
-    "test:playback": "node scripts/test-playback-capabilities.mjs"
+    "dev": "node --env-file-if-exists=.env --import tsx --watch src/server.ts",
+    "build": "tsc --noEmit && tsup --format esm --platform node --target node22 --out-dir dist",
+    "start": "node --env-file-if-exists=.env dist/server.js",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "test:mobile": "node --import tsx scripts/test-mobile-api.mjs",
+    "test:playback": "node scripts/test-playback-capabilities.mjs",
+    "contract:generate": "node --import tsx scripts/generate-contract.ts",
+    "contract:check": "node scripts/check-contract.mjs",
+    "contract:pack": "tsc -p contract/tsconfig.json && cp contract/paths.d.ts contract/dist/paths.d.ts && npm pack ./contract",
+    "test:torrent": "node --import tsx --test integration/torrent.test.ts",
+    "storage:import": "node --env-file-if-exists=.env dist/import-state.js",
+    "lint": "eslint .",
+    "storage:backup": "node --env-file-if-exists=.env dist/backup-state.js",
+    "contract:kotlin": "bash scripts/generate-kotlin.sh",
+    "contract:test": "node scripts/compare-contract-test.mjs"
   },
   "dependencies": {
-    "hls.js": "^1.7.4",
-    "lucide-react": "^0.460.0",
-    "next": "15.5.28",
-    "react": "19.3.1",
-    "react-dom": "19.3.1"
+    "ajv": "^8.20.0",
+    "fastify": "^5.6.2",
+    "proxy-addr": "^2.0.7"
   },
   "devDependencies": {
-    "@types/node": "^20",
-    "@types/react": "^19.3.0",
-    "@types/react-dom": "^19.3.0",
-    "eslint": "^8",
-    "eslint-config-next": "15.5.28",
-    "postcss": "8.5.32",
-    "tailwindcss": "^3.4.1",
-    "typescript": "^5"
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^22",
+    "@types/proxy-addr": "^2.0.3",
+    "eslint": "^10.14.0",
+    "openapi-typescript": "^7.13.0",
+    "tsup": "^8.5.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.72.1",
+    "typescript-json-schema": "^0.68.0"
   },
-  "overrides": {
-    "postcss": "$postcss"
-  }
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Eckobrew/homestream-backend.git"
+  },
+  "license": "MIT"
 }

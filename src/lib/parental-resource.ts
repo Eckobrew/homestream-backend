@@ -1,7 +1,8 @@
+import { fetch } from '@/upstream';
 import { requestParentalDevice } from './parental-runtime';
 import { registeredDevice } from './devices';
 import crypto from 'crypto';
-import { NextRequest, NextResponse } from 'next/server';
+import { HttpRequest, HttpResponse } from '@/http';
 import { getServerConfig } from './config';
 import { getHomeflixProfiles } from './profiles';
 import { kidsPolicyRevision, isKids, KIDS_LIMITS } from './parental-store';
@@ -51,7 +52,7 @@ export function imageResource(source: string, profile: UserProfile, age: number)
     return resourceUrl(target, profile, 'image', age);
   } catch { return null; }
 }
-export async function parentalResource(request: NextRequest): Promise<Response> {
+export async function parentalResource(request: HttpRequest): Promise<Response> {
   try {
     const token = request.nextUrl.searchParams.get('ticket') || '';
     if (token.length > 16384) throw new Error('Invalid ticket');
@@ -90,7 +91,7 @@ export async function parentalResource(request: NextRequest): Promise<Response> 
       return new Response(playlist, { headers: output });
     }
     return new Response(request.method === 'HEAD' ? null : response.body, { status: response.status, headers: output });
-  } catch { return NextResponse.json({ error: 'Media access is not permitted for this profile' }, { status: 403, headers: { 'Cache-Control': 'no-store' } }); }
+  } catch { return HttpResponse.json({ error: 'Media access is not permitted for this profile' }, { status: 403, headers: { 'Cache-Control': 'no-store' } }); }
 }
 
 async function boundedPlaylist(response: Response): Promise<string> {

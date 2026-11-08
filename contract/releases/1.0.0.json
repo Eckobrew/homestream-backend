@@ -1,0 +1,1792 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "HomeStream API",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "paths": {
+    "/api/v1/auth": {
+      "get": {
+        "operationId": "get_auth",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Existing HomeStream response"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Policy denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          },
+          {}
+        ]
+      },
+      "post": {
+        "operationId": "post_auth",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Existing HomeStream response"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Policy denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          },
+          {}
+        ]
+      }
+    },
+    "/api/v1/categories/{type}": {
+      "get": {
+        "operationId": "get_categories_type",
+        "parameters": [
+          {
+            "name": "type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Existing HomeStream response"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Policy denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          },
+          {}
+        ]
+      }
+    },
+    "/api/v1/config": {
+      "get": {
+        "operationId": "get_config",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Existing HomeStream response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicConfig"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Policy denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          },
+          {}
+        ]
+      },
+      "post": {
+        "operationId": "post_config",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Existing HomeStream response"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Policy denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          },
+          {}
+        ]
+      }
+    },
+    "/api/v1/downloads": {
+      "get": {
+        "operationId": "get_downloads",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Existing HomeStream response"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Policy denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          },
+          {}
+        ]
+      }
+    },
+    "/api/v1/home": {
+      "get": {
+        "operationId": "get_home",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Existing HomeStream response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HomeResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Policy denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          },
+          {}
+        ]
+      }
+    },
+    "/api/v1/library/{type}": {
+      "get": {
+        "operationId": "get_library_type",
+        "parameters": [
+          {
+            "name": "type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Existing HomeStream response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LibraryResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Policy denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          },
+          {}
+        ]
+      }
+    },
+    "/api/v1/media/{id}": {
+      "get": {
+        "operationId": "get_media_id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Existing HomeStream response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Policy denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          },
+          {}
+        ]
+      }
+    },
+    "/api/v1/media/{id}/recommendations": {
+      "get": {
+        "operationId": "get_media_id_recommendations",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Existing HomeStream response"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Policy denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          },
+          {}
+        ]
+      }
+    },
+    "/api/v1/playback": {
+      "get": {
+        "operationId": "get_playback",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Existing HomeStream response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaybackResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Policy denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          },
+          {}
+        ]
+      }
+    },
+    "/api/v1/playback/progress": {
+      "post": {
+        "operationId": "post_playback_progress",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Existing HomeStream response"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Policy denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          },
+          {}
+        ]
+      }
+    },
+    "/api/v1/preview-stream": {
+      "get": {
+        "operationId": "get_preview_stream",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Existing HomeStream response"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Policy denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          },
+          {}
+        ]
+      }
+    },
+    "/api/v1/profiles": {
+      "get": {
+        "operationId": "get_profiles",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Existing HomeStream response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfilesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Policy denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          },
+          {}
+        ]
+      },
+      "post": {
+        "operationId": "post_profiles",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Existing HomeStream response"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Policy denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          },
+          {}
+        ]
+      }
+    },
+    "/api/v1/request": {
+      "get": {
+        "operationId": "get_request",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Existing HomeStream response"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Policy denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          },
+          {}
+        ]
+      },
+      "post": {
+        "operationId": "post_request",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Existing HomeStream response"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Policy denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          },
+          {}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestMediaPayload"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/search": {
+      "get": {
+        "operationId": "get_search",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Existing HomeStream response"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Policy denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          },
+          {}
+        ]
+      }
+    },
+    "/api/v1/stream/download": {
+      "get": {
+        "operationId": "get_stream_download",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Existing HomeStream response"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Policy denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          },
+          {}
+        ]
+      }
+    },
+    "/api/v1/subtitles": {
+      "get": {
+        "operationId": "get_subtitles",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Existing HomeStream response"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Policy denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          },
+          {}
+        ]
+      }
+    },
+    "/api/v1/trailer": {
+      "get": {
+        "operationId": "get_trailer",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Existing HomeStream response"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Policy denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          },
+          {}
+        ]
+      }
+    },
+    "/api/v1/webhook/arr": {
+      "post": {
+        "operationId": "post_webhook_arr",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Existing HomeStream response"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Policy denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          },
+          {}
+        ]
+      },
+      "get": {
+        "operationId": "get_webhook_arr",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Existing HomeStream response"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Policy denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          },
+          {}
+        ]
+      }
+    },
+    "/api/v1/catalog-links": {
+      "get": {
+        "operationId": "get_catalog_links",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Existing HomeStream response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LibraryResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Policy denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "bearer": []
+          },
+          {}
+        ]
+      }
+    },
+    "/api/mobile/v1/capabilities": {
+      "get": {
+        "operationId": "mobile_capabilities",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Native capabilities",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Capabilities"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ApiError": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "MediaItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "originalTitle": {
+            "type": "string"
+          },
+          "overview": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/MediaType"
+          },
+          "posterUrl": {
+            "type": "string"
+          },
+          "backdropUrl": {
+            "type": "string"
+          },
+          "year": {
+            "type": "number"
+          },
+          "releaseDate": {
+            "type": "string"
+          },
+          "rating": {
+            "type": "string"
+          },
+          "matchPercentage": {
+            "type": "number"
+          },
+          "communityRating": {
+            "type": "number"
+          },
+          "durationMinutes": {
+            "type": "number"
+          },
+          "genres": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "seasonsCount": {
+            "type": "number"
+          },
+          "source": {
+            "enum": [
+              "demo",
+              "jellyfin",
+              "seerr"
+            ],
+            "type": "string"
+          },
+          "jellyfinId": {
+            "type": "string"
+          },
+          "seerrId": {
+            "type": "number"
+          },
+          "tmdbId": {
+            "type": "number"
+          },
+          "playableEpisodeId": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AvailabilityStatus"
+          },
+          "played": {
+            "type": "boolean"
+          },
+          "playbackPositionTicks": {
+            "type": "number"
+          },
+          "totalDurationTicks": {
+            "type": "number"
+          },
+          "progressPercent": {
+            "type": "number"
+          },
+          "cast": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CastMember"
+            }
+          },
+          "director": {
+            "type": "string"
+          },
+          "seriesId": {
+            "type": "string"
+          },
+          "seasonNumber": {
+            "type": "number"
+          },
+          "episodeNumber": {
+            "type": "number"
+          },
+          "seriesName": {
+            "type": "string"
+          },
+          "seasons": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Season"
+            }
+          },
+          "videoStreamUrl": {
+            "type": "string"
+          },
+          "trailerKey": {
+            "type": "string"
+          },
+          "trailerUrl": {
+            "type": "string"
+          },
+          "resolution": {
+            "type": "string"
+          },
+          "videoQuality": {
+            "type": "string"
+          },
+          "audioQuality": {
+            "type": "string"
+          },
+          "hasHdr": {
+            "type": "boolean"
+          },
+          "isDownloading": {
+            "type": "boolean"
+          },
+          "downloadProgress": {
+            "type": "number"
+          },
+          "downloadSpeed": {
+            "type": "number"
+          },
+          "downloadEta": {
+            "type": "number"
+          },
+          "downloaded": {
+            "type": "number"
+          },
+          "torrentHash": {
+            "type": "string"
+          },
+          "downloadStreamUrl": {
+            "type": "string"
+          },
+          "mediaFiles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DownloadingTorrentFile"
+            }
+          }
+        },
+        "required": [
+          "backdropUrl",
+          "genres",
+          "id",
+          "overview",
+          "posterUrl",
+          "source",
+          "status",
+          "title",
+          "type"
+        ]
+      },
+      "MediaType": {
+        "enum": [
+          "Episode",
+          "Movie",
+          "Series"
+        ],
+        "type": "string"
+      },
+      "AvailabilityStatus": {
+        "enum": [
+          "available",
+          "not_requested",
+          "partially_available",
+          "processing",
+          "requested"
+        ],
+        "type": "string"
+      },
+      "CastMember": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "profileUrl": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "role"
+        ]
+      },
+      "Season": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "seasonNumber": {
+            "type": "number"
+          },
+          "name": {
+            "type": "string"
+          },
+          "episodeCount": {
+            "type": "number"
+          },
+          "overview": {
+            "type": "string"
+          },
+          "episodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Episode"
+            }
+          }
+        },
+        "required": [
+          "episodeCount",
+          "id",
+          "name",
+          "seasonNumber"
+        ]
+      },
+      "Episode": {
+        "type": "object",
+        "properties": {
+          "locationType": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "episodeNumber": {
+            "type": "number"
+          },
+          "seasonNumber": {
+            "type": "number"
+          },
+          "name": {
+            "type": "string"
+          },
+          "overview": {
+            "type": "string"
+          },
+          "durationMinutes": {
+            "type": "number"
+          },
+          "thumbnailUrl": {
+            "type": "string"
+          },
+          "playbackPositionTicks": {
+            "type": "number"
+          },
+          "totalDurationTicks": {
+            "type": "number"
+          },
+          "progressPercent": {
+            "type": "number"
+          },
+          "played": {
+            "type": "boolean"
+          },
+          "jellyfinId": {
+            "type": "string"
+          },
+          "videoStreamUrl": {
+            "type": "string"
+          },
+          "downloadStreamUrl": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "durationMinutes",
+          "episodeNumber",
+          "id",
+          "name",
+          "overview",
+          "seasonNumber",
+          "thumbnailUrl"
+        ]
+      },
+      "DownloadingTorrentFile": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "number"
+          },
+          "name": {
+            "type": "string"
+          },
+          "size": {
+            "type": "number"
+          },
+          "progress": {
+            "type": "number"
+          },
+          "isMedia": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "index",
+          "isMedia",
+          "name",
+          "progress",
+          "size"
+        ]
+      },
+      "MediaRowSection": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MediaItem"
+            }
+          },
+          "isTop10": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "items",
+          "title"
+        ]
+      },
+      "HomeResponse": {
+        "type": "object",
+        "properties": {
+          "hero": {
+            "$ref": "#/components/schemas/MediaItem"
+          },
+          "sections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MediaRowSection"
+            }
+          },
+          "requestSections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MediaRowSection"
+            }
+          },
+          "isDemoMode": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "isDemoMode",
+          "sections"
+        ]
+      },
+      "LibraryResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MediaItem"
+            }
+          },
+          "totalCount": {
+            "type": "number"
+          },
+          "filteredCount": {
+            "type": "number"
+          },
+          "availableLetters": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "MediaResponse": {
+        "type": "object",
+        "properties": {
+          "item": {
+            "$ref": "#/components/schemas/MediaItem"
+          }
+        },
+        "required": [
+          "item"
+        ]
+      },
+      "UserProfile": {
+        "type": "object",
+        "properties": {
+          "isKids": {
+            "type": "boolean"
+          },
+          "kidsDateOfBirth": {
+            "type": "string"
+          },
+          "kidsRating": {
+            "enum": [
+              "12",
+              "15",
+              "18",
+              "PG",
+              "U"
+            ],
+            "type": "string"
+          },
+          "avatarId": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "avatarColor": {
+            "type": "string"
+          },
+          "avatarBg": {
+            "type": "string"
+          },
+          "initials": {
+            "type": "string"
+          },
+          "avatarUrl": {
+            "type": "string"
+          },
+          "isAdministrator": {
+            "type": "boolean"
+          },
+          "jellyfinUserId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "avatarBg",
+          "avatarColor",
+          "id",
+          "initials",
+          "name"
+        ]
+      },
+      "ProfilesResponse": {
+        "type": "object",
+        "properties": {
+          "profiles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserProfile"
+            }
+          },
+          "activeProfileId": {
+            "type": "string"
+          },
+          "canSwitchProfile": {
+            "type": "boolean"
+          },
+          "needsSetup": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "profiles"
+        ]
+      },
+      "PlaybackResponse": {
+        "type": "object",
+        "properties": {
+          "streamUrl": {
+            "type": "string"
+          },
+          "isTranscoding": {
+            "type": "boolean"
+          },
+          "durationSeconds": {
+            "type": "number"
+          },
+          "transport": {
+            "type": "string"
+          },
+          "contentType": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "isTranscoding",
+          "streamUrl"
+        ]
+      },
+      "PublicConfig": {
+        "type": "object",
+        "properties": {
+          "appName": {
+            "type": "string"
+          },
+          "isConfigured": {
+            "type": "boolean"
+          },
+          "jellyfinUrl": {
+            "type": "string"
+          },
+          "hasJellyfinKey": {
+            "type": "boolean"
+          },
+          "jellyfinUserId": {
+            "type": "string"
+          },
+          "seerrUrl": {
+            "type": "string"
+          },
+          "hasSeerrKey": {
+            "type": "boolean"
+          },
+          "qbittorrentUrl": {
+            "type": "string"
+          },
+          "qbittorrentUsername": {
+            "type": "string"
+          },
+          "hasQbittorrentPassword": {
+            "type": "boolean"
+          },
+          "downloadsPath": {
+            "type": "string"
+          },
+          "isJellyfinConfigured": {
+            "type": "boolean"
+          },
+          "isSeerrConfigured": {
+            "type": "boolean"
+          },
+          "isQbittorrentConfigured": {
+            "type": "boolean"
+          },
+          "isSetupNeeded": {
+            "type": "boolean"
+          },
+          "profilesCount": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "appName",
+          "downloadsPath",
+          "hasJellyfinKey",
+          "hasQbittorrentPassword",
+          "hasSeerrKey",
+          "isConfigured",
+          "isJellyfinConfigured",
+          "isQbittorrentConfigured",
+          "isSeerrConfigured",
+          "isSetupNeeded",
+          "jellyfinUrl",
+          "jellyfinUserId",
+          "profilesCount",
+          "seerrUrl"
+        ]
+      },
+      "Capabilities": {
+        "type": "object",
+        "properties": {
+          "apiVersion": {
+            "type": "number"
+          },
+          "appName": {
+            "type": "string"
+          },
+          "cast": {
+            "type": "boolean"
+          },
+          "jellyfinLogin": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "apiVersion",
+          "appName",
+          "cast"
+        ]
+      },
+      "RequestMediaPayload": {
+        "type": "object",
+        "properties": {
+          "mediaType": {
+            "enum": [
+              "movie",
+              "tv"
+            ],
+            "type": "string"
+          },
+          "mediaId": {
+            "type": "number"
+          },
+          "seasons": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              {
+                "const": "all",
+                "type": "string"
+              }
+            ]
+          },
+          "is4k": {
+            "type": "boolean"
+          },
+          "profileId": {
+            "type": "number"
+          },
+          "serverId": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "mediaId",
+          "mediaType"
+        ]
+      },
+      "SubtitleTrack": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "index": {
+            "type": "number"
+          },
+          "title": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "isDefault": {
+            "type": "boolean"
+          },
+          "isForced": {
+            "type": "boolean"
+          },
+          "src": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "index",
+          "language",
+          "src",
+          "title"
+        ]
+      }
+    },
+    "securitySchemes": {
+      "session": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "homeflix_session"
+      },
+      "bearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

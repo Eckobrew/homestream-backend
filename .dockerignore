@@ -1,10 +1,8 @@
-.git
 node_modules
-.next
-.next-*
-.env*
-!.env.example
+.git
+.env
+.env.*
 data
-*.tsbuildinfo
-npm-debug.log*
-.DS_Store
+dist
+contract/dist
+*.tgz

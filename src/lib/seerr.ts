@@ -1,3 +1,5 @@
+import { fetch, registerDependency } from '@/upstream';
+import { log } from '@/log';
 import { MediaItem, AvailabilityStatus, RequestMediaPayload, Season, Episode } from '@/types';
 import { getServerConfig } from './config';
 
@@ -29,10 +31,11 @@ export class SeerrClient {
   constructor(url?: string, apiKey?: string) {
     const config = getServerConfig();
     this.url = (url || config.seerrUrl).replace(/\/+$/, '');
+    registerDependency('seerr', this.url);
     this.apiKey = apiKey || config.seerrApiKey;
   }
 
-  private fetch(input: string, options: RequestInit & { next?: { revalidate?: number } } = {}) {
+  private fetch(input: string, options: RequestInit = {}) {
     return fetch(input, { ...options, redirect: 'error', signal: options.signal || AbortSignal.timeout(10000) });
   }
 
@@ -56,8 +59,7 @@ export class SeerrClient {
     try {
       const res = await this.fetch(`${this.url}/api/v1/status`, {
         headers: this.getHeaders(),
-        next: { revalidate: 0 },
-      });
+        });
 
       if (!res.ok) {
         return { success: false, error: `HTTP ${res.status}: ${res.statusText}` };
@@ -143,7 +145,7 @@ export class SeerrClient {
       );
       return results.map((r) => this.mapResult(r));
     } catch (e) {
-      console.error('Error searching media in Seerr:', e);
+      log.error('Error searching media in Seerr:', e);
       return [];
     }
   }
@@ -153,8 +155,7 @@ export class SeerrClient {
     try {
       const res = await this.fetch(`${this.url}/api/v1/discover/trending`, {
         headers: this.getHeaders(),
-        next: { revalidate: 300 },
-      });
+        });
       if (!res.ok) return [];
       const data = await res.json();
       const results: SeerrResult[] = (data.results || []).filter(
@@ -162,7 +163,7 @@ export class SeerrClient {
       );
       return results.map((r) => this.mapResult(r));
     } catch (e) {
-      console.error('Error fetching trending from Seerr:', e);
+      log.error('Error fetching trending from Seerr:', e);
       return [];
     }
   }
@@ -172,8 +173,7 @@ export class SeerrClient {
     try {
       const res = await this.fetch(`${this.url}/api/v1/discover/movies?page=${page}`, {
         headers: this.getHeaders(),
-        next: { revalidate: 300 },
-      });
+        });
       if (!res.ok) return [];
       const data = await res.json();
       const results: SeerrResult[] = (data.results || []).filter(
@@ -181,7 +181,7 @@ export class SeerrClient {
       );
       return results.map((r) => this.mapResult({ ...r, mediaType: 'movie' }));
     } catch (e) {
-      console.error('Error fetching popular movies from Seerr:', e);
+      log.error('Error fetching popular movies from Seerr:', e);
       return [];
     }
   }
@@ -191,8 +191,7 @@ export class SeerrClient {
     try {
       const res = await this.fetch(`${this.url}/api/v1/discover/tv?page=${page}`, {
         headers: this.getHeaders(),
-        next: { revalidate: 300 },
-      });
+        });
       if (!res.ok) return [];
       const data = await res.json();
       const results: SeerrResult[] = (data.results || []).filter(
@@ -200,7 +199,7 @@ export class SeerrClient {
       );
       return results.map((r) => this.mapResult({ ...r, mediaType: 'tv' }));
     } catch (e) {
-      console.error('Error fetching popular TV from Seerr:', e);
+      log.error('Error fetching popular TV from Seerr:', e);
       return [];
     }
   }
@@ -211,14 +210,14 @@ export class SeerrClient {
       const endpoint = mediaType === 'tv' ? 'tv' : 'movies';
       const res = await this.fetch(`${this.url}/api/v1/discover/${endpoint}?genre=${genreId}&page=${page}`, {
         headers: this.getHeaders(),
-        next: { revalidate: 300 }, signal: AbortSignal.timeout(8000),
+        signal: AbortSignal.timeout(8000),
       });
       if (!res.ok) return [];
       const data = await res.json();
       const results: SeerrResult[] = data.results || [];
       return results.map((r) => this.mapResult({ ...r, mediaType }));
     } catch (e) {
-      console.error(`Error discovering ${mediaType} with genre ${genreId}:`, e);
+      log.error(`Error discovering ${mediaType} with genre ${genreId}:`, e);
       return [];
     }
   }
@@ -320,7 +319,7 @@ export class SeerrClient {
 
       return combined.length > 0 ? combined : this.getTrending();
     } catch (e) {
-      console.error('Error building genre recommendations:', e);
+      log.error('Error building genre recommendations:', e);
       return this.getTrending();
     }
   }
@@ -331,8 +330,7 @@ export class SeerrClient {
       const service = mediaType === 'tv' ? 'sonarr' : 'radarr';
       const srvRes = await this.fetch(`${this.url}/api/v1/service/${service}`, {
         headers: this.getHeaders(),
-        next: { revalidate: 600 },
-      });
+        });
       if (!srvRes.ok) return [];
       const servers = await srvRes.json();
       if (!Array.isArray(servers) || servers.length === 0) return [];
@@ -340,8 +338,7 @@ export class SeerrClient {
 
       const profRes = await this.fetch(`${this.url}/api/v1/service/${service}/${defaultServer.id}`, {
         headers: this.getHeaders(),
-        next: { revalidate: 600 },
-      });
+        });
       if (!profRes.ok) return [];
       const serverDetails = await profRes.json();
       const profiles: { id: number; name: string }[] = serverDetails.profiles || [];
@@ -352,7 +349,7 @@ export class SeerrClient {
         is4k: p.name.toLowerCase().includes('4k') || p.name.toLowerCase().includes('ultra'),
       }));
     } catch (e) {
-      console.error(`Error fetching quality profiles for ${mediaType}:`, e);
+      log.error(`Error fetching quality profiles for ${mediaType}:`, e);
       return [];
     }
   }
@@ -362,8 +359,7 @@ export class SeerrClient {
     try {
       const res = await this.fetch(`${this.url}/api/v1/tv/${tmdbId}`, {
         headers: this.getHeaders(),
-        next: { revalidate: 300 },
-      });
+        });
       if (!res.ok) return null;
       const tvData = await res.json();
       const mapped = this.mapResult({ ...tvData, mediaType: 'tv' });
@@ -407,8 +403,7 @@ export class SeerrClient {
             const sRes = await this.fetch(`${this.url}/api/v1/tv/${tmdbId}/season/${s.seasonNumber}`, {
               signal: AbortSignal.timeout(Math.max(1, Math.min(10000, seasonDeadline - Date.now()))),
               headers: this.getHeaders(),
-              next: { revalidate: 300 },
-            });
+              });
             if (sRes.ok) {
               const sData = await sRes.json();
               episodes = (sData.episodes || []).map((ep: any) => {
@@ -427,7 +422,7 @@ export class SeerrClient {
               });
             }
           } catch (e) {
-            console.error(`Failed to fetch episodes for season ${s.seasonNumber}:`, e);
+            log.error(`Failed to fetch episodes for season ${s.seasonNumber}:`, e);
           }
 
           return {
@@ -445,7 +440,7 @@ export class SeerrClient {
       mapped.seasonsCount = seasonsWithEpisodes.length;
       return mapped;
     } catch (err) {
-      console.error(`Failed to fetch TV details from Seerr for ID ${tmdbId}:`, err);
+      log.error(`Failed to fetch TV details from Seerr for ID ${tmdbId}:`, err);
       return null;
     }
   }
@@ -455,8 +450,7 @@ export class SeerrClient {
     try {
       const res = await this.fetch(`${this.url}/api/v1/movie/${tmdbId}`, {
         headers: this.getHeaders(),
-        next: { revalidate: 300 },
-      });
+        });
       if (!res.ok) return null;
       const movieData = await res.json();
       const mapped = this.mapResult({ ...movieData, mediaType: 'movie' });
@@ -490,7 +484,7 @@ export class SeerrClient {
 
       return mapped;
     } catch (err) {
-      console.error(`Failed to fetch movie details from Seerr for ID ${tmdbId}:`, err);
+      log.error(`Failed to fetch movie details from Seerr for ID ${tmdbId}:`, err);
       return null;
     }
   }
@@ -501,8 +495,7 @@ export class SeerrClient {
       const type = mediaType === 'tv' ? 'tv' : 'movie';
       const res = await this.fetch(`${this.url}/api/v1/${type}/${tmdbId}`, {
         headers: this.getHeaders(),
-        next: { revalidate: 3600 },
-      });
+        });
       if (!res.ok) return null;
       const data = await res.json();
       const videos: any[] = data.relatedVideos || [];
@@ -519,7 +512,7 @@ export class SeerrClient {
         type: trailer.type || 'Trailer',
       };
     } catch (e) {
-      console.error(`Failed to fetch trailer for ${mediaType} ${tmdbId}:`, e);
+      log.error(`Failed to fetch trailer for ${mediaType} ${tmdbId}:`, e);
       return null;
     }
   }
@@ -530,7 +523,7 @@ export class SeerrClient {
       const type = mediaType === 'tv' ? 'tv' : 'movie';
       const res = await this.fetch(
         `${this.url}/api/v1/${type}/${tmdbId}/recommendations?page=${page}`,
-        { headers: this.getHeaders(), next: { revalidate: 3600 }, signal: AbortSignal.timeout(10000) }
+        { headers: this.getHeaders(), signal: AbortSignal.timeout(10000) }
       );
       if (!res.ok) return [];
       const data = await res.json();
@@ -540,7 +533,7 @@ export class SeerrClient {
       }));
       return results.map((r) => this.mapResult(r));
     } catch (e) {
-      console.error(`Error fetching recommendations from Seerr for ${mediaType} ${tmdbId}:`, e);
+      log.error(`Error fetching recommendations from Seerr for ${mediaType} ${tmdbId}:`, e);
       return [];
     }
   }
@@ -550,8 +543,7 @@ export class SeerrClient {
     try {
       const res = await this.fetch(`${this.url}/api/v1/movie/${tmdbId}`, {
         headers: this.getHeaders(),
-        next: { revalidate: 3600 },
-      });
+        });
       if (!res.ok) return null;
       const movieData = await res.json();
       const colId = movieData.collection?.id;
@@ -559,8 +551,7 @@ export class SeerrClient {
 
       const colRes = await this.fetch(`${this.url}/api/v1/collection/${colId}`, {
         headers: this.getHeaders(),
-        next: { revalidate: 3600 },
-      });
+        });
       if (!colRes.ok) return null;
       const colData = await colRes.json();
       const parts = (colData.parts || []).map((p: any) =>
@@ -572,7 +563,7 @@ export class SeerrClient {
         parts,
       };
     } catch (e) {
-      console.error(`Error fetching collection for movie ${tmdbId}:`, e);
+      log.error(`Error fetching collection for movie ${tmdbId}:`, e);
       return null;
     }
   }
@@ -582,8 +573,7 @@ export class SeerrClient {
     try {
       const res = await this.fetch(`${this.url}/api/v1/request?take=${take}&sort=added`, {
         headers: this.getHeaders(),
-        next: { revalidate: 15 },
-      });
+        });
       if (!res.ok) return [];
       const data = await res.json();
       const results: MediaItem[] = [];
@@ -601,7 +591,7 @@ export class SeerrClient {
       }
       return results;
     } catch (e) {
-      console.error('Failed to fetch user requests from Seerr:', e);
+      log.error('Failed to fetch user requests from Seerr:', e);
       return [];
     }
   }

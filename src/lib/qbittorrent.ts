@@ -1,3 +1,5 @@
+import { fetch, registerDependency } from '@/upstream';
+import { log } from '@/log';
 import { sanitizeUrl, getServerConfig } from './config';
 import { DownloadingTorrentFile, DownloadingTorrentItem } from '@/types';
 
@@ -56,6 +58,7 @@ export class QBittorrentClient {
   constructor(url?: string, username?: string, password?: string) {
     const config = getServerConfig();
     this.baseUrl = sanitizeUrl(url || config.qbittorrentUrl || '');
+    registerDependency('qbittorrent', this.baseUrl);
     this.username = username !== undefined ? username : config.qbittorrentUsername;
     this.password = password !== undefined ? password : config.qbittorrentPassword;
   }
@@ -112,7 +115,7 @@ export class QBittorrentClient {
 
       return null;
     } catch (err) {
-      console.error('qBittorrent login error:', err);
+      log.error('qBittorrent login error:', err);
       return null;
     }
   }
@@ -284,7 +287,7 @@ export class QBittorrentClient {
 
       return true;
     } catch (err) {
-      console.error(`Failed to ensure sequential download for ${hash}:`, err);
+      log.error(`Failed to ensure sequential download for ${hash}:`, err);
       return false;
     }
   }
@@ -310,7 +313,7 @@ export class QBittorrentClient {
       });
       return response.ok;
     } catch (err) {
-      console.warn(`Failed to prioritize file ${fileIndex} in torrent ${hash}:`, err);
+      log.warn(`Failed to prioritize file ${fileIndex} in torrent ${hash}:`, err);
       return false;
     }
   }

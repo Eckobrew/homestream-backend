@@ -1,26 +1,6 @@
-import fs from 'fs';
-import path from 'path';
+import { readState, writeState } from '@/state/database';
+import { log } from '@/log';
 import { ServerConfig } from '@/types';
-
-function getConfigFilePath(): string {
-  const custom = process.env.DATA_DIR;
-  let targetDir = custom || path.join(process.cwd(), 'data');
-
-  try {
-    if (!fs.existsSync(targetDir)) {
-      fs.mkdirSync(targetDir, { recursive: true });
-    }
-    fs.accessSync(targetDir, fs.constants.W_OK);
-    return path.join(targetDir, 'config.json');
-  } catch {
-    if (custom) throw new Error('Configuration storage is unavailable; refusing temporary fallback');
-    const fallbackDir = path.join('/tmp', 'homeflix-data');
-    if (!fs.existsSync(fallbackDir)) {
-      fs.mkdirSync(fallbackDir, { recursive: true });
-    }
-    return path.join(fallbackDir, 'config.json');
-  }
-}
 
 export const sanitizeUrl = (url: string): string => {
   if (!url) return '';
@@ -29,17 +9,7 @@ export const sanitizeUrl = (url: string): string => {
 
 // Configuration merged from persistent config.json and environment variables
 export const getServerConfig = (): ServerConfig => {
-  let fileConfig: Partial<ServerConfig> = {};
-  const filePath = getConfigFilePath();
-
-  try {
-    if (fs.existsSync(filePath)) {
-      const content = fs.readFileSync(filePath, 'utf-8');
-      fileConfig = JSON.parse(content) || {};
-    }
-  } catch (err) {
-    console.error('Failed reading config.json:', err);
-  }
+  const fileConfig = readState<Partial<ServerConfig>>('config', {});
 
   const jellyfinUrl =
     fileConfig.jellyfinUrl ||
@@ -129,11 +99,11 @@ export const saveServerConfig = (newConfig: Partial<ServerConfig>): ServerConfig
     (merged.jellyfinUrl && merged.jellyfinApiKey) || (merged.seerrUrl && merged.seerrApiKey)
   );
 
-  const filePath = getConfigFilePath();
   try {
-    fs.writeFileSync(filePath, JSON.stringify(merged, null, 2), 'utf-8');
+    writeState('config', merged);
   } catch (err) {
-    console.error('Failed writing config.json:', err);
+    log.error('Failed writing config.json');
+    throw new Error('Configuration storage unavailable');
   }
 
   return merged;

@@ -1,5 +1,6 @@
+import { log } from '@/log';
 import fs from 'fs';
-import { NextRequest, NextResponse } from 'next/server';
+import { HttpRequest, HttpResponse } from '@/http';
 import { QBittorrentClient } from './qbittorrent';
 
 export interface PieceSource {
@@ -10,11 +11,11 @@ export interface PieceSource {
 }
 
 /** Never read preallocated holes: wait until qBittorrent verifies each piece. */
-export async function torrentResponse(request: NextRequest, file: string, size: number, contentType: string, source?: PieceSource) {
+export async function torrentResponse(request: HttpRequest, file: string, size: number, contentType: string, source?: PieceSource) {
   let start = 0;
   let end = size - 1;
   const range = request.headers.get('range');
-  const invalid = () => new NextResponse(null, { status: 416, headers: { 'Content-Range': `bytes */${size}` } });
+  const invalid = () => new HttpResponse(null, { status: 416, headers: { 'Content-Range': `bytes */${size}` } });
   if (range) {
     const match = /^bytes=(\d*)-(\d*)$/.exec(range);
     if (!match || (!match[1] && !match[2])) return invalid();
@@ -70,13 +71,13 @@ export async function torrentResponse(request: NextRequest, file: string, size: 
         controller.enqueue(buffer.subarray(0, bytesRead));
       } catch (error) {
         await close();
-        console.warn('[torrent] Read interrupted:', error instanceof Error ? error.message : 'unknown error');
+        log.warn('[torrent] Read interrupted:', error instanceof Error ? error.message : 'unknown error');
         controller.error(error);
       }
     },
     cancel: close,
   });
-  return new NextResponse(stream, {
+  return new HttpResponse(stream, {
     status: range ? 206 : 200,
     headers: {
       ...(range ? { 'Content-Range': `bytes ${start}-${end}/${size}` } : {}),

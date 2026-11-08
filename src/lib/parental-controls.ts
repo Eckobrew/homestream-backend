@@ -1,8 +1,8 @@
 import { getServerConfig } from './config';
 import { JellyfinClient } from './jellyfin';
-import { createHmac, timingSafeEqual } from 'crypto';
-import { headers } from 'next/headers';
-import { NextRequest, NextResponse } from 'next/server';
+import { peerIdentity } from '@/request-context';
+import { headers } from '@/request-context';
+import { HttpRequest, HttpResponse } from '@/http';
 import { getHomeflixProfiles } from './profiles';
 import { registeredDevice, selectDeviceProfile } from './devices';
 import { readSession } from './session';
@@ -13,7 +13,7 @@ import { resourceUrl, imageResource } from './parental-resource';
 import { UserProfile } from '@/types';
 
 export class ParentalDenied extends Error {}
-export async function activeProfile(request: NextRequest): Promise<UserProfile | null> {
+export async function activeProfile(request: HttpRequest): Promise<UserProfile | null> {
   const profiles = await getHomeflixProfiles();
   const bearer = request.headers.get('authorization')?.replace(/^Bearer /i, '') || '';
   const session = await readSession(bearer || request.cookies.get('homeflix_session')?.value, bearer ? 'mobile' : 'web');
@@ -30,16 +30,12 @@ export async function activeProfile(request: NextRequest): Promise<UserProfile |
     return chosen || null;
   }
   // Unbound household credentials cannot bypass an enabled kids policy.
-  const peer = request.headers.get('x-homestream-socket') || '';
-  const proof = request.headers.get('x-homestream-proof') || '';
-  const [ip, time] = peer.split('|');
-  const secret = process.env.HOMESTREAM_SESSION_SECRET || '';
-  const expected = secret.length >= 32 ? createHmac('sha256', secret).update(peer).digest('hex') : '';
-  if (request.nextUrl.pathname.endsWith('/stream/download') && request.nextUrl.searchParams.get('source') === '1' && ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(ip) && Math.abs(Date.now() - Number(time)) < 30000 && expected.length === proof.length && expected.length > 0 && timingSafeEqual(Buffer.from(expected), Buffer.from(proof))) return null;
+  const peer = peerIdentity();
+  if (request.nextUrl.pathname.endsWith('/stream/download') && request.nextUrl.searchParams.get('source') === '1' && peer?.direct && ['127.0.0.1', '::1'].includes(peer.socketIp)) return null;
   if (kids.length) throw new ParentalDenied('Use a paired device and select a profile');
   return null;
 }
-function route(request: NextRequest) { return request.nextUrl.pathname.replace(/^\/api\/(mobile\/v1\/)?/, ''); }
+function route(request: HttpRequest) { return request.nextUrl.pathname.replace(/^\/api\/(mobile\/v1\/)?/, ''); }
 async function permit(id: string, profile: UserProfile, type: 'movie' | 'tv' = 'movie'): Promise<number> {
   const match = /^seerr-(?:(movie|tv)-)?(\d+)$/.exec(id);
   const rating = match ? await catalogCertification(Number(match[2]), match[1] === 'tv' ? 'tv' : type)
@@ -47,7 +43,7 @@ async function permit(id: string, profile: UserProfile, type: 'movie' | 'tv' = '
   if (!isKids(profile) || !ratingAllowed(rating, profile.kidsRating)) throw new ParentalDenied('This title is not available for this kids profile');
   return ratingAge(rating)!;
 }
-export async function guardKidsRequest(request: NextRequest, profile: UserProfile): Promise<void> {
+export async function guardKidsRequest(request: HttpRequest, profile: UserProfile): Promise<void> {
   if (!isKids(profile)) return;
   const name = route(request);
   if (name === 'downloads' || name.startsWith('stream/download')) throw new ParentalDenied('Downloading torrents are unavailable in Kids mode');
@@ -120,7 +116,7 @@ export async function filterKidsJson(value: unknown, profile: UserProfile): Prom
   return walk(value);
 }
 
-export async function pinProfileRequest(request: NextRequest, profile: UserProfile): Promise<NextRequest> {
+export async function pinProfileRequest(request: HttpRequest, profile: UserProfile): Promise<HttpRequest> {
   const url = request.nextUrl.clone(); url.searchParams.set('userId', profile.jellyfinUserId || profile.id);
   const headers = new Headers(request.headers);
   const cookies = request.cookies.getAll().filter(cookie => cookie.name !== 'homeflix_profile_id');
@@ -130,17 +126,17 @@ export async function pinProfileRequest(request: NextRequest, profile: UserProfi
     const payload = await request.clone().json().catch(() => null);
     if (payload && typeof payload === 'object' && !Array.isArray(payload)) body = JSON.stringify({ ...payload, userId: profile.jellyfinUserId || profile.id });
   }
-  return new NextRequest(url, { method: request.method, headers, body, signal: request.signal });
+  return new HttpRequest(url, { method: request.method, headers, body, signal: request.signal });
 }
 
 export function withParentalControls<Args extends unknown[]>(handler: (...args: Args) => Promise<Response>) {
   return async (...args: Args): Promise<Response> => {
-    let request = args[0] instanceof NextRequest ? args[0] : new NextRequest('http://localhost/api/downloads', { headers: await headers() });
+    let request = args[0] instanceof HttpRequest ? args[0] : new HttpRequest('http://localhost/api/downloads', { headers: await headers() });
     // The native dispatcher already pins its authoritative device profile.
     if (requestParentalProfile() !== undefined) return handler(...args);
     try {
       const profile = await activeProfile(request);
-      if (profile && args[0] instanceof NextRequest) { request = await pinProfileRequest(request, profile); args[0] = request; }
+      if (profile && args[0] instanceof HttpRequest) { request = await pinProfileRequest(request, profile); args[0] = request; }
       return await withParentalProfile(profile, async () => {
         if (profile) await guardKidsRequest(request, profile);
         if (!request.nextUrl.pathname.includes('/mobile/')) {
@@ -149,28 +145,28 @@ export function withParentalControls<Args extends unknown[]>(handler: (...args: 
             try { await requireParentPin((await request.clone().json().catch(() => null))?.parentPin); }
             catch (error) { throw new ParentalDenied(error instanceof Error ? error.message : 'Parent PIN required'); }
           }
-          if (isKids(profile) && name === 'profiles') return NextResponse.json({ profiles: [profile], activeProfileId: profile.id, canSwitchProfile: false, isExternal: true, availableJellyfinUsers: [] });
+          if (isKids(profile) && name === 'profiles') return HttpResponse.json({ profiles: [profile], activeProfileId: profile.id, canSwitchProfile: false, isExternal: true, availableJellyfinUsers: [] });
         }
         const response = await handler(...args);
         return profile ? parentalResponse(request, response, profile) : response;
       }, request.headers.get('authorization')?.slice(7));
     } catch (error) {
-      if (error instanceof ParentalDenied) return NextResponse.json({ error: error.message }, { status: 403, headers: { 'Cache-Control': 'no-store' } });
+      if (error instanceof ParentalDenied) return HttpResponse.json({ error: error.message }, { status: 403, headers: { 'Cache-Control': 'no-store' } });
       throw error;
     }
   };
 }
-export async function parentalResponse(request: NextRequest, response: Response, profile: UserProfile): Promise<Response> {
+export async function parentalResponse(request: HttpRequest, response: Response, profile: UserProfile): Promise<Response> {
   if (!isKids(profile) && !(await getHomeflixProfiles()).some(isKids)) return response;
   const name = route(request);
   const location = response.headers.get('location');
   if (location && response.status >= 300 && response.status < 400 && name === 'preview-stream') {
     const age = isKids(profile) ? await permit(request.nextUrl.searchParams.get('itemId') || '', profile) : 1000;
-    return NextResponse.redirect(new URL(resourceUrl(new URL(location, request.url).toString(), profile, 'stream', age), request.url), 307);
+    return HttpResponse.redirect(new URL(resourceUrl(new URL(location, request.url).toString(), profile, 'stream', age), request.url), 307);
   }
   if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) return response;
   if (name.startsWith('profiles')) return response;
-  if (isKids(profile) && name === 'trailer') return NextResponse.json({ success: true, trailer: null });
+  if (isKids(profile) && name === 'trailer') return HttpResponse.json({ success: true, trailer: null });
   const data = await response.json();
   if (name === 'subtitles' && Array.isArray(data.subtitles)) {
     const age = isKids(profile) ? await permit(request.nextUrl.searchParams.get('itemId') || '', profile) : 1000;
@@ -182,15 +178,15 @@ export async function parentalResponse(request: NextRequest, response: Response,
       if (![id, mediaSource].every(value => /^[a-zA-Z0-9_-]{1,128}$/.test(value)) || !/^\d+$/.test(index)) return null;
       return { ...track, src: new URL(resourceUrl(new JellyfinClient().getSubtitleStreamUrl(id, mediaSource, Number(index)), profile, 'stream', age), request.url).toString() };
     }).filter(Boolean);
-    return NextResponse.json(data, { headers: { 'Cache-Control': 'no-store' } });
+    return HttpResponse.json(data, { headers: { 'Cache-Control': 'no-store' } });
   }
   if (name === 'playback' && data.streamUrl) {
     const age = isKids(profile) ? await permit(request.nextUrl.searchParams.get('itemId') || '', profile) : 1000;
     data.streamUrl = new URL(resourceUrl(data.streamUrl, profile, 'stream', age), request.url).toString();
-    return NextResponse.json(data, { headers: { 'Cache-Control': 'no-store' } });
+    return HttpResponse.json(data, { headers: { 'Cache-Control': 'no-store' } });
   }
-  if (!isKids(profile)) return NextResponse.json(await wrapAdultArtwork(data, profile), { headers: { 'Cache-Control': 'no-store' } });
-  return NextResponse.json(await filterKidsJson(data, profile), { headers: { 'Cache-Control': 'no-store' } });
+  if (!isKids(profile)) return HttpResponse.json(await wrapAdultArtwork(data, profile), { headers: { 'Cache-Control': 'no-store' } });
+  return HttpResponse.json(await filterKidsJson(data, profile), { headers: { 'Cache-Control': 'no-store' } });
 }
 
 async function wrapAdultArtwork(value: unknown, profile: UserProfile): Promise<unknown> {

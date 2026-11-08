@@ -1,0 +1,30 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "schedule": [
+    "before 6am on monday"
+  ],
+  "rangeStrategy": "bump",
+  "packageRules": [
+    {
+      "groupName": "lint tooling",
+      "matchPackageNames": [
+        "eslint",
+        "@eslint/js",
+        "typescript-eslint"
+      ]
+    },
+    {
+      "groupName": "React and Next.js",
+      "matchPackageNames": [
+        "react",
+        "react-dom",
+        "next",
+        "@types/react",
+        "@types/react-dom"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { once } from 'node:events';
+import { startConversion, conversionMetrics, ConversionCapacityError, shutdownConversions } from '../src/media/conversions';
+test('conversion capacity, cancellation, failed spawns and shutdown release every slot', async () => {
+  process.env.HOMESTREAM_MAX_CONVERSIONS='2';
+  const first = new AbortController();
+  const a = startConversion(['-e','setInterval(()=>{},1000)'],first.signal,process.execPath);
+  const b = startConversion(['-e','setInterval(()=>{},1000)'],new AbortController().signal,process.execPath);
+  assert.equal(conversionMetrics().active,2);
+  assert.throws(() => startConversion([],new AbortController().signal,process.execPath),ConversionCapacityError);
+  const endedA=once(a,'close'); first.abort(); await endedA;
+  assert.equal(conversionMetrics().active,1);
+  const c=startConversion([],new AbortController().signal,'/no-such-homestream-executable');
+  await new Promise<void>(resolve => c.once('error',()=>resolve()));
+  assert.equal(conversionMetrics().active,1);
+  const endedB=once(b,'close'); shutdownConversions(); await endedB;
+  assert.equal(conversionMetrics().active,0);
+  process.env.HOMESTREAM_CONVERSION_TIMEOUT_MS='30';
+  const timed = startConversion(['-e','setInterval(()=>{},1000)'],new AbortController().signal,process.execPath);
+  await once(timed,'close');
+  assert.equal(conversionMetrics().active,0);
+});

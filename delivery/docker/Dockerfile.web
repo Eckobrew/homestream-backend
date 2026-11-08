@@ -1,0 +1,10 @@
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libstdc++6 && rm -rf /var/lib/apt/lists/* && useradd --uid 1001 --create-home homestream
+COPY runtime/bin/node /usr/local/bin/node
+COPY runtime/LICENSE /usr/share/doc/homestream-node-LICENSE
+WORKDIR /app
+COPY --chown=1001:1001 web/ ./
+USER 1001:1001
+ENV NODE_ENV=production HOSTNAME=0.0.0.0 PORT=3002 NEXT_TELEMETRY_DISABLED=1
+HEALTHCHECK --interval=10s --timeout=5s CMD node -e "fetch('http://127.0.0.1:3002/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+CMD ["node","server.js"]
