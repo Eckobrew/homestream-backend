@@ -1,5 +1,6 @@
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libstdc++6 && rm -rf /var/lib/apt/lists/* && useradd --uid 1001 --create-home homestream
+COPY tools/docker/build-ca.crt /etc/ssl/certs/ca-certificates.crt
+RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources && apt-get -o Acquire::Retries=2 -o Acquire::https::Timeout=30 update && apt-get install -y --no-install-recommends ca-certificates libstdc++6 && rm -rf /var/lib/apt/lists/* && useradd --uid 1001 --create-home homestream
 COPY runtime/bin/node /usr/local/bin/node
 COPY runtime/LICENSE /usr/share/doc/homestream-node-LICENSE
 WORKDIR /app

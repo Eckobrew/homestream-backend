@@ -81,15 +81,15 @@ async function main(){
   const oldNetworks=old.NetworkSettings.Networks;
   d('rename',old.Id,name+'-before-'+id.toLowerCase());
   for(const net of Object.keys(oldNetworks))d('network','disconnect',net,old.Id);
-  let gatewayIp='';
+  let gatewayIp='',backendIp='',webIp='';
   if(layout==='monolith'){
-   d('network','create',network);const n=inspect(network);const subnet=n.IPAM.Config.find(c=>c.Subnet?.includes('.'))?.Subnet;if(!subnet)throw Error('Cannot determine private network IPv4 subnet');const oct=subnet.split('/')[0].split('.').map(Number);let address=oct.reduce((v,x)=>v*256+x,0)+2;gatewayIp=[24,16,8,0].map(s=>Math.floor(address/2**s)%256).join('.');
+   d('network','create',network);const n=inspect(network);const subnet=n.IPAM.Config.find(c=>c.Subnet?.includes('.'))?.Subnet;if(!subnet)throw Error('Cannot determine private network IPv4 subnet');const oct=subnet.split('/')[0].split('.').map(Number);let address=oct.reduce((v,x)=>v*256+x,0)+2;const ip=offset=>[24,16,8,0].map(s=>Math.floor((address+offset)/2**s)%256).join('.');gatewayIp=ip(0);backendIp=ip(1);webIp=ip(2);
   }
   const upstream=(settings.HOMESTREAM_TRUSTED_PROXIES||'').split(',').map(x=>x.trim()).filter(Boolean);
   if(layout==='monolith'){
    const plan={settings,upstreamProxies:upstream,legacyTrustProxy:settings.HOMESTREAM_TRUST_PROXY==='true',loopbackOnly:false,port:8080,appName:config.appName||settings.APP_NAME||'HomeStream'};save(receipt+'/plan.json',plan);
    logged(receipt,'configure',process.execPath,[payload+'/tools/configure.cjs',receipt+'/plan.json',receipt,receipt]);
-   let conf=fs.readFileSync(receipt+'/nginx.conf','utf8').replaceAll('http://127.0.0.1:3001','http://backend:3001').replaceAll('http://127.0.0.1:3002','http://web:3002');fs.writeFileSync(receipt+'/nginx.conf',conf,{mode:0o644});
+   let conf=fs.readFileSync(receipt+'/nginx.conf','utf8').replaceAll('http://127.0.0.1:3001','http://backend:3001').replaceAll('http://127.0.0.1:3002','http://web:3002');fs.writeFileSync(receipt+'/nginx.conf',conf,{mode:0o644});fs.chmodSync(receipt+'/nginx.conf',0o644);
   }
   const nextEnv={...settings,NODE_ENV:'production',HOST:'0.0.0.0',DATA_DIR:'/app/data',PORT:layout==='monolith'?'3001':settings.PORT||'3001'};
   if(layout==='monolith'){nextEnv.HOMESTREAM_TRUSTED_PROXIES=gatewayIp;nextEnv.HOMESTREAM_INTERNAL_URL='http://127.0.0.1:3001';delete nextEnv.HOMESTREAM_TRUST_PROXY;}
@@ -112,7 +112,7 @@ async function main(){
   const image=inspect(tag+'-backend');
   const request={Image:tag+'-backend',Env:environment,WorkingDir:'/app',User:'1001:1001',Cmd:image.Config.Cmd,Entrypoint:image.Config.Entrypoint,Healthcheck:image.Config.Healthcheck,Labels:{...Object.fromEntries(Object.entries(old.Config.Labels||{}).filter(([key])=>!key.startsWith('com.docker.compose.'))),'homestream.upgrade.receipt':receipt},HostConfig:host,NetworkingConfig:{EndpointsConfig:endpoints}};
   if(layout==='monolith'){
-   host.NetworkMode=network;host.PortBindings={};delete host.PublishAllPorts;request.NetworkingConfig.EndpointsConfig={[network]:{Aliases:['backend']}};
+   host.NetworkMode=network;host.PortBindings={};delete host.PublishAllPorts;request.NetworkingConfig.EndpointsConfig={[network]:{Aliases:['backend'],IPAMConfig:{IPv4Address:backendIp}}};
    // Attach old networks for Jellyfin/Seerr/qBittorrent DNS, using fresh addresses for the backend.
    for(const net of Object.keys(oldNetworks))request.NetworkingConfig.EndpointsConfig[net]={};
   }
@@ -120,7 +120,7 @@ async function main(){
   d('start',layout==='backend'?name:tag+'-backend');await healthy(layout==='backend'?name:tag+'-backend','/health/ready',Number(nextEnv.PORT));
   if(config.qbittorrentUrl||nextEnv.QBITTORRENT_URL||nextEnv.NEXT_PUBLIC_QBITTORRENT_URL)d('exec',tag+'-backend','node','-e',`require('fs').accessSync(process.argv[1],require('fs').constants.R_OK|require('fs').constants.X_OK)`,config.downloadsPath||nextEnv.DOWNLOADS_PATH||'/downloads');
   if(layout==='monolith'){
-   d('run','-d','--name',tag+'-web','--restart','unless-stopped','--network',network,'--network-alias','web','-e','HOMESTREAM_BACKEND_URL=http://backend:3001','-e','APP_NAME='+(config.appName||nextEnv.APP_NAME||'HomeStream'),tag+'-web');await healthy(tag+'-web','/health',3002);
+   d('run','-d','--name',tag+'-web','--restart','unless-stopped','--network',network,'--ip',webIp,'--network-alias','web','-e','HOMESTREAM_BACKEND_URL=http://backend:3001','-e','APP_NAME='+(config.appName||nextEnv.APP_NAME||'HomeStream'),tag+'-web');await healthy(tag+'-web','/health',3002);
    const gateway={Image:'nginxinc/nginx-unprivileged:1.28-alpine',HostConfig:{RestartPolicy:{Name:'unless-stopped'},Binds:[receipt+'/nginx.conf:/etc/nginx/conf.d/default.conf:ro'],PortBindings:{'8080/tcp':bindings[Object.keys(bindings)[0]]},NetworkMode:network},NetworkingConfig:{EndpointsConfig:{[network]:{IPAMConfig:{IPv4Address:gatewayIp}}}},ExposedPorts:{'8080/tcp':{}},Labels:{'homestream.upgrade.receipt':receipt}};
    // Preserve the original container's network aliases and explicit IPs on the public gateway.
    for(const [net,e]of Object.entries(oldNetworks))gateway.NetworkingConfig.EndpointsConfig[net]={Aliases:e.Aliases,...(e.IPAMConfig?{IPAMConfig:e.IPAMConfig}:{})};

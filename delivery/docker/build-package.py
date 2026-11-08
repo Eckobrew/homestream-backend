@@ -3,6 +3,7 @@ import pathlib,shutil,hashlib,json,tarfile
 root=pathlib.Path('/workspace');out=root/'homestream-delivery';stage=out/'staging';source=root/'homestream-backend/delivery/docker'
 assert (stage/'backend/dist/server.js').is_file() and (stage/'web/server.js').is_file()
 shutil.copytree(source,stage/'tools/docker',dirs_exist_ok=True,ignore=shutil.ignore_patterns('build-package.py','host-header.sh','test-upgrade.cjs'))
+shutil.copyfile('/etc/ssl/certs/ca-certificates.crt',stage/'tools/docker/build-ca.crt')
 (stage/'.dockerignore').write_text('payload.tar.gz\n.git\n*.run\n')
 manifest={'version':'1.1.0','node':'22.23.4','architecture':'linux-x64','layout':'original-monolith-to-docker-split','files':{str(p.relative_to(stage)):hashlib.sha256(p.read_bytes()).hexdigest() for p in stage.rglob('*') if p.is_file() and p.name!='manifest.json'}}
 (stage/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')

@@ -63,4 +63,4 @@ After checking out tested revisions in both repositories, `scripts/update-lxc.sh
 5. Validate Cast and hardware decoding on actual receiver hardware. Receivers must still reach Jellyfin or issued HomeStream resource URLs.
 6. On failure, stop the new backend, restore the saved configuration/image and data backup, and start the old deployment. Never run both writers simultaneously.
 
-No production cutover, remote repository creation, registry publication or LXC installation is performed by the local implementation.
+The Docker prerelease was deployed and validated in LXC 111 on 8 November 2026 with local fixes; see [Docker upgrade fixes](docker-upgrade-fixes.md). Main image publication is now automated; deployments remain deliberate.

@@ -32,9 +32,19 @@ jobs:
           images: ghcr.io/${{ github.repository }}
           tags: |
             type=semver,pattern={{version}}
+            type=sha,format=long
       - uses: docker/build-push-action@v6
         with:
           context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          load: true
+          tags: homestream-release:test
           labels: ${{ steps.meta.outputs.labels }}
+      - run: bash scripts/test-docker.sh homestream-release:test
+      - name: Publish tested release image
+        env:
+          IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          while IFS= read -r tag; do
+            docker tag homestream-release:test "$tag"
+            docker push "$tag"
+          done <<< "$IMAGE_TAGS"

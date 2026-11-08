@@ -1,7 +1,13 @@
 // Exercise successful migration and rollback against an in-memory Docker daemon.
 'use strict';
 const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),cp=require('node:child_process'),vm=require('node:vm'),assert=require('node:assert/strict'),events=require('node:events');
-const stage='/workspace/homestream-delivery/staging',script=stage+'/tools/docker/upgrade.cjs';
+const root=path.resolve(__dirname,'../..'),stage=fs.mkdtempSync(path.join(os.tmpdir(),'hs-docker-stage-'));
+fs.mkdirSync(stage+'/tools/docker',{recursive:true});fs.mkdirSync(stage+'/runtime/bin',{recursive:true});fs.mkdirSync(stage+'/backend');
+fs.symlinkSync(process.execPath,stage+'/runtime/bin/node');
+fs.cpSync(root+'/dist',stage+'/backend/dist',{recursive:true});fs.copyFileSync(root+'/package.json',stage+'/backend/package.json');
+for(const name of ['configure.cjs','verify-state.cjs'])fs.copyFileSync(root+'/delivery/'+name,stage+'/tools/'+name);
+fs.copyFileSync(__dirname+'/upgrade.cjs',stage+'/tools/docker/upgrade.cjs');
+const script=stage+'/tools/docker/upgrade.cjs';
 async function scenario(failAt){
  const temp=fs.mkdtempSync(path.join(os.tmpdir(),'hs-docker-test-')),receipts=temp+'/receipts',data=temp+'/legacy';fs.mkdirSync(data);fs.mkdirSync(receipts);
  const token='hst_dev_'+'a'.repeat(48);for(const [name,value]of Object.entries({'config.json':{appName:'Existing Home'},'profiles.json':[{id:'keep-profile',name:'Owner'}],'devices.json':{[token]:{token,deviceId:'keep-device',client:'android'}}}))fs.writeFileSync(data+'/'+name,JSON.stringify(value));
@@ -43,6 +49,7 @@ async function scenario(failAt){
     if(a.includes('dist/import-state.js')){const mount=a[a.indexOf('-v')+1].split(':')[0];return cp.execFileSync(stage+'/runtime/bin/node',[stage+'/backend/dist/import-state.js',mount],{encoding:'utf8'});}
     return '';
    }
+   if(a.includes('--network-alias'))assert.equal(a[a.indexOf('--ip')+1],'172.29.0.4','Web must not consume gateway address');
    const name=a[a.indexOf('--name')+1];containers.set(name,{Id:name,Name:'/'+name,State:{Running:true},NetworkSettings:{Networks:{}},HostConfig:{RestartPolicy:{Name:'unless-stopped'}}});return name;
   }
   throw Error('Unexpected docker call '+JSON.stringify(args));
@@ -56,6 +63,10 @@ async function scenario(failAt){
  }else{
   assert.equal(exitCode,0);assert(!get('original-id').State.Running);assert.equal(get('original-id').HostConfig.RestartPolicy.Name,'no');
   const backend=requests.find(r=>r.name.endsWith('-backend')).body,gateway=requests.find(r=>r.name==='homestream').body;
+  assert.equal(backend.NetworkingConfig.EndpointsConfig[backend.HostConfig.NetworkMode].IPAMConfig.IPv4Address,'172.29.0.3');
+  assert.equal(gateway.NetworkingConfig.EndpointsConfig[gateway.HostConfig.NetworkMode].IPAMConfig.IPv4Address,'172.29.0.2');
+  const receipt=receipts+'/'+fs.readdirSync(receipts)[0];
+  assert.equal(fs.statSync(receipt+'/nginx.conf').mode & 0o777,0o644,'Unprivileged nginx must read its config');
   assert(backend.Env.includes('JELLYFIN_API_KEY=keep-secret'));assert(backend.Env.includes('HOMESTREAM_TRUSTED_PROXIES=172.29.0.2'));
   assert(backend.HostConfig.Mounts.some(m=>m.Source==='/media'&&m.ReadOnly));assert(!backend.HostConfig.Mounts.some(m=>m.Source==='state-volume'));assert.deepEqual(gateway.HostConfig.PortBindings['8080/tcp'],original.HostConfig.PortBindings['3000/tcp']);
   assert.equal(JSON.parse(fs.readFileSync(data+'/profiles.json'))[0].id,'keep-profile');
@@ -63,4 +74,4 @@ async function scenario(failAt){
  }
  fs.rmSync(temp,{recursive:true,force:true});console.log('PASS '+(failAt||'successful split, settings/mount/port preservation and migration'));
 }
-(async()=>{await scenario();await scenario('create');await scenario('stop');await scenario('health');})().catch(e=>{console.error(e);process.exitCode=1;});
+(async()=>{await scenario();await scenario('create');await scenario('stop');await scenario('health');})().catch(e=>{console.error(e);process.exitCode=1;}).finally(()=>fs.rmSync(stage,{recursive:true,force:true}));

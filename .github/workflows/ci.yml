@@ -15,6 +15,7 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: npm run lint
       - run: npm run build
+      - run: node delivery/docker/test-upgrade.cjs
       - run: npm test
       - run: npm run test:mobile
       - run: npm run test:torrent
@@ -35,3 +36,46 @@ jobs:
           name: homestream-api
           path: '*.tgz'
       - run: docker build -t homestream-backend:test .
+      - run: bash scripts/test-docker.sh homestream-backend:test
+
+  publish:
+    needs: verify
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.verify.result == 'success'
+    permissions:
+      contents: read
+      packages: write
+    runs-on: ubuntu-latest
+    concurrency:
+      group: publish-main
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=edge
+            type=sha,format=long
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: homestream-publish:test
+          cache-from: type=gha,scope=publish
+          cache-to: type=gha,mode=max,scope=publish
+      - run: bash scripts/test-docker.sh homestream-publish:test
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish tested image
+        env:
+          IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          while IFS= read -r tag; do
+            docker tag homestream-publish:test "$tag"
+            docker push "$tag"
+          done <<< "$IMAGE_TAGS"

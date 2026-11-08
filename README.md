@@ -45,10 +45,18 @@ OpenAPI covers all web and native operations. The same request schemas validate 
 
 ## Deployment and migration
 
-See [the deployment and migration guide](docs/split-migration.md). The reference Compose stack uses separate images and an Nginx gateway. Build locally before a first deployment; remote images are not published by this workspace change.
+See [the deployment and migration guide](docs/split-migration.md). The reference Compose stack uses separate images and an Nginx gateway. Use published images or build locally; see Docker image publishing below.
 
 See [the follow-up improvement plan](docs/improvement-plan.md) for prioritized work beyond the split. Existing audit documents are retained as historical context; source and tests describe current behavior.
 
-The two local checkouts retain monolith history on `split-backend` / `split-web` branches. Their `monolith` remote is for provenance; add a new `origin` for each destination repository before publishing. No changes have been pushed upstream.
+The independent repositories retain provenance from the original monolith revision above.
 
 See [the 1.1 upgrade and feature guide](docs/follow-up-release.md) before starting this version against existing JSON state.
+
+## Docker image publishing
+
+Successful `main` CI runs publish Linux amd64 images to `ghcr.io/eckobrew/homestream-backend` with `edge` and full `sha-<commit>` tags. Main publication waits for verification (and enabled browser integration checks in the web repository). Pull requests do not receive registry write access or publish images.
+
+Pushing a `vX.Y.Z` tag publishes the corresponding version; stable version tags also update `latest`, while prereleases do not. Each publishing workflow starts the built image as UID 1001 and checks readiness before pushing that exact image. Authentication uses the workflow's short-lived `GITHUB_TOKEN`, with `packages: write` scoped to publishing; no personal token secret is required.
+
+Use a commit tag or image digest for controlled deployments. `edge` tracks tested main and is not an automatic production redeployment. Pair tested backend/web revisions before upgrading. Newly created GHCR packages default to private; package visibility must be public to permit anonymous pulls.
