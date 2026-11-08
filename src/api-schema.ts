@@ -22,7 +22,7 @@ const operations: Operation[] = [];
 function add(path: string, method: string, response: Schema, query: Record<string,Schema> = {}, body?: Schema, extra: Partial<Operation> = {}) {
   operations.push({ path,method,response,query:{userId:id,...query},body,...extra });
 }
-add('auth','GET',object({requiresAuth:boolean,isAuthenticated:boolean,isLocalOrTailscale:boolean,users:list(profile)}),{action:{type:'string',enum:['users']}},undefined,{public:true});
+add('auth','GET',object({requiresAuth:boolean,isAuthenticated:boolean,isLocalOrTailscale:boolean,canManageIntegrations:boolean,users:list(profile)}),{action:{type:'string',enum:['users']}},undefined,{public:true});
 add('auth','POST',success,{},login,{public:true});
 add('config','GET',object(),{},undefined,{responseModel:'PublicConfig'});
 add('config','POST',object({success:boolean,config:object(),error:text}),{action:{type:'string',enum:['save','test-jellyfin','test-seerr','test-qbittorrent']}},object({...configFields,action:text}));
@@ -47,8 +47,16 @@ add('stream/download','GET',object(),{hash:id,path:text,fileIndex:natural,season
 add('webhook/arr','GET',object({status:text}));
 add('webhook/arr','POST',success,{},object({eventType:text,downloadId:text,torrentHash:text,event_type:text}));
 add('catalog-links','GET',object({items:list(media)}));
+add('music','GET',object(),{q:{type:'string',maxLength:200},offset:natural},undefined,{responseModel:'MusicResponse'});
+add('music/album','GET',object(),{albumId:id},undefined,{requiredQuery:['albumId'],responseModel:'MusicAlbumResponse'});
+add('music/artwork','GET',object(),{albumId:id},undefined,{requiredQuery:['albumId'],binary:true});
+add('music/stream','GET',object(),{trackId:id},undefined,{requiredQuery:['trackId'],binary:true});
+add('music/request','POST',success,{},object({musicbrainzId:id},['musicbrainzId']));
+add('requested','GET',object(),{},undefined,{responseModel:'RequestedResponse'});
+add('integrations','GET',object(),{},undefined,{responseModel:'IntegrationsResponse'});
+add('integrations','POST',object(),{},object({integration:{type:'string',enum:['jellyfin','seerr','qbittorrent','droppedneedle']},action:{type:'string',enum:['save','test']},url:text,secret:text,username:text,downloadsPath:text,parentPin:text},['integration','action']));
 export const webOperations = operations;
-const shared = ['home','library/{type}','categories/{type}','media/{id}','media/{id}/recommendations','search','downloads','playback','request','subtitles','trailer','stream/download'];
+const shared = ['integrations','requested','music','music/album','music/artwork','music/stream','music/request','home','library/{type}','categories/{type}','media/{id}','media/{id}/recommendations','search','downloads','playback','request','subtitles','trailer','stream/download'];
 export const mobileOperations: Operation[] = operations.filter(operation => shared.includes(operation.path)).map(operation => ({...operation}));
 function native(path:string,method:string,response:Schema,query:Record<string,Schema>={},body?:Schema,extra:Partial<Operation>={}) { mobileOperations.push({path,method,response,query:{userId:id,...query},body,...extra}); }
 native('discovery','GET',object({apiVersion:integer,appName:text,cast:boolean,pairing:text,localPairing:boolean,jellyfinLogin:boolean}),{},undefined,{public:true});

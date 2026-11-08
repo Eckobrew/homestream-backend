@@ -21,7 +21,9 @@ test('legacy responses match fixtures captured from the original monolith', asyn
     for (const fixture of fixtures) {
       const result = await app.inject({ url: fixture.path, headers: { authorization: `Bearer ${token}`, 'x-forwarded-for': '203.0.113.9' } });
       assert.equal(result.statusCode, fixture.status, fixture.path);
-      assert.deepEqual(result.json(), normalize(fixture.body), fixture.path);
+      const actual=result.json();
+      if(fixture.path==='/api/auth' || fixture.path==='/api/mobile/v1/capabilities') {assert.equal(actual.canManageIntegrations,false);delete actual.canManageIntegrations;}
+      assert.deepEqual(actual, normalize(fixture.body), fixture.path);
     }
   } finally { await app.close(); await rm(directory, { recursive: true, force: true }); }
 });

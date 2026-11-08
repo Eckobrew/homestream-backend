@@ -55,6 +55,8 @@ export interface MediaItem {
   backdropUrl: string;
   year?: number;
   releaseDate?: string;
+  requestStatus?: string;
+  requestedAt?: string;
   rating?: string; // e.g. "TV-MA", "PG-13"
   matchPercentage?: number; // e.g. 98
   communityRating?: number; // e.g. 8.6
@@ -109,6 +111,8 @@ export interface ServerConfig {
   jellyfinUserId: string;
   seerrUrl: string;
   seerrApiKey: string;
+  droppedneedleUrl?: string;
+  droppedneedleToken?: string;
   qbittorrentUrl?: string;
   qbittorrentUsername?: string;
   qbittorrentPassword?: string;
@@ -167,3 +171,52 @@ export interface RequestMediaPayload {
   profileId?: number;
   serverId?: number;
 }
+
+export interface MusicAlbum {
+  id: string;
+  title: string;
+  artist: string;
+  year?: number;
+  releaseDate?: string;
+  coverUrl?: string;
+  inLibrary: boolean;
+  requested: boolean;
+  trackCount?: number;
+}
+export interface MusicTrack {
+  id: string;
+  title: string;
+  artist: string;
+  album: string;
+  trackNumber: number;
+  discNumber: number;
+  durationSeconds?: number;
+  streamUrl: string;
+}
+export interface MusicResponse { configured: boolean; albums: MusicAlbum[]; total: number; }
+export interface MusicAlbumResponse { album: MusicAlbum; tracks: MusicTrack[]; }
+export interface RequestedItem {
+  id: string;
+  title: string;
+  kind: 'movie' | 'tv' | 'music';
+  source: 'seerr' | 'qbittorrent' | 'droppedneedle';
+  status: string;
+  artist?: string;
+  posterUrl?: string;
+  releaseDate?: string;
+  requestedAt?: string;
+  progress?: number;
+  downloadSpeed?: number;
+  etaSeconds?: number;
+  media?: MediaItem;
+}
+export interface RequestedResponse { items: RequestedItem[]; warnings: string[]; updatedAt: string; }
+export interface IntegrationSummary {
+  id: 'jellyfin' | 'seerr' | 'qbittorrent' | 'droppedneedle';
+  name: string;
+  url: string;
+  configured: boolean;
+  credentialSet: boolean;
+  username?: string;
+}
+export interface IntegrationsResponse { integrations: IntegrationSummary[]; downloadsPath: string; }

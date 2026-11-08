@@ -1,3 +1,6 @@
+import * as integrationsService from '@/services/integrations/handler';
+import * as musicService from '@/services/music/handler';
+import * as requestedService from '@/services/requested/handler';
 import { validateApiRequest } from '@/api-schema';
 import { fetch } from '@/upstream';
 import { log } from '@/log';
@@ -90,7 +93,7 @@ async function dispatch(request: HttpRequest, context: Context) {
     if (!auth.User?.Id || !auth.User?.Name) return HttpResponse.json({ error: 'Invalid authentication response' }, { status: 502 });
     if (await denyPasswordlessAdultLogin(auth.User.Id, body.password, auth.User.Name)) return HttpResponse.json({ error: 'Adult Jellyfin accounts need a password different from their username when Kids profiles are enabled. You can also use local pairing and the parent PIN.' }, { status: 403 });
     const user = { id: auth.User.Id, name: auth.User.Name };
-    return HttpResponse.json({ user, token: await createSession({ ...user, accessToken: auth.AccessToken }, 'mobile') });
+    return HttpResponse.json({ user, token: await createSession({ ...user, admin:auth.User.Policy?.IsAdministrator===true, accessToken: auth.AccessToken }, 'mobile') });
   }
   if (!get && route === 'auth/pair') {
     if (!directLocal(request)) return HttpResponse.json({ error: 'Automatic pairing requires a direct connection on your home network. Use Jellyfin sign-in remotely.' }, { status: 403 });
@@ -139,8 +142,15 @@ async function dispatchContent(request: HttpRequest, context: Context) {
     }
     request = new HttpRequest(url, { method: request.method, headers, body, signal: request.signal });
   }
+  if (route === 'integrations') {
+    if(!session?.admin)return HttpResponse.json({error:'Administrator sign-in required'},{status:403});
+    return get?integrationsService.GET(request):integrationsService.POST(request);
+  }
+  if (get && route === 'requested') return requestedService.GET(request);
+  if (get && (route === 'music' || route.startsWith('music/'))) return musicService.GET(request);
+  if (!get && route === 'music/request') return musicService.POST(request);
   if (get && route === 'trailer') return trailer(request);
-  if (get && route === 'capabilities') return HttpResponse.json({ apiVersion: 1, appName: getServerConfig().appName || 'HomeStream', cast: true, jellyfinLogin: true });
+  if (get && route === 'capabilities') return HttpResponse.json({ apiVersion: 1, appName: getServerConfig().appName || 'HomeStream', cast: true, jellyfinLogin: true, canManageIntegrations:session?.admin===true });
   if (get && route === 'session/status') {
     const profile = await activeProfile(request);
     return HttpResponse.json({ profile, revision: profile ? kidsPolicyRevision(profile) : '' });

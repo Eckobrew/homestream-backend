@@ -46,6 +46,7 @@ async function permit(id: string, profile: UserProfile, type: 'movie' | 'tv' = '
 export async function guardKidsRequest(request: HttpRequest, profile: UserProfile): Promise<void> {
   if (!isKids(profile)) return;
   const name = route(request);
+  if (name === 'integrations' || name === 'music' || name.startsWith('music/')) throw new ParentalDenied('Music and integration settings are unavailable in Kids mode');
   if (name === 'downloads' || name.startsWith('stream/download')) throw new ParentalDenied('Downloading torrents are unavailable in Kids mode');
   if (name === 'trailer' || (name === 'request' && request.method === 'GET')) return;
   if (name.startsWith('profiles')) return;
@@ -141,7 +142,7 @@ export function withParentalControls<Args extends unknown[]>(handler: (...args: 
         if (profile) await guardKidsRequest(request, profile);
         if (!request.nextUrl.pathname.includes('/mobile/')) {
           const name = route(request);
-          if (parentPinConfigured() && (name === 'config' || (name === 'profiles' && request.method !== 'GET'))) {
+          if (parentPinConfigured() && (name === 'config' || (name === 'integrations' && request.method !== 'GET') || (name === 'profiles' && request.method !== 'GET'))) {
             try { await requireParentPin((await request.clone().json().catch(() => null))?.parentPin); }
             catch (error) { throw new ParentalDenied(error instanceof Error ? error.message : 'Parent PIN required'); }
           }

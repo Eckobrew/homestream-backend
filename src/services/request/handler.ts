@@ -1,3 +1,4 @@
+import { invalidateRequested } from '@/lib/request-cache';
 import { withParentalControls } from '@/lib/parental-controls';
 import { HttpRequest, HttpResponse } from '@/http';
 import { SeerrClient } from '@/lib/seerr';
@@ -60,6 +61,7 @@ async function handlePOST(request: HttpRequest) {
       return HttpResponse.json({ success: false, error: result.error }, { status: 400 });
     }
 
+    invalidateRequested();
     return HttpResponse.json({
       success: true,
       message: result.message || 'Request successfully sent to Jellyseerr/Overseerr!',

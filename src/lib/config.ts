@@ -12,9 +12,9 @@ export const getServerConfig = (): ServerConfig => {
   const fileConfig = readState<Partial<ServerConfig>>('config', {});
 
   const jellyfinUrl =
-    fileConfig.jellyfinUrl ||
-    process.env.JELLYFIN_URL ||
-    process.env.NEXT_PUBLIC_JELLYFIN_URL ||
+    fileConfig.jellyfinUrl ??
+    process.env.JELLYFIN_URL ??
+    process.env.NEXT_PUBLIC_JELLYFIN_URL ??
     '';
   const jellyfinApiKey =
     fileConfig.jellyfinApiKey ||
@@ -25,9 +25,9 @@ export const getServerConfig = (): ServerConfig => {
     process.env.JELLYFIN_USER_ID ||
     '';
   const seerrUrl =
-    fileConfig.seerrUrl ||
-    process.env.SEERR_URL ||
-    process.env.NEXT_PUBLIC_SEERR_URL ||
+    fileConfig.seerrUrl ??
+    process.env.SEERR_URL ??
+    process.env.NEXT_PUBLIC_SEERR_URL ??
     '';
   const seerrApiKey =
     fileConfig.seerrApiKey ||
@@ -35,9 +35,9 @@ export const getServerConfig = (): ServerConfig => {
     '';
 
   const qbittorrentUrl =
-    fileConfig.qbittorrentUrl ||
-    process.env.QBITTORRENT_URL ||
-    process.env.NEXT_PUBLIC_QBITTORRENT_URL ||
+    fileConfig.qbittorrentUrl ??
+    process.env.QBITTORRENT_URL ??
+    process.env.NEXT_PUBLIC_QBITTORRENT_URL ??
     '';
   const qbittorrentUsername =
     fileConfig.qbittorrentUsername ||
@@ -69,6 +69,8 @@ export const getServerConfig = (): ServerConfig => {
     jellyfinUserId,
     seerrUrl: sanitizeUrl(seerrUrl),
     seerrApiKey,
+    droppedneedleUrl: sanitizeUrl(fileConfig.droppedneedleUrl ?? process.env.DROPPEDNEEDLE_URL ?? ''),
+    droppedneedleToken: fileConfig.droppedneedleToken || process.env.DROPPEDNEEDLE_TOKEN || '',
     qbittorrentUrl: sanitizeUrl(qbittorrentUrl),
     qbittorrentUsername,
     qbittorrentPassword,

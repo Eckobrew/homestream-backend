@@ -45,6 +45,7 @@ export async function GET(request: HttpRequest) {
   // If local or over Tailscale -> NO LOGIN REQUIRED!
   if (netCheck.isLocalOrTailscale && !(await getHomeflixProfiles()).some(isKids)) {
     return HttpResponse.json({
+      canManageIntegrations: netCheck.isLocalOrTailscale || Boolean(sessionUser?.admin),
       requiresAuth: false,
       isLocalOrTailscale: true,
       isAuthenticated: true,
@@ -57,6 +58,7 @@ export async function GET(request: HttpRequest) {
   // External network (Internet without Tailscale)
   if (sessionUser && sessionUser.name) {
     return HttpResponse.json({
+      canManageIntegrations: netCheck.isLocalOrTailscale || Boolean(sessionUser?.admin),
       requiresAuth: false,
       isLocalOrTailscale: false,
       isAuthenticated: true,
@@ -68,6 +70,7 @@ export async function GET(request: HttpRequest) {
 
   // External network and NOT authenticated -> SHOW LOGIN!
   return HttpResponse.json({
+    canManageIntegrations: false,
     requiresAuth: true,
     isLocalOrTailscale: false,
     isAuthenticated: false,

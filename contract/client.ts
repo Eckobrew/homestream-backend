@@ -1,7 +1,7 @@
 import type { paths } from './paths.js';
 export type { paths } from './paths.js';
 export type * from './models.js';
-export const API_CONTRACT_VERSION = '1.1.0';
+export const API_CONTRACT_VERSION = '1.2.0';
 export type ApiPath = keyof paths;
 /** Keep same-origin credentials and Fetch semantics for JSON, redirects and streaming. */
 export function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {

@@ -1,5 +1,5 @@
 group 'uk.eckonet.homestream'
-version '1.1.0'
+version '1.2.0'
 buildscript {
     ext.kotlin_version = '2.2.20'
     repositories { mavenCentral() }

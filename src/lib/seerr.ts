@@ -568,6 +568,28 @@ export class SeerrClient {
     }
   }
 
+  async getRequestQueue(): Promise<MediaItem[]> {
+    const response = await this.fetch(`${this.url}/api/v1/request?take=100&sort=added`, { headers: this.getHeaders() });
+    if (!response.ok) throw new Error('Seerr requests are unavailable');
+    const data = await response.json();
+    const output: MediaItem[] = [];
+    const rows = (data.results || []).filter((r: any) => r.media?.tmdbId);
+    for(let offset=0;offset<rows.length;offset+=5) {
+      const batch=await Promise.all(rows.slice(offset,offset+5).map(async (r: any) => {
+        const tv=r.type==='tv';const id=r.media.tmdbId;
+        const details=await this.fetch(`${this.url}/api/v1/${tv ? 'tv' : 'movie'}/${id}`,{headers:this.getHeaders()});
+        if(!details.ok) throw new Error('Seerr release metadata is unavailable');
+        const raw=await details.json();const item=this.mapResult({...raw,mediaType:tv?'tv':'movie'});
+        item.status=r.media.status===5?'available':r.media.status===3?'processing':'requested';
+        item.requestStatus=r.status===3?'declined':r.media.status===5?'available':r.media.status===3?'processing':r.status===1?'pending approval':'requested';
+        item.requestedAt=typeof r.createdAt==='string'?r.createdAt:undefined;
+        if(tv && raw.nextEpisodeToAir?.airDate) item.releaseDate=raw.nextEpisodeToAir.airDate;
+        return item;
+      }));output.push(...batch);
+    }
+    return Array.from(new Map(output.map(item=>[item.id,item])).values());
+  }
+
   async getUserRequests(take = 20): Promise<MediaItem[]> {
     if (!this.isConfigured()) return [];
     try {

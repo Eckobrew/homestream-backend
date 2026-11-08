@@ -1,3 +1,6 @@
+import * as music from './services/music/handler';
+import * as requested from './services/requested/handler';
+import * as integrations from './services/integrations/handler';
 import * as service0 from './services/auth/handler';
 import * as service1 from './services/categories/[type]/handler';
 import * as service2 from './services/config/handler';
@@ -18,6 +21,13 @@ import * as service16 from './services/subtitles/handler';
 import * as service17 from './services/trailer/handler';
 import * as service18 from './services/webhook/arr/handler';
 export const routes = [
+  {path:'/api/music',methods:['GET'],service:music},
+  {path:'/api/music/album',methods:['GET'],service:music},
+  {path:'/api/music/artwork',methods:['GET'],service:music},
+  {path:'/api/music/stream',methods:['GET'],service:music},
+  {path:'/api/music/request',methods:['POST'],service:music},
+  {path:'/api/requested',methods:['GET'],service:requested},
+  {path:'/api/integrations',methods:['GET','POST'],service:integrations},
   { path: "/api/auth", methods: ["GET", "POST"], service: service0 },
   { path: "/api/categories/:type", methods: ["GET"], service: service1 },
   { path: "/api/config", methods: ["GET", "POST"], service: service2 },

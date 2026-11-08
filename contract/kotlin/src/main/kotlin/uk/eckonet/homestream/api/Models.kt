@@ -21,6 +21,8 @@ data class MediaItem(
     @SerialName("backdropUrl") val `backdropUrl`: String,
     @SerialName("year") val `year`: Double? = null,
     @SerialName("releaseDate") val `releaseDate`: String? = null,
+    @SerialName("requestStatus") val `requestStatus`: String? = null,
+    @SerialName("requestedAt") val `requestedAt`: String? = null,
     @SerialName("rating") val `rating`: String? = null,
     @SerialName("matchPercentage") val `matchPercentage`: Double? = null,
     @SerialName("communityRating") val `communityRating`: Double? = null,
@@ -197,7 +199,8 @@ data class Capabilities(
     @SerialName("apiVersion") val `apiVersion`: Double,
     @SerialName("appName") val `appName`: String,
     @SerialName("cast") val `cast`: Boolean,
-    @SerialName("jellyfinLogin") val `jellyfinLogin`: Boolean? = null
+    @SerialName("jellyfinLogin") val `jellyfinLogin`: Boolean? = null,
+    @SerialName("canManageIntegrations") val `canManageIntegrations`: Boolean? = null
 )
 
 @Serializable
@@ -222,6 +225,84 @@ data class SubtitleTrack(
 )
 
 @Serializable
+data class MusicAlbum(
+    @SerialName("id") val `id`: String,
+    @SerialName("title") val `title`: String,
+    @SerialName("artist") val `artist`: String,
+    @SerialName("year") val `year`: Double? = null,
+    @SerialName("releaseDate") val `releaseDate`: String? = null,
+    @SerialName("coverUrl") val `coverUrl`: String? = null,
+    @SerialName("inLibrary") val `inLibrary`: Boolean,
+    @SerialName("requested") val `requested`: Boolean,
+    @SerialName("trackCount") val `trackCount`: Double? = null
+)
+
+@Serializable
+data class MusicTrack(
+    @SerialName("id") val `id`: String,
+    @SerialName("title") val `title`: String,
+    @SerialName("artist") val `artist`: String,
+    @SerialName("album") val `album`: String,
+    @SerialName("trackNumber") val `trackNumber`: Double,
+    @SerialName("discNumber") val `discNumber`: Double,
+    @SerialName("durationSeconds") val `durationSeconds`: Double? = null,
+    @SerialName("streamUrl") val `streamUrl`: String
+)
+
+@Serializable
+data class MusicResponse(
+    @SerialName("configured") val `configured`: Boolean,
+    @SerialName("albums") val `albums`: List<MusicAlbum>,
+    @SerialName("total") val `total`: Double
+)
+
+@Serializable
+data class MusicAlbumResponse(
+    @SerialName("album") val `album`: MusicAlbum,
+    @SerialName("tracks") val `tracks`: List<MusicTrack>
+)
+
+@Serializable
+data class RequestedItem(
+    @SerialName("id") val `id`: String,
+    @SerialName("title") val `title`: String,
+    @SerialName("kind") val `kind`: String,
+    @SerialName("source") val `source`: String,
+    @SerialName("status") val `status`: String,
+    @SerialName("artist") val `artist`: String? = null,
+    @SerialName("posterUrl") val `posterUrl`: String? = null,
+    @SerialName("releaseDate") val `releaseDate`: String? = null,
+    @SerialName("requestedAt") val `requestedAt`: String? = null,
+    @SerialName("progress") val `progress`: Double? = null,
+    @SerialName("downloadSpeed") val `downloadSpeed`: Double? = null,
+    @SerialName("etaSeconds") val `etaSeconds`: Double? = null,
+    @SerialName("media") val `media`: MediaItem? = null
+)
+
+@Serializable
+data class RequestedResponse(
+    @SerialName("items") val `items`: List<RequestedItem>,
+    @SerialName("warnings") val `warnings`: List<String>,
+    @SerialName("updatedAt") val `updatedAt`: String
+)
+
+@Serializable
+data class IntegrationSummary(
+    @SerialName("id") val `id`: String,
+    @SerialName("name") val `name`: String,
+    @SerialName("url") val `url`: String,
+    @SerialName("configured") val `configured`: Boolean,
+    @SerialName("credentialSet") val `credentialSet`: Boolean,
+    @SerialName("username") val `username`: String? = null
+)
+
+@Serializable
+data class IntegrationsResponse(
+    @SerialName("integrations") val `integrations`: List<IntegrationSummary>,
+    @SerialName("downloadsPath") val `downloadsPath`: String
+)
+
+@Serializable
 data class WebGetAuthQuery(
     @SerialName("userId") val `userId`: String? = null,
     @SerialName("action") val `action`: String? = null
@@ -232,6 +313,7 @@ data class WebGetAuthResponse(
     @SerialName("requiresAuth") val `requiresAuth`: Boolean? = null,
     @SerialName("isAuthenticated") val `isAuthenticated`: Boolean? = null,
     @SerialName("isLocalOrTailscale") val `isLocalOrTailscale`: Boolean? = null,
+    @SerialName("canManageIntegrations") val `canManageIntegrations`: Boolean? = null,
     @SerialName("users") val `users`: List<WebGetAuthResponseUsersItem>? = null
 )
 
@@ -596,6 +678,73 @@ data class WebGetCatalogLinksResponseItemsItem(
 )
 
 @Serializable
+data class WebGetMusicQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("q") val `q`: String? = null,
+    @SerialName("offset") val `offset`: String? = null
+)
+
+@Serializable
+data class WebGetMusicAlbumQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("albumId") val `albumId`: String
+)
+
+@Serializable
+data class WebGetMusicArtworkQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("albumId") val `albumId`: String
+)
+
+@Serializable
+data class WebGetMusicStreamQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("trackId") val `trackId`: String
+)
+
+@Serializable
+data class WebPostMusicRequestQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class WebPostMusicRequestBody(
+    @SerialName("musicbrainzId") val `musicbrainzId`: String
+)
+
+@Serializable
+data class WebPostMusicRequestResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null
+)
+
+@Serializable
+data class WebGetRequestedQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class WebGetIntegrationsQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class WebPostIntegrationsQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class WebPostIntegrationsBody(
+    @SerialName("integration") val `integration`: String,
+    @SerialName("action") val `action`: String,
+    @SerialName("url") val `url`: String? = null,
+    @SerialName("secret") val `secret`: String? = null,
+    @SerialName("username") val `username`: String? = null,
+    @SerialName("downloadsPath") val `downloadsPath`: String? = null,
+    @SerialName("parentPin") val `parentPin`: String? = null
+)
+
+@Serializable
 data class MobileGetHomeQuery(
     @SerialName("userId") val `userId`: String? = null
 )
@@ -763,6 +912,73 @@ data class MobileGetStreamDownloadQuery(
     @SerialName("source") val `source`: String? = null,
     @SerialName("probe") val `probe`: String? = null,
     @SerialName("growing") val `growing`: String? = null
+)
+
+@Serializable
+data class MobileGetMusicQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("q") val `q`: String? = null,
+    @SerialName("offset") val `offset`: String? = null
+)
+
+@Serializable
+data class MobileGetMusicAlbumQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("albumId") val `albumId`: String
+)
+
+@Serializable
+data class MobileGetMusicArtworkQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("albumId") val `albumId`: String
+)
+
+@Serializable
+data class MobileGetMusicStreamQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("trackId") val `trackId`: String
+)
+
+@Serializable
+data class MobilePostMusicRequestQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class MobilePostMusicRequestBody(
+    @SerialName("musicbrainzId") val `musicbrainzId`: String
+)
+
+@Serializable
+data class MobilePostMusicRequestResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null
+)
+
+@Serializable
+data class MobileGetRequestedQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class MobileGetIntegrationsQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class MobilePostIntegrationsQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class MobilePostIntegrationsBody(
+    @SerialName("integration") val `integration`: String,
+    @SerialName("action") val `action`: String,
+    @SerialName("url") val `url`: String? = null,
+    @SerialName("secret") val `secret`: String? = null,
+    @SerialName("username") val `username`: String? = null,
+    @SerialName("downloadsPath") val `downloadsPath`: String? = null,
+    @SerialName("parentPin") val `parentPin`: String? = null
 )
 
 @Serializable

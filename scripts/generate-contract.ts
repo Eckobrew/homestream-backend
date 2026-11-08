@@ -7,7 +7,7 @@ import { openapi } from '../src/openapi';
 const program = TJS.getProgramFromFiles([resolve('src/public-api.ts')], { strictNullChecks: true, skipLibCheck: true, esModuleInterop: true, moduleResolution: 2 }, process.cwd());
 const generator = TJS.buildGenerator(program, { required: true, ignoreErrors: false, ref: true });
 if (!generator) throw new Error('Could not generate public API models');
-const names = ['ApiError','HomeResponse','LibraryResponse','MediaResponse','ProfilesResponse','PlaybackResponse','PublicConfig','Capabilities','MediaItem','UserProfile','RequestMediaPayload','SubtitleTrack'];
+const names = ['ApiError','HomeResponse','LibraryResponse','MediaResponse','ProfilesResponse','PlaybackResponse','PublicConfig','Capabilities','MediaItem','UserProfile','RequestMediaPayload','SubtitleTrack','MusicAlbum','MusicTrack','MusicResponse','MusicAlbumResponse','RequestedItem','RequestedResponse','IntegrationSummary','IntegrationsResponse'];
 const schemas: Record<string, unknown> = {};
 const fixRefs = (value: unknown) => JSON.parse(JSON.stringify(value).replaceAll('#/definitions/', '#/components/schemas/'));
 for (const name of names) {

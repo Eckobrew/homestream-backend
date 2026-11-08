@@ -214,6 +214,59 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         return execute(url.build().toString(), "GET", null, null)
     }
 
+    fun `web_get_music`(query: WebGetMusicQuery): ApiResponse<MusicResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("music")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`q`?.let { url.addQueryParameter("q", it.toString()) }
+        query.`offset`?.let { url.addQueryParameter("offset", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `web_get_music_album`(query: WebGetMusicAlbumQuery): ApiResponse<MusicAlbumResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("music").addPathSegment("album")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`albumId`.let { url.addQueryParameter("albumId", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `web_get_music_artwork`(query: WebGetMusicArtworkQuery, range: String? = null): okhttp3.Response {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("music").addPathSegment("artwork")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`albumId`.let { url.addQueryParameter("albumId", it.toString()) }
+        return executeStream(url.build().toString(), "GET", null, range)
+    }
+
+    fun `web_get_music_stream`(query: WebGetMusicStreamQuery, range: String? = null): okhttp3.Response {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("music").addPathSegment("stream")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`trackId`.let { url.addQueryParameter("trackId", it.toString()) }
+        return executeStream(url.build().toString(), "GET", null, range)
+    }
+
+    fun `web_post_music_request`(query: WebPostMusicRequestQuery, body: WebPostMusicRequestBody): ApiResponse<WebPostMusicRequestResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("music").addPathSegment("request")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
+    fun `web_get_requested`(query: WebGetRequestedQuery): ApiResponse<RequestedResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("requested")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `web_get_integrations`(query: WebGetIntegrationsQuery): ApiResponse<IntegrationsResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("integrations")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `web_post_integrations`(query: WebPostIntegrationsQuery, body: WebPostIntegrationsBody): ApiResponse<JsonElement> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("integrations")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
     fun `mobile_get_home`(query: MobileGetHomeQuery): ApiResponse<HomeResponse> {
         val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("home")
         query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
@@ -324,6 +377,59 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         query.`probe`?.let { url.addQueryParameter("probe", it.toString()) }
         query.`growing`?.let { url.addQueryParameter("growing", it.toString()) }
         return executeStream(url.build().toString(), "GET", null, range)
+    }
+
+    fun `mobile_get_music`(query: MobileGetMusicQuery): ApiResponse<MusicResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("music")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`q`?.let { url.addQueryParameter("q", it.toString()) }
+        query.`offset`?.let { url.addQueryParameter("offset", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `mobile_get_music_album`(query: MobileGetMusicAlbumQuery): ApiResponse<MusicAlbumResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("music").addPathSegment("album")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`albumId`.let { url.addQueryParameter("albumId", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `mobile_get_music_artwork`(query: MobileGetMusicArtworkQuery, range: String? = null): okhttp3.Response {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("music").addPathSegment("artwork")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`albumId`.let { url.addQueryParameter("albumId", it.toString()) }
+        return executeStream(url.build().toString(), "GET", null, range)
+    }
+
+    fun `mobile_get_music_stream`(query: MobileGetMusicStreamQuery, range: String? = null): okhttp3.Response {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("music").addPathSegment("stream")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`trackId`.let { url.addQueryParameter("trackId", it.toString()) }
+        return executeStream(url.build().toString(), "GET", null, range)
+    }
+
+    fun `mobile_post_music_request`(query: MobilePostMusicRequestQuery, body: MobilePostMusicRequestBody): ApiResponse<MobilePostMusicRequestResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("music").addPathSegment("request")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
+    fun `mobile_get_requested`(query: MobileGetRequestedQuery): ApiResponse<RequestedResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("requested")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `mobile_get_integrations`(query: MobileGetIntegrationsQuery): ApiResponse<IntegrationsResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("integrations")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `mobile_post_integrations`(query: MobilePostIntegrationsQuery, body: MobilePostIntegrationsBody): ApiResponse<JsonElement> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("integrations")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
     }
 
     fun `mobile_get_discovery`(query: MobileGetDiscoveryQuery): ApiResponse<MobileGetDiscoveryResponse> {

@@ -13,7 +13,7 @@ export async function authenticate(request: HttpRequest): Promise<HttpRequest | 
   const setupToken = process.env.HOMESTREAM_SETUP_TOKEN || '';
   const setup = setupToken.length >= 32 && request.headers.get('authorization') === `Bearer ${setupToken}`;
   if (!local && !session && !setup) return HttpResponse.json({ error: 'Authentication required' }, { status: 401 });
-  if ((path === '/api/config' || (path === '/api/profiles' && request.method !== 'GET')) && !local && !session?.admin && !setup) return HttpResponse.json({ error: 'Administrator access required' }, { status: 403 });
+  if ((path === '/api/config' || path === '/api/integrations' || (path === '/api/profiles' && request.method !== 'GET')) && !local && !session?.admin && !setup) return HttpResponse.json({ error: 'Administrator access required' }, { status: 403 });
   if (!local && session) {
     const headers = new Headers(request.headers);
     const cookies = request.cookies.getAll().filter(cookie => cookie.name !== 'homeflix_profile_id');

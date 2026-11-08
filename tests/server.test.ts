@@ -48,7 +48,7 @@ test('standalone API keeps compatibility, authorization, discovery and direct pa
       assert.equal((await app.inject(request)).statusCode, 403, 'Default app does not permit asserted gateway pairing');
     } finally { await pairingApp.close(); delete process.env.HOMESTREAM_ALLOW_PROXY_PAIRING; }
     const spec = (await app.inject('/openapi.json')).json();
-    assert.equal(spec.info.version, '1.1.0');
+    assert.equal(spec.info.version, '1.2.0');
     assert.ok(spec.paths['/api/v1/media/{id}']);
   } finally { await app.close(); await rm(directory, { recursive: true, force: true }); }
 });
