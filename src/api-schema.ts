@@ -63,12 +63,12 @@ add('youtube/search','GET',object(),{q:text},undefined,{responseModel:'YouTubeSe
 add('youtube/stream','GET',object(),{videoId:id},undefined,{requiredQuery:['videoId'],responseModel:'YouTubeStreamResponse'});
 add('youtube/stream-video','GET',object(),{videoId:id},undefined,{requiredQuery:['videoId'],binary:true});
 add('youtube/progress','POST',success,{},object({videoId:id,positionSeconds:integer,durationSeconds:integer,completed:boolean,title:text,channelTitle:text,thumbnailUrl:text},['videoId']));
-add('youtube/continue-watching','GET',object(),{},undefined,{responseModel:'YouTubeContinueWatchingResponse'});
+add('youtube/continue-watching','GET',object({items:list()}),{},undefined);
 add('youtube/continue-watching','DELETE',success,{videoId:id},undefined,{requiredQuery:['videoId']});
-add('youtube/auth','GET',object(),{},undefined,{responseModel:'YouTubeAuthStatusResponse'});
+add('youtube/auth','GET',object({authenticated:boolean}),{},undefined);
 add('youtube/auth','POST',object({success:boolean}),{},object({cookiesText:text}));
 add('youtube/auth','DELETE',success,{},undefined);
-add('youtube/recommendations','GET',object(),{},undefined,{responseModel:'YouTubeRecommendationsResponse'});
+add('youtube/recommendations','GET',object({hero:object(),sections:list()}),{},undefined);
 add('youtube/download','POST',success,{},object({videoId:id,channelId:text,channelTitle:text,title:text,durationSeconds:integer,thumbnailUrl:text,uploadDate:text},['videoId','title']));
 add('youtube/subscriptions','GET',object(),{},undefined,{responseModel:'YouTubeSubscriptionsResponse'});
 add('youtube/subscriptions','POST',object({success:boolean}),{},object({channelUrlOrHandle:text,autoDownload:boolean,minDurationSeconds:integer,maxDurationSeconds:integer,includeKeywords:list(text),excludeKeywords:list(text),ignoreShorts:boolean},['channelUrlOrHandle']));

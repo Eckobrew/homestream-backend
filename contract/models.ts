@@ -72,7 +72,7 @@ export interface MediaItem {
   durationMinutes?: number;
   genres: string[];
   seasonsCount?: number;
-  source: 'jellyfin' | 'seerr' | 'demo';
+  source: 'jellyfin' | 'seerr' | 'demo' | 'youtube';
   jellyfinId?: string;
   seerrId?: number;
   tmdbId?: number;
@@ -175,6 +175,7 @@ export interface MusicAlbum {
   releaseDate?: string;
   coverUrl?: string;
   inLibrary: boolean;
+  isDownloaded?: boolean;
   requested: boolean;
   trackCount?: number;
 }
