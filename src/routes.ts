@@ -53,7 +53,7 @@ export const routes = [
   { path: "/api/library/:type", methods: ["GET"], service: service5 },
   { path: "/api/media/:id", methods: ["GET"], service: service6 },
   { path: "/api/media/:id/recommendations", methods: ["GET"], service: service7 },
-  { path: "/api/mobile/v1/*", methods: ["GET", "POST", "HEAD", "OPTIONS"], service: service8 },
+  { path: "/api/mobile/v1/*", methods: ["GET", "POST", "DELETE", "HEAD", "OPTIONS"], service: service8 },
   { path: "/api/playback", methods: ["GET"], service: service9 },
   { path: "/api/playback/progress", methods: ["POST"], service: service10 },
   { path: "/api/preview-stream", methods: ["GET"], service: service11 },

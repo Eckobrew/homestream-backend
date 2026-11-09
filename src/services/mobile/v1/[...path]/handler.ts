@@ -153,9 +153,11 @@ async function dispatchContent(request: HttpRequest, context: Context) {
     return get?integrationsService.GET(request):integrationsService.POST(request);
   }
   if (get && route === 'requested') return requestedService.GET(request);
-  if (get && (route === 'music' || route.startsWith('music/'))) return musicService.GET(request);
-  if (request.method === 'POST' && (route === 'music/request' || route === 'music/profile-album')) return musicService.POST(request);
-  if (request.method === 'DELETE' && (route === 'music/album' || route === 'music/profile-album')) return musicService.DELETE(request);
+  if (route === 'music' || route.startsWith('music/')) {
+    if (get || request.method === 'HEAD') return musicService.GET(request);
+    if (request.method === 'POST') return musicService.POST(request);
+    if (request.method === 'DELETE') return musicService.DELETE(request);
+  }
   if (route === 'youtube' || route.startsWith('youtube/')) {
     if (get || request.method === 'HEAD') return youtubeService.GET(request);
     if (request.method === 'POST') return youtubeService.POST(request);

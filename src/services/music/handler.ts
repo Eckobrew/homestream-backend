@@ -184,11 +184,13 @@ async function get(request: HttpRequest) {
 }
 
 async function post(request: HttpRequest) {
+  const body = await request.json().catch(() => null);
   const profileId =
     request.nextUrl.searchParams.get('userId') ||
     request.nextUrl.searchParams.get('profileId') ||
+    body?.userId ||
+    body?.profileId ||
     request.cookies.get('homeflix_profile_id')?.value;
-  const body = await request.json().catch(() => null);
 
   const route = request.nextUrl.pathname.replace(/^\/api\/(?:mobile\/v1\/|v1\/)?/, '');
 

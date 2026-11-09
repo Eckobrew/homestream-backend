@@ -20,7 +20,7 @@ import openapi from '../contract/openapi.json';
 type Handler = (request: HttpRequest, context: { params: Promise<Record<string, string | string[]>> }) => Promise<Response> | Response;
 export function createApp() {
   // Disable automatic request logs: URLs may contain signed playback credentials.
-  const app = Fastify({ logger: false, exposeHeadRoutes: false, bodyLimit: 1024 * 1024, requestTimeout: 30000 });
+  const app = Fastify({ logger: false, exposeHeadRoutes: false, bodyLimit: 50 * 1024 * 1024, requestTimeout: 60000 });
   const apiMetrics = { requests: 0, errors: 0, totalDurationMs: 0 };
   app.addHook('onRequest', async (request, reply) => { reply.header('x-request-id', randomUUID()); apiMetrics.requests++; (request as unknown as { started: number }).started = Date.now(); });
   app.addHook('onResponse', async (request, reply) => { apiMetrics.totalDurationMs += Date.now() - (request as unknown as { started: number }).started; if (reply.statusCode >= 500) apiMetrics.errors++; });

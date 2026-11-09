@@ -56,6 +56,15 @@ add('music/request','POST',success,{},object({musicbrainzId:id,albumId:id}));
 add('music/profile-album','POST',success,{},object({albumId:id}));
 add('music/profile-album','DELETE',success,{albumId:id});
 add('music/album','DELETE',success,{albumId:id});
+add('music/playlists','GET',object(),{profileId:id});
+add('music/playlists','POST',object({success:boolean,playlist:object()}),{},object({name:text,description:text},['name']));
+add('music/playlists/import','POST',object({success:boolean,message:text,playlists:list(),totalTracksQueued:integer}),{},object({url:text,urls:list(text),spotifyUrl:text,csv:text,files:list(object({name:text,content:text})),zipBase64:text,playlistName:text}));
+add('music/playlists/import-spotify','POST',object({success:boolean,message:text,playlists:list(),totalTracksQueued:integer}),{},object({url:text,urls:list(text),spotifyUrl:text}));
+add('music/playlists/import-exportify','POST',object({success:boolean,message:text,playlists:list(),totalTracksQueued:integer}),{},object({csv:text,files:list(object({name:text,content:text})),zipBase64:text,playlistName:text}));
+add('music/playlist','GET',object(),{playlistId:id},{requiredQuery:['playlistId']});
+add('music/playlist','DELETE',success,{playlistId:id},{requiredQuery:['playlistId']});
+add('music/playlist/track','POST',success,{},object({playlistId:id,trackId:id},['playlistId','trackId']));
+add('music/playlist/track','DELETE',success,{playlistId:id,trackId:id},{requiredQuery:['playlistId','trackId']});
 add('requested','GET',object(),{},undefined,{responseModel:'RequestedResponse'});
 add('integrations','GET',object(),{},undefined,{responseModel:'IntegrationsResponse'});
 add('integrations','POST',object(),{},object({integration:{type:'string',enum:['jellyfin','seerr','qbittorrent','slskd','radarr','sonarr','tmdb']},action:{type:'string',enum:['save','test']},url:text,secret:text,username:text,downloadsPath:text,parentPin:text},['integration','action']));
@@ -81,7 +90,7 @@ add('youtube/archive','GET',object(),{},undefined,{responseModel:'YouTubeArchive
 add('youtube/stream-local','GET',object(),{path:text},undefined,{requiredQuery:['path'],binary:true});
 add('youtube/thumbnail','GET',object(),{path:text},undefined,{requiredQuery:['path'],binary:true,public:true});
 export const webOperations = operations;
-const shared = ['integrations','requested','music','music/album','music/artwork','music/stream','music/request','youtube/search','youtube/stream','youtube/stream-video','youtube/progress','youtube/continue-watching','youtube/auth','youtube/recommendations','youtube/download','youtube/subscriptions','youtube/subscriptions/check','youtube/queue','youtube/archive','youtube/stream-local','youtube/thumbnail','home','library/{type}','categories/{type}','media/{id}','media/{id}/recommendations','search','downloads','playback','request','subtitles','trailer','stream/download','stream/torrent'];
+const shared = ['integrations','requested','music','music/album','music/artwork','music/stream','music/request','music/profile-album','music/playlists','music/playlists/import','music/playlists/import-spotify','music/playlists/import-exportify','music/playlist','music/playlist/track','youtube/search','youtube/stream','youtube/stream-video','youtube/progress','youtube/continue-watching','youtube/auth','youtube/recommendations','youtube/download','youtube/subscriptions','youtube/subscriptions/check','youtube/queue','youtube/archive','youtube/stream-local','youtube/thumbnail','home','library/{type}','categories/{type}','media/{id}','media/{id}/recommendations','search','downloads','playback','request','subtitles','trailer','stream/download','stream/torrent'];
 export const mobileOperations: Operation[] = operations.filter(operation => shared.includes(operation.path)).map(operation => ({...operation}));
 function native(path:string,method:string,response:Schema,query:Record<string,Schema>={},body?:Schema,extra:Partial<Operation>={}) { mobileOperations.push({path,method,response,query:{userId:id,...query},body,...extra}); }
 native('discovery','GET',object({apiVersion:integer,appName:text,cast:boolean,pairing:text,localPairing:boolean,jellyfinLogin:boolean}),{},undefined,{public:true});
