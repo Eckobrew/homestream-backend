@@ -17,6 +17,7 @@ import * as service12 from './services/profiles/handler';
 import * as service13 from './services/request/handler';
 import * as service14 from './services/search/handler';
 import * as service15 from './services/stream/download/handler';
+import * as serviceTorrent from './services/stream/torrent/handler';
 import * as service16 from './services/subtitles/handler';
 import * as service17 from './services/trailer/handler';
 import * as service18 from './services/webhook/arr/handler';
@@ -44,6 +45,7 @@ export const routes = [
   { path: "/api/request", methods: ["GET", "POST"], service: service13 },
   { path: "/api/search", methods: ["GET"], service: service14 },
   { path: "/api/stream/download", methods: ["GET"], service: service15 },
+  { path: "/api/stream/torrent", methods: ["GET"], service: serviceTorrent },
   { path: "/api/subtitles", methods: ["GET"], service: service16 },
   { path: "/api/trailer", methods: ["GET"], service: service17 },
   { path: "/api/webhook/arr", methods: ["POST", "GET"], service: service18 },

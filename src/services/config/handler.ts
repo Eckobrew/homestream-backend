@@ -3,10 +3,10 @@ import { HttpRequest, HttpResponse } from '@/http';
 import { JellyfinClient } from '@/lib/jellyfin';
 import { SeerrClient } from '@/lib/seerr';
 import { QBittorrentClient } from '@/lib/qbittorrent';
+import { RadarrClient } from '@/lib/radarr';
+import { SonarrClient } from '@/lib/sonarr';
 import { getServerConfig, saveServerConfig } from '@/lib/config';
 import { getHomeflixProfiles } from '@/lib/profiles';
-
-
 
 async function handleGET(_request: HttpRequest) {
   const config = getServerConfig();
@@ -15,6 +15,8 @@ async function handleGET(_request: HttpRequest) {
   const isJellyfinConfigured = Boolean(config.jellyfinUrl && config.jellyfinApiKey);
   const isSeerrConfigured = Boolean(config.seerrUrl && config.seerrApiKey);
   const isQbittorrentConfigured = Boolean(config.qbittorrentUrl);
+  const isRadarrConfigured = Boolean(config.radarrUrl && config.radarrApiKey);
+  const isSonarrConfigured = Boolean(config.sonarrUrl && config.sonarrApiKey);
   const isSetupNeeded = !isJellyfinConfigured || profiles.length === 0;
 
   return HttpResponse.json({
@@ -28,10 +30,16 @@ async function handleGET(_request: HttpRequest) {
     qbittorrentUsername: config.qbittorrentUsername,
     hasQbittorrentPassword: Boolean(config.qbittorrentPassword),
     downloadsPath: config.downloadsPath || '/downloads',
+    radarrUrl: config.radarrUrl,
+    hasRadarrKey: Boolean(config.radarrApiKey),
+    sonarrUrl: config.sonarrUrl,
+    hasSonarrKey: Boolean(config.sonarrApiKey),
     isConfigured: config.isConfigured,
     isJellyfinConfigured,
     isSeerrConfigured,
     isQbittorrentConfigured,
+    isRadarrConfigured,
+    isSonarrConfigured,
     isSetupNeeded,
     profilesCount: profiles.length,
   });
@@ -53,6 +61,10 @@ async function handlePOST(request: HttpRequest) {
         qbittorrentUsername: body.qbittorrentUsername,
         qbittorrentPassword: body.qbittorrentPassword,
         downloadsPath: body.downloadsPath,
+        radarrUrl: body.radarrUrl,
+        radarrApiKey: body.radarrApiKey,
+        sonarrUrl: body.sonarrUrl,
+        sonarrApiKey: body.sonarrApiKey,
       });
 
       return HttpResponse.json({
@@ -65,6 +77,10 @@ async function handlePOST(request: HttpRequest) {
           qbittorrentUrl: saved.qbittorrentUrl,
           hasQbittorrentPassword: Boolean(saved.qbittorrentPassword),
           downloadsPath: saved.downloadsPath,
+          radarrUrl: saved.radarrUrl,
+          hasRadarrKey: Boolean(saved.radarrApiKey),
+          sonarrUrl: saved.sonarrUrl,
+          hasSonarrKey: Boolean(saved.sonarrApiKey),
           isConfigured: saved.isConfigured,
         },
       });
@@ -84,6 +100,18 @@ async function handlePOST(request: HttpRequest) {
 
     if (action === 'test-qbittorrent') {
       const client = new QBittorrentClient(body.url, body.username, body.password);
+      const res = await client.testConnection();
+      return HttpResponse.json(res);
+    }
+
+    if (action === 'test-radarr') {
+      const client = new RadarrClient(body.url, body.apiKey);
+      const res = await client.testConnection();
+      return HttpResponse.json(res);
+    }
+
+    if (action === 'test-sonarr') {
+      const client = new SonarrClient(body.url, body.apiKey);
       const res = await client.testConnection();
       return HttpResponse.json(res);
     }

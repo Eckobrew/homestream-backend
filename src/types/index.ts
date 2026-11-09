@@ -117,6 +117,10 @@ export interface ServerConfig {
   qbittorrentUsername?: string;
   qbittorrentPassword?: string;
   downloadsPath?: string;
+  radarrUrl?: string;
+  radarrApiKey?: string;
+  sonarrUrl?: string;
+  sonarrApiKey?: string;
   isConfigured: boolean;
 }
 

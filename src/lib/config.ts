@@ -52,6 +52,26 @@ export const getServerConfig = (): ServerConfig => {
     process.env.DOWNLOADS_PATH ||
     '/downloads';
 
+  const radarrUrl =
+    fileConfig.radarrUrl ||
+    process.env.RADARR_URL ||
+    process.env.NEXT_PUBLIC_RADARR_URL ||
+    '';
+  const radarrApiKey =
+    fileConfig.radarrApiKey ||
+    process.env.RADARR_API_KEY ||
+    '';
+
+  const sonarrUrl =
+    fileConfig.sonarrUrl ||
+    process.env.SONARR_URL ||
+    process.env.NEXT_PUBLIC_SONARR_URL ||
+    '';
+  const sonarrApiKey =
+    fileConfig.sonarrApiKey ||
+    process.env.SONARR_API_KEY ||
+    '';
+
   const appName =
     fileConfig.appName ||
     process.env.APP_NAME ||
@@ -75,6 +95,10 @@ export const getServerConfig = (): ServerConfig => {
     qbittorrentUsername,
     qbittorrentPassword,
     downloadsPath,
+    radarrUrl: sanitizeUrl(radarrUrl),
+    radarrApiKey,
+    sonarrUrl: sanitizeUrl(sonarrUrl),
+    sonarrApiKey,
     isConfigured,
   };
 };
@@ -94,6 +118,10 @@ export const saveServerConfig = (newConfig: Partial<ServerConfig>): ServerConfig
     qbittorrentUsername: newConfig.qbittorrentUsername !== undefined ? newConfig.qbittorrentUsername : current.qbittorrentUsername,
     qbittorrentPassword: newConfig.qbittorrentPassword !== undefined ? newConfig.qbittorrentPassword : current.qbittorrentPassword,
     downloadsPath: newConfig.downloadsPath !== undefined ? newConfig.downloadsPath : current.downloadsPath,
+    radarrUrl: sanitizeUrl(newConfig.radarrUrl !== undefined ? newConfig.radarrUrl : current.radarrUrl || ''),
+    radarrApiKey: newConfig.radarrApiKey !== undefined ? newConfig.radarrApiKey : current.radarrApiKey,
+    sonarrUrl: sanitizeUrl(newConfig.sonarrUrl !== undefined ? newConfig.sonarrUrl : current.sonarrUrl || ''),
+    sonarrApiKey: newConfig.sonarrApiKey !== undefined ? newConfig.sonarrApiKey : current.sonarrApiKey,
     isConfigured: false,
   };
 
