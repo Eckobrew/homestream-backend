@@ -39,7 +39,7 @@ function seedNathanProfileMusic(db: any) {
   }
 }
 
-function ensureMusicTables() {
+export function ensureMusicTables() {
   if (dbInitialized) return;
   try {
     const db = stateDatabase();

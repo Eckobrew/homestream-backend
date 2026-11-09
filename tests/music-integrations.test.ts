@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { createApp } from '../src/app';
 import { createSession } from '../src/lib/session';
 import { writeState, closeStateDatabases, stateDatabase } from '../src/state/database';
+import { ensureMusicTables } from '../src/lib/music';
 const mbid = '11111111-1111-4111-8111-111111111111';
 test('music requests, authenticated range streaming, all-media queue and admin credential separation', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'homestream-music-'));
@@ -86,6 +87,7 @@ test('music requests, authenticated range streaming, all-media queue and admin c
 
   // Seed native SQLite library and track file
   const app = createApp();
+  ensureMusicTables();
   const db = stateDatabase();
   const now = new Date().toISOString();
   db.prepare(
@@ -181,7 +183,7 @@ test('music requests, authenticated range streaming, all-media queue and admin c
   } finally {
     await app.close();
     upstream.closeAllConnections();
-    await new Promise<void>((resolve) => upstream.close(() => resolve()));
+    upstream.close();
     closeStateDatabases();
     await rm(directory, { recursive: true, force: true });
   }
