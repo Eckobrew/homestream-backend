@@ -73,6 +73,7 @@ test('music requests, authenticated range streaming, all-media queue and admin c
     res.end('{}');
   });
   await new Promise<void>((resolve) => upstream.listen(0, '127.0.0.1', resolve));
+  upstream.unref();
   const port = (upstream.address() as { port: number }).port;
   const url = 'http://127.0.0.1:' + port;
   Object.assign(process.env, {
@@ -188,7 +189,14 @@ test('music requests, authenticated range streaming, all-media queue and admin c
     stopDownloadMonitor();
     await app.close();
     upstream.closeAllConnections();
-    await new Promise<void>((resolve) => upstream.close(() => resolve()));
+    await new Promise<void>((resolve) => {
+      try {
+        upstream.close(() => resolve());
+      } catch {
+        resolve();
+      }
+      setTimeout(resolve, 500).unref();
+    });
     closeStateDatabases();
     await rm(directory, { recursive: true, force: true });
   }

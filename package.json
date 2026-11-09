@@ -11,7 +11,7 @@
     "build": "tsc --noEmit && tsup --format esm --platform node --target node22 --out-dir dist",
     "start": "node --env-file-if-exists=.env dist/server.js",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test tests/*.test.ts",
+    "test": "node --test-timeout=20000 --import tsx --test tests/*.test.ts",
     "test:mobile": "node --import tsx scripts/test-mobile-api.mjs",
     "test:playback": "node scripts/test-playback-capabilities.mjs",
     "contract:generate": "node --import tsx scripts/generate-contract.ts",
