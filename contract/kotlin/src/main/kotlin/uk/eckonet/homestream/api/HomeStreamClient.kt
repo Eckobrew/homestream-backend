@@ -244,6 +244,13 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         return execute(url.build().toString(), "GET", null, null)
     }
 
+    fun `web_delete_music_album`(query: WebDeleteMusicAlbumQuery): ApiResponse<WebDeleteMusicAlbumResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("music").addPathSegment("album")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`albumId`?.let { url.addQueryParameter("albumId", it.toString()) }
+        return execute(url.build().toString(), "DELETE", null, null)
+    }
+
     fun `web_get_music_artwork`(query: WebGetMusicArtworkQuery, range: String? = null): okhttp3.Response {
         val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("music").addPathSegment("artwork")
         query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
@@ -262,6 +269,19 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("music").addPathSegment("request")
         query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
         return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
+    fun `web_post_music_profile_album`(query: WebPostMusicProfileAlbumQuery, body: WebPostMusicProfileAlbumBody): ApiResponse<WebPostMusicProfileAlbumResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("music").addPathSegment("profile-album")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
+    fun `web_delete_music_profile_album`(query: WebDeleteMusicProfileAlbumQuery): ApiResponse<WebDeleteMusicProfileAlbumResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("music").addPathSegment("profile-album")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`albumId`?.let { url.addQueryParameter("albumId", it.toString()) }
+        return execute(url.build().toString(), "DELETE", null, null)
     }
 
     fun `web_get_requested`(query: WebGetRequestedQuery): ApiResponse<RequestedResponse> {
@@ -293,6 +313,56 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("youtube").addPathSegment("stream")
         query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
         query.`videoId`.let { url.addQueryParameter("videoId", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `web_get_youtube_stream_video`(query: WebGetYoutubeStreamVideoQuery, range: String? = null): okhttp3.Response {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("youtube").addPathSegment("stream-video")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`videoId`.let { url.addQueryParameter("videoId", it.toString()) }
+        return executeStream(url.build().toString(), "GET", null, range)
+    }
+
+    fun `web_post_youtube_progress`(query: WebPostYoutubeProgressQuery, body: WebPostYoutubeProgressBody): ApiResponse<WebPostYoutubeProgressResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("youtube").addPathSegment("progress")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
+    fun `web_get_youtube_continue_watching`(query: WebGetYoutubeContinueWatchingQuery): ApiResponse<WebGetYoutubeContinueWatchingResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("youtube").addPathSegment("continue-watching")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `web_delete_youtube_continue_watching`(query: WebDeleteYoutubeContinueWatchingQuery): ApiResponse<WebDeleteYoutubeContinueWatchingResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("youtube").addPathSegment("continue-watching")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`videoId`.let { url.addQueryParameter("videoId", it.toString()) }
+        return execute(url.build().toString(), "DELETE", null, null)
+    }
+
+    fun `web_get_youtube_auth`(query: WebGetYoutubeAuthQuery): ApiResponse<WebGetYoutubeAuthResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("youtube").addPathSegment("auth")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `web_post_youtube_auth`(query: WebPostYoutubeAuthQuery, body: WebPostYoutubeAuthBody): ApiResponse<WebPostYoutubeAuthResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("youtube").addPathSegment("auth")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
+    fun `web_delete_youtube_auth`(query: WebDeleteYoutubeAuthQuery): ApiResponse<WebDeleteYoutubeAuthResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("youtube").addPathSegment("auth")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "DELETE", null, null)
+    }
+
+    fun `web_get_youtube_recommendations`(query: WebGetYoutubeRecommendationsQuery): ApiResponse<WebGetYoutubeRecommendationsResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("youtube").addPathSegment("recommendations")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
         return execute(url.build().toString(), "GET", null, null)
     }
 
@@ -508,6 +578,13 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         return execute(url.build().toString(), "GET", null, null)
     }
 
+    fun `mobile_delete_music_album`(query: MobileDeleteMusicAlbumQuery): ApiResponse<MobileDeleteMusicAlbumResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("music").addPathSegment("album")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`albumId`?.let { url.addQueryParameter("albumId", it.toString()) }
+        return execute(url.build().toString(), "DELETE", null, null)
+    }
+
     fun `mobile_get_music_artwork`(query: MobileGetMusicArtworkQuery, range: String? = null): okhttp3.Response {
         val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("music").addPathSegment("artwork")
         query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
@@ -557,6 +634,56 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("youtube").addPathSegment("stream")
         query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
         query.`videoId`.let { url.addQueryParameter("videoId", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `mobile_get_youtube_stream_video`(query: MobileGetYoutubeStreamVideoQuery, range: String? = null): okhttp3.Response {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("youtube").addPathSegment("stream-video")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`videoId`.let { url.addQueryParameter("videoId", it.toString()) }
+        return executeStream(url.build().toString(), "GET", null, range)
+    }
+
+    fun `mobile_post_youtube_progress`(query: MobilePostYoutubeProgressQuery, body: MobilePostYoutubeProgressBody): ApiResponse<MobilePostYoutubeProgressResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("youtube").addPathSegment("progress")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
+    fun `mobile_get_youtube_continue_watching`(query: MobileGetYoutubeContinueWatchingQuery): ApiResponse<MobileGetYoutubeContinueWatchingResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("youtube").addPathSegment("continue-watching")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `mobile_delete_youtube_continue_watching`(query: MobileDeleteYoutubeContinueWatchingQuery): ApiResponse<MobileDeleteYoutubeContinueWatchingResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("youtube").addPathSegment("continue-watching")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`videoId`.let { url.addQueryParameter("videoId", it.toString()) }
+        return execute(url.build().toString(), "DELETE", null, null)
+    }
+
+    fun `mobile_get_youtube_auth`(query: MobileGetYoutubeAuthQuery): ApiResponse<MobileGetYoutubeAuthResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("youtube").addPathSegment("auth")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `mobile_post_youtube_auth`(query: MobilePostYoutubeAuthQuery, body: MobilePostYoutubeAuthBody): ApiResponse<MobilePostYoutubeAuthResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("youtube").addPathSegment("auth")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
+    fun `mobile_delete_youtube_auth`(query: MobileDeleteYoutubeAuthQuery): ApiResponse<MobileDeleteYoutubeAuthResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("youtube").addPathSegment("auth")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "DELETE", null, null)
+    }
+
+    fun `mobile_get_youtube_recommendations`(query: MobileGetYoutubeRecommendationsQuery): ApiResponse<MobileGetYoutubeRecommendationsResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("youtube").addPathSegment("recommendations")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
         return execute(url.build().toString(), "GET", null, null)
     }
 

@@ -241,6 +241,7 @@ data class MusicAlbum(
     @SerialName("releaseDate") val `releaseDate`: String? = null,
     @SerialName("coverUrl") val `coverUrl`: String? = null,
     @SerialName("inLibrary") val `inLibrary`: Boolean,
+    @SerialName("isDownloaded") val `isDownloaded`: Boolean? = null,
     @SerialName("requested") val `requested`: Boolean,
     @SerialName("trackCount") val `trackCount`: Double? = null
 )
@@ -814,6 +815,18 @@ data class WebGetMusicAlbumQuery(
 )
 
 @Serializable
+data class WebDeleteMusicAlbumQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("albumId") val `albumId`: String? = null
+)
+
+@Serializable
+data class WebDeleteMusicAlbumResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null
+)
+
+@Serializable
 data class WebGetMusicArtworkQuery(
     @SerialName("userId") val `userId`: String? = null,
     @SerialName("albumId") val `albumId`: String
@@ -832,11 +845,40 @@ data class WebPostMusicRequestQuery(
 
 @Serializable
 data class WebPostMusicRequestBody(
-    @SerialName("musicbrainzId") val `musicbrainzId`: String
+    @SerialName("musicbrainzId") val `musicbrainzId`: String? = null,
+    @SerialName("albumId") val `albumId`: String? = null
 )
 
 @Serializable
 data class WebPostMusicRequestResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null
+)
+
+@Serializable
+data class WebPostMusicProfileAlbumQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class WebPostMusicProfileAlbumBody(
+    @SerialName("albumId") val `albumId`: String? = null
+)
+
+@Serializable
+data class WebPostMusicProfileAlbumResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null
+)
+
+@Serializable
+data class WebDeleteMusicProfileAlbumQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("albumId") val `albumId`: String? = null
+)
+
+@Serializable
+data class WebDeleteMusicProfileAlbumResponse(
     @SerialName("success") val `success`: Boolean? = null,
     @SerialName("message") val `message`: String? = null
 )
@@ -877,6 +919,103 @@ data class WebGetYoutubeSearchQuery(
 data class WebGetYoutubeStreamQuery(
     @SerialName("userId") val `userId`: String? = null,
     @SerialName("videoId") val `videoId`: String
+)
+
+@Serializable
+data class WebGetYoutubeStreamVideoQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("videoId") val `videoId`: String
+)
+
+@Serializable
+data class WebPostYoutubeProgressQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class WebPostYoutubeProgressBody(
+    @SerialName("videoId") val `videoId`: String,
+    @SerialName("positionSeconds") val `positionSeconds`: Long? = null,
+    @SerialName("durationSeconds") val `durationSeconds`: Long? = null,
+    @SerialName("completed") val `completed`: Boolean? = null,
+    @SerialName("title") val `title`: String? = null,
+    @SerialName("channelTitle") val `channelTitle`: String? = null,
+    @SerialName("thumbnailUrl") val `thumbnailUrl`: String? = null
+)
+
+@Serializable
+data class WebPostYoutubeProgressResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null
+)
+
+@Serializable
+data class WebGetYoutubeContinueWatchingQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class WebGetYoutubeContinueWatchingResponse(
+    @SerialName("items") val `items`: List<JsonElement>? = null
+)
+
+@Serializable
+data class WebDeleteYoutubeContinueWatchingQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("videoId") val `videoId`: String
+)
+
+@Serializable
+data class WebDeleteYoutubeContinueWatchingResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null
+)
+
+@Serializable
+data class WebGetYoutubeAuthQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class WebGetYoutubeAuthResponse(
+    @SerialName("authenticated") val `authenticated`: Boolean? = null
+)
+
+@Serializable
+data class WebPostYoutubeAuthQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class WebPostYoutubeAuthBody(
+    @SerialName("cookiesText") val `cookiesText`: String? = null
+)
+
+@Serializable
+data class WebPostYoutubeAuthResponse(
+    @SerialName("success") val `success`: Boolean? = null
+)
+
+@Serializable
+data class WebDeleteYoutubeAuthQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class WebDeleteYoutubeAuthResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null
+)
+
+@Serializable
+data class WebGetYoutubeRecommendationsQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class WebGetYoutubeRecommendationsResponse(
+    @SerialName("hero") val `hero`: JsonElement? = null,
+    @SerialName("sections") val `sections`: List<JsonElement>? = null
 )
 
 @Serializable
@@ -1208,6 +1347,18 @@ data class MobileGetMusicAlbumQuery(
 )
 
 @Serializable
+data class MobileDeleteMusicAlbumQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("albumId") val `albumId`: String? = null
+)
+
+@Serializable
+data class MobileDeleteMusicAlbumResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null
+)
+
+@Serializable
 data class MobileGetMusicArtworkQuery(
     @SerialName("userId") val `userId`: String? = null,
     @SerialName("albumId") val `albumId`: String
@@ -1226,7 +1377,8 @@ data class MobilePostMusicRequestQuery(
 
 @Serializable
 data class MobilePostMusicRequestBody(
-    @SerialName("musicbrainzId") val `musicbrainzId`: String
+    @SerialName("musicbrainzId") val `musicbrainzId`: String? = null,
+    @SerialName("albumId") val `albumId`: String? = null
 )
 
 @Serializable
@@ -1271,6 +1423,103 @@ data class MobileGetYoutubeSearchQuery(
 data class MobileGetYoutubeStreamQuery(
     @SerialName("userId") val `userId`: String? = null,
     @SerialName("videoId") val `videoId`: String
+)
+
+@Serializable
+data class MobileGetYoutubeStreamVideoQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("videoId") val `videoId`: String
+)
+
+@Serializable
+data class MobilePostYoutubeProgressQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class MobilePostYoutubeProgressBody(
+    @SerialName("videoId") val `videoId`: String,
+    @SerialName("positionSeconds") val `positionSeconds`: Long? = null,
+    @SerialName("durationSeconds") val `durationSeconds`: Long? = null,
+    @SerialName("completed") val `completed`: Boolean? = null,
+    @SerialName("title") val `title`: String? = null,
+    @SerialName("channelTitle") val `channelTitle`: String? = null,
+    @SerialName("thumbnailUrl") val `thumbnailUrl`: String? = null
+)
+
+@Serializable
+data class MobilePostYoutubeProgressResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null
+)
+
+@Serializable
+data class MobileGetYoutubeContinueWatchingQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class MobileGetYoutubeContinueWatchingResponse(
+    @SerialName("items") val `items`: List<JsonElement>? = null
+)
+
+@Serializable
+data class MobileDeleteYoutubeContinueWatchingQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("videoId") val `videoId`: String
+)
+
+@Serializable
+data class MobileDeleteYoutubeContinueWatchingResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null
+)
+
+@Serializable
+data class MobileGetYoutubeAuthQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class MobileGetYoutubeAuthResponse(
+    @SerialName("authenticated") val `authenticated`: Boolean? = null
+)
+
+@Serializable
+data class MobilePostYoutubeAuthQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class MobilePostYoutubeAuthBody(
+    @SerialName("cookiesText") val `cookiesText`: String? = null
+)
+
+@Serializable
+data class MobilePostYoutubeAuthResponse(
+    @SerialName("success") val `success`: Boolean? = null
+)
+
+@Serializable
+data class MobileDeleteYoutubeAuthQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class MobileDeleteYoutubeAuthResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null
+)
+
+@Serializable
+data class MobileGetYoutubeRecommendationsQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class MobileGetYoutubeRecommendationsResponse(
+    @SerialName("hero") val `hero`: JsonElement? = null,
+    @SerialName("sections") val `sections`: List<JsonElement>? = null
 )
 
 @Serializable
