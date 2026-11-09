@@ -641,7 +641,7 @@ export async function getAlbumArtwork(albumId: string, signal?: AbortSignal): Pr
   const db = stateDatabase();
 
   // 1. Check local album record
-  const local = db.prepare('SELECT cover_path FROM music_albums WHERE id=? OR musicbrainz_id=?').get(albumId, albumId) as { cover_path?: string } | undefined;
+  const local = db.prepare('SELECT id, title, artist, cover_path, musicbrainz_id FROM music_albums WHERE id=? OR musicbrainz_id=?').get(albumId, albumId) as { id?: string; title?: string; artist?: string; cover_path?: string; musicbrainz_id?: string } | undefined;
   if (local?.cover_path && fs.existsSync(local.cover_path)) {
     const ext = path.extname(local.cover_path).toLowerCase();
     const contentType = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
@@ -656,11 +656,39 @@ export async function getAlbumArtwork(albumId: string, signal?: AbortSignal): Pr
     return { filePath: cachedFile, contentType: 'image/jpeg' };
   }
 
-  // 3. Fetch from Cover Art Archive (CAA)
-  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(albumId)) {
+  // 3. Check tracks belonging to this album for embedded art or folder art
+  const track = db.prepare('SELECT file_path FROM music_tracks WHERE album_id=? LIMIT 1').get(local?.id || albumId) as { file_path?: string } | undefined;
+  if (track?.file_path && fs.existsSync(track.file_path)) {
+    const albumDir = path.dirname(track.file_path);
+    const folderArtCandidates = ['cover.jpg', 'cover.png', 'folder.jpg', 'front.jpg', 'Folder.jpg', 'Cover.jpg', 'front.png'];
+    for (const cand of folderArtCandidates) {
+      const artPath = path.join(albumDir, cand);
+      if (fs.existsSync(artPath)) {
+        try {
+          fs.copyFileSync(artPath, cachedFile);
+          if (local?.id) db.prepare('UPDATE music_albums SET cover_path=? WHERE id=?').run(cachedFile, local.id);
+          return { filePath: cachedFile, contentType: cand.endsWith('.png') ? 'image/png' : 'image/jpeg' };
+        } catch {}
+      }
+    }
+
+    // Extract embedded ID3/FLAC cover art via ffmpeg
+    try {
+      const exec = require('child_process').execSync;
+      exec(`ffmpeg -i "${track.file_path}" -an -vcodec copy -y "${cachedFile}"`, { stdio: 'ignore', timeout: 5000 });
+      if (fs.existsSync(cachedFile) && fs.statSync(cachedFile).size > 1000) {
+        if (local?.id) db.prepare('UPDATE music_albums SET cover_path=? WHERE id=?').run(cachedFile, local.id);
+        return { filePath: cachedFile, contentType: 'image/jpeg' };
+      }
+    } catch {}
+  }
+
+  // 4. Fetch from Cover Art Archive (CAA) if musicbrainz_id is present
+  const mbId = local?.musicbrainz_id || (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(albumId) ? albumId : null);
+  if (mbId) {
     const caaUrls = [
-      `https://coverartarchive.org/release-group/${encodeURIComponent(albumId)}/front-250`,
-      `https://coverartarchive.org/release-group/${encodeURIComponent(albumId)}/front`,
+      `https://coverartarchive.org/release-group/${encodeURIComponent(mbId)}/front-250`,
+      `https://coverartarchive.org/release-group/${encodeURIComponent(mbId)}/front`,
     ];
 
     for (const u of caaUrls) {
@@ -668,7 +696,7 @@ export async function getAlbumArtwork(albumId: string, signal?: AbortSignal): Pr
         const res = await fetch(u, {
           headers: { 'User-Agent': 'HomeStream/1.2.0 (contact@homestream.local)' },
           redirect: 'follow',
-          signal: signal || AbortSignal.timeout(12000),
+          signal: signal || AbortSignal.timeout(6000),
         });
 
         if (res.ok) {
@@ -677,11 +705,40 @@ export async function getAlbumArtwork(albumId: string, signal?: AbortSignal): Pr
           const buffer = Buffer.from(arrayBuf);
           try {
             fs.writeFileSync(cachedFile, buffer);
+            if (local?.id) db.prepare('UPDATE music_albums SET cover_path=? WHERE id=?').run(cachedFile, local.id);
           } catch {}
           return { buffer, contentType };
         }
       } catch {}
     }
+  }
+
+  // 5. Fallback: Search iTunes Store API for album cover
+  if (local?.artist && local?.title) {
+    try {
+      const query = encodeURIComponent(`${local.artist} ${local.title}`);
+      const itunesUrl = `https://itunes.apple.com/search?term=${query}&entity=album&limit=1`;
+      const res = await fetch(itunesUrl, {
+        headers: { 'User-Agent': 'Mozilla/5.0 HomeStream/1.2.0' },
+        signal: signal || AbortSignal.timeout(5000),
+      });
+      if (res.ok) {
+        const data = await res.json() as any;
+        const rawArt = data?.results?.[0]?.artworkUrl100;
+        if (rawArt && typeof rawArt === 'string') {
+          const highResArt = rawArt.replace('100x100bb', '600x600bb');
+          const imgRes = await fetch(highResArt, { signal: signal || AbortSignal.timeout(6000) });
+          if (imgRes.ok) {
+            const buf = Buffer.from(await imgRes.arrayBuffer());
+            try {
+              fs.writeFileSync(cachedFile, buf);
+              if (local.id) db.prepare('UPDATE music_albums SET cover_path=? WHERE id=?').run(cachedFile, local.id);
+            } catch {}
+            return { buffer: buf, contentType: 'image/jpeg' };
+          }
+        }
+      }
+    } catch {}
   }
 
   return null;
