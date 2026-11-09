@@ -43,8 +43,8 @@ export class SlskdClient {
 
   constructor(url?: string, apiKey?: string, private readonly signal?: AbortSignal) {
     const c = getServerConfig();
-    this.url = (url ?? c.slskdUrl ?? 'http://192.168.1.146:5030').replace(/\/+$/, '');
-    this.apiKey = apiKey ?? c.slskdApiKey ?? 'whydoineedsomanyfuckingkeys';
+    this.url = (url ?? c.slskdUrl ?? '').replace(/\/+$/, '');
+    this.apiKey = apiKey ?? c.slskdApiKey ?? '';
   }
 
   isConfigured(): boolean {
