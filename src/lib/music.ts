@@ -1096,18 +1096,33 @@ async function dispatchAlbumDownload(requestId: string, artist: string, album: s
 }
 
 /**
- * Background loop to track downloads and auto-import completed albums.
+ * Background loop to track downloads and auto-import completed albums and tracks.
  */
 let downloadMonitorInterval: NodeJS.Timeout | null = null;
+let activePlaylistSearches = 0;
+const MAX_CONCURRENT_PLAYLIST_SEARCHES = 1;
+const SEARCH_PACING_MS = 2000;
 
 export function startDownloadMonitor() {
   if (downloadMonitorInterval) return;
+  ensureMusicTables();
+  const db = stateDatabase();
+
+  // Reset any orphaned searches or timeout/rate-limited failed tracks so rate limiter processes them safely
+  try {
+    db.prepare("UPDATE playlist_tracks SET status='pending' WHERE status='searching'").run();
+    db.prepare("UPDATE playlist_tracks SET status='pending', error_message=NULL WHERE status='failed' AND (error_message LIKE '%timeout%' OR error_message LIKE '%429%' OR error_message LIKE '%concurrent%')").run();
+  } catch {}
+
   downloadMonitorInterval = setInterval(async () => {
     try {
       await monitorActiveDownloads();
+      processNextPlaylistTrack();
     } catch {}
   }, 6000);
   downloadMonitorInterval.unref();
+
+  processNextPlaylistTrack();
 }
 
 export function stopDownloadMonitor() {
@@ -1132,7 +1147,10 @@ async function monitorActiveDownloads() {
     WHERE pt.status IN ('downloading', 'searching')
   `).all() as any[];
 
-  if (!activeRequests.length && !activePlaylistTracks.length) return;
+  if (!activeRequests.length && !activePlaylistTracks.length) {
+    processNextPlaylistTrack();
+    return;
+  }
 
   const slskd = new SlskdClient();
   if (!slskd.isConfigured()) return;
@@ -1220,6 +1238,8 @@ async function monitorActiveDownloads() {
       );
     }
   }
+
+  processNextPlaylistTrack();
 }
 
 /**
@@ -1575,14 +1595,11 @@ export async function populatePlaylistWithTracks(
       `).run(ptId, playlistId, t.title, t.artist, t.album, t.durationSeconds, t.coverUrl || null, t.spotifyTrackId || null, pos, now);
 
       queuedCount++;
-
-      dispatchTrackDownload(ptId, t.artist, t.title, t.album, playlistId, pid).catch((err) => {
-        console.warn(`[music] Failed dispatching track download for ${t.artist} - ${t.title}:`, err);
-      });
     }
   }
 
   updatePlaylistCounts(playlistId);
+  processNextPlaylistTrack();
   return { playlistId, trackCount: tracks.length, queuedCount };
 }
 
@@ -1710,7 +1727,209 @@ export async function importSpotifyPlaylists(
 }
 
 /**
+ * Rate-limited queue worker for Soulseek playlist track searches and downloads.
+ * Ensures max 2 concurrent searches with pacing delay to protect slskd and Soulseek network.
+ */
+export function processNextPlaylistTrack(): void {
+  ensureMusicTables();
+  const db = stateDatabase();
+  const slskd = new SlskdClient();
+  if (!slskd.isConfigured()) return;
+
+  while (activePlaylistSearches < MAX_CONCURRENT_PLAYLIST_SEARCHES) {
+    const nextTrack = db.prepare(`
+      SELECT pt.*, p.profile_id
+      FROM playlist_tracks pt
+      JOIN playlists p ON pt.playlist_id = p.id
+      WHERE pt.status = 'pending'
+      ORDER BY pt.created_at ASC, pt.position ASC
+      LIMIT 1
+    `).get() as any;
+
+    if (!nextTrack) break;
+
+    // Immediately mark as searching to prevent race conditions
+    db.prepare("UPDATE playlist_tracks SET status='searching', error_message=NULL WHERE id=?").run(nextTrack.id);
+    activePlaylistSearches++;
+
+    (async () => {
+      try {
+        await executeTrackSearchAndDownload(nextTrack);
+      } catch (err: any) {
+        console.error(`[music] Error processing track ${nextTrack.id} (${nextTrack.artist} - ${nextTrack.title}):`, err);
+        try {
+          db.prepare("UPDATE playlist_tracks SET status='failed', error_message=? WHERE id=?").run(
+            `Search failed: ${err.message}`,
+            nextTrack.id
+          );
+        } catch {}
+      } finally {
+        activePlaylistSearches--;
+        setTimeout(() => {
+          processNextPlaylistTrack();
+        }, SEARCH_PACING_MS);
+      }
+    })();
+  }
+}
+
+/**
  * Searches Soulseek via slskd for an MP3 of a track and enqueues download.
+ */
+async function executeTrackSearchAndDownload(track: any) {
+  const db = stateDatabase();
+  const slskd = new SlskdClient();
+
+  // 1. Double check local library
+  const local = db.prepare(`
+    SELECT id, album_id FROM music_tracks
+    WHERE LOWER(artist) = ? AND LOWER(title) = ?
+    LIMIT 1
+  `).get(track.artist.toLowerCase().trim(), track.title.toLowerCase().trim()) as { id: string; album_id: string } | undefined;
+
+  if (local) {
+    db.prepare('UPDATE playlist_tracks SET track_id=?, status=?, error_message=NULL WHERE id=?').run(
+      local.id,
+      'completed',
+      track.id
+    );
+    if (track.profile_id && local.album_id) {
+      db.prepare('INSERT OR IGNORE INTO profile_music_albums (profile_id, album_id, added_at) VALUES (?, ?, ?)').run(
+        track.profile_id,
+        local.album_id,
+        new Date().toISOString()
+      );
+    }
+    updatePlaylistCounts(track.playlist_id);
+    return;
+  }
+
+  if (!slskd.isConfigured()) {
+    db.prepare('UPDATE playlist_tracks SET status=?, error_message=? WHERE id=?').run(
+      'failed',
+      'slskd downloader is not configured',
+      track.id
+    );
+    return;
+  }
+
+  const primaryArtist = (track.artist || '')
+    .split(/[,&]|\bfeat\.?|\bft\.?/i)[0]
+    .replace(/[^\w\s-]/g, '')
+    .trim();
+  const cleanTitle = (track.title || '')
+    .replace(/\([^)]*\)|\[[^\]]*\]/g, '')
+    .replace(/[^\w\s-]/g, '')
+    .trim() || (track.title || '').replace(/[^\w\s-]/g, '').trim();
+  const query = `${primaryArtist} ${cleanTitle}`.trim();
+
+  let searchRes: { id: string } | null = null;
+  try {
+    searchRes = await slskd.startSearch(query, 20);
+  } catch (err: any) {
+    if (err.message?.includes('429') || err.message?.includes('concurrent operation')) {
+      // Re-queue track cleanly so it gets processed when slskd is idle
+      db.prepare("UPDATE playlist_tracks SET status='pending', error_message=NULL WHERE id=?").run(track.id);
+      return;
+    }
+    db.prepare('UPDATE playlist_tracks SET status=?, error_message=? WHERE id=?').run(
+      'failed',
+      `Search failed: ${err.message}`,
+      track.id
+    );
+    return;
+  }
+
+  try {
+    // Poll for responses (up to 12s)
+    let responses: any[] = [];
+    for (let i = 0; i < 5; i++) {
+      await new Promise((r) => {
+        const t = setTimeout(r, process.env.NODE_ENV === 'test' ? 50 : 2500);
+        t.unref();
+      });
+      try {
+        responses = await slskd.getSearchResponses(searchRes.id);
+        if (responses.length >= 3) break;
+      } catch {}
+    }
+
+    if (!responses.length) {
+      db.prepare('UPDATE playlist_tracks SET status=?, error_message=? WHERE id=?').run(
+        'failed',
+        'No sources found on Soulseek network',
+        track.id
+      );
+      return;
+    }
+
+    // Find best MP3 file
+    let bestUser = '';
+    let bestFile: { filename: string; size: number } | null = null;
+    let bestScore = -1;
+
+    for (const resp of responses) {
+      const user = resp.username;
+      const files = resp.files || [];
+      for (const f of files) {
+        if (f.isLocked) continue;
+        const fn = f.filename || '';
+        const ext = path.extname(fn).toLowerCase();
+        if (!AUDIO_EXTS.has(ext)) continue;
+
+        let score = 0;
+        if (ext === '.mp3') score += 50;
+        if (f.bitRate && f.bitRate >= 320) score += 40;
+        else if (f.bitRate && f.bitRate >= 256) score += 25;
+        else if (f.bitRate && f.bitRate >= 192) score += 10;
+        if (resp.hasFreeUploadSlot) score += 30;
+        if (resp.uploadSpeed && resp.uploadSpeed > 500000) score += 20;
+
+        const lowerFn = path.basename(fn).toLowerCase();
+        if (lowerFn.includes(cleanTitle.toLowerCase())) score += 40;
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestUser = user;
+          bestFile = { filename: fn, size: f.size };
+        }
+      }
+    }
+
+    if (!bestUser || !bestFile) {
+      db.prepare('UPDATE playlist_tracks SET status=?, error_message=? WHERE id=?').run(
+        'failed',
+        'No matching MP3 files found',
+        track.id
+      );
+      return;
+    }
+
+    try {
+      await slskd.enqueue(bestUser, [bestFile]);
+      db.prepare('UPDATE playlist_tracks SET status=?, username=?, filename=?, error_message=NULL WHERE id=?').run(
+        'downloading',
+        bestUser,
+        bestFile.filename,
+        track.id
+      );
+      console.log(`[music] Enqueued slskd MP3 download for "${track.artist} - ${track.title}" from peer "${bestUser}"`);
+    } catch (err: any) {
+      db.prepare('UPDATE playlist_tracks SET status=?, error_message=? WHERE id=?').run(
+        'failed',
+        `Enqueue download failed: ${err.message}`,
+        track.id
+      );
+    }
+  } finally {
+    if (searchRes?.id) {
+      await slskd.deleteSearch(searchRes.id).catch(() => {});
+    }
+  }
+}
+
+/**
+ * Backward compatibility wrapper that triggers the rate-limited queue.
  */
 export async function dispatchTrackDownload(
   playlistTrackId: string,
@@ -1720,138 +1939,7 @@ export async function dispatchTrackDownload(
   playlistId: string,
   profileId: string
 ) {
-  const db = stateDatabase();
-  const slskd = new SlskdClient();
-
-  // 1. Double check local library
-  const local = db.prepare(`
-    SELECT id, album_id FROM music_tracks
-    WHERE LOWER(artist) = ? AND LOWER(title) = ?
-    LIMIT 1
-  `).get(artist.toLowerCase().trim(), title.toLowerCase().trim()) as { id: string; album_id: string } | undefined;
-
-  if (local) {
-    db.prepare('UPDATE playlist_tracks SET track_id=?, status=?, error_message=NULL WHERE id=?').run(
-      local.id,
-      'completed',
-      playlistTrackId
-    );
-    db.prepare('INSERT OR IGNORE INTO profile_music_albums (profile_id, album_id, added_at) VALUES (?, ?, ?)').run(
-      profileId,
-      local.album_id,
-      new Date().toISOString()
-    );
-    updatePlaylistCounts(playlistId);
-    return;
-  }
-
-  if (!slskd.isConfigured()) {
-    db.prepare('UPDATE playlist_tracks SET status=?, error_message=? WHERE id=?').run(
-      'failed',
-      'slskd downloader is not configured',
-      playlistTrackId
-    );
-    return;
-  }
-
-  db.prepare('UPDATE playlist_tracks SET status=? WHERE id=?').run('searching', playlistTrackId);
-
-  const cleanArtist = artist.replace(/[^\w\s-]/g, '').trim();
-  const cleanTitle = title.replace(/[^\w\s-]/g, '').trim();
-  const query = `${cleanArtist} ${cleanTitle}`.trim();
-
-  let searchRes: { id: string };
-  try {
-    searchRes = await slskd.startSearch(query, 20);
-  } catch (err: any) {
-    db.prepare('UPDATE playlist_tracks SET status=?, error_message=? WHERE id=?').run(
-      'failed',
-      `Search failed: ${err.message}`,
-      playlistTrackId
-    );
-    return;
-  }
-
-  // Poll for responses (up to 12s)
-  let responses: any[] = [];
-  for (let i = 0; i < 5; i++) {
-    await new Promise((r) => {
-      const t = setTimeout(r, process.env.NODE_ENV === 'test' ? 50 : 2500);
-      t.unref();
-    });
-    try {
-      responses = await slskd.getSearchResponses(searchRes.id);
-      if (responses.length >= 3) break;
-    } catch {}
-  }
-
-  if (!responses.length) {
-    db.prepare('UPDATE playlist_tracks SET status=?, error_message=? WHERE id=?').run(
-      'failed',
-      'No sources found on Soulseek network',
-      playlistTrackId
-    );
-    return;
-  }
-
-  // Find best MP3 file
-  let bestUser = '';
-  let bestFile: { filename: string; size: number } | null = null;
-  let bestScore = -1;
-
-  for (const resp of responses) {
-    const user = resp.username;
-    const files = resp.files || [];
-    for (const f of files) {
-      if (f.isLocked) continue;
-      const fn = f.filename || '';
-      const ext = path.extname(fn).toLowerCase();
-      if (!AUDIO_EXTS.has(ext)) continue;
-
-      let score = 0;
-      if (ext === '.mp3') score += 50;
-      if (f.bitRate && f.bitRate >= 320) score += 40;
-      else if (f.bitRate && f.bitRate >= 256) score += 25;
-      else if (f.bitRate && f.bitRate >= 192) score += 10;
-      if (resp.hasFreeUploadSlot) score += 30;
-      if (resp.uploadSpeed && resp.uploadSpeed > 500000) score += 20;
-
-      const lowerFn = path.basename(fn).toLowerCase();
-      if (lowerFn.includes(cleanTitle.toLowerCase())) score += 40;
-
-      if (score > bestScore) {
-        bestScore = score;
-        bestUser = user;
-        bestFile = { filename: fn, size: f.size };
-      }
-    }
-  }
-
-  if (!bestUser || !bestFile) {
-    db.prepare('UPDATE playlist_tracks SET status=?, error_message=? WHERE id=?').run(
-      'failed',
-      'No matching MP3 files found',
-      playlistTrackId
-    );
-    return;
-  }
-
-  try {
-    await slskd.enqueue(bestUser, [bestFile]);
-    db.prepare('UPDATE playlist_tracks SET status=?, username=?, filename=?, error_message=NULL WHERE id=?').run(
-      'downloading',
-      bestUser,
-      bestFile.filename,
-      playlistTrackId
-    );
-    console.log(`[music] Enqueued slskd MP3 download for "${artist} - ${title}" from peer "${bestUser}"`);
-  } catch (err: any) {
-    db.prepare('UPDATE playlist_tracks SET status=?, error_message=? WHERE id=?').run(
-      'failed',
-      `Enqueue download failed: ${err.message}`,
-      playlistTrackId
-    );
-  }
+  processNextPlaylistTrack();
 }
 
 /**

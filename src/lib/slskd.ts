@@ -62,7 +62,7 @@ export class SlskdClient {
     return fetch(fullUrl, {
       ...init,
       headers,
-      signal: init.signal || this.signal || AbortSignal.timeout(15000),
+      signal: init.signal || this.signal || AbortSignal.timeout(30000),
     });
   }
 
@@ -103,6 +103,10 @@ export class SlskdClient {
 
   async getSearchResponses(searchId: string): Promise<SlskdUserResponse[]> {
     return this.json(`/searches/${encodeURIComponent(searchId)}/responses`);
+  }
+
+  async deleteSearch(searchId: string): Promise<void> {
+    await this.request(`/searches/${encodeURIComponent(searchId)}`, { method: 'DELETE' }).catch(() => {});
   }
 
   async enqueue(username: string, files: SlskdFile[]): Promise<{ enqueued?: SlskdFile[]; failed?: SlskdFile[] }> {

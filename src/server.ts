@@ -1,6 +1,7 @@
 import { shutdownConversions } from './media/conversions';
 import { createApp } from './app';
 import { ensureYouTubeTables, processNextDownload, pollAllSubscribedChannels } from './lib/youtube';
+import { ensureMusicTables, startDownloadMonitor, processNextPlaylistTrack } from './lib/music';
 const app = createApp();
 for (const signal of ['SIGTERM', 'SIGINT'] as const) process.once(signal, async () => { shutdownConversions(); await app.close(); });
 try {
@@ -8,6 +9,9 @@ try {
   console.info('HomeStream backend listening');
   ensureYouTubeTables();
   processNextDownload();
+  ensureMusicTables();
+  startDownloadMonitor();
+  processNextPlaylistTrack();
   const youtubePoller = setInterval(() => {
     pollAllSubscribedChannels().catch(() => {});
   }, 30 * 60 * 1000);
