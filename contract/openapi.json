@@ -16882,11 +16882,19 @@
                     "maxLength": 8192
                   },
                   "urls": {
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "maxLength": 8192
-                    }
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 52428800
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "maxLength": 52428800
+                        }
+                      }
+                    ]
                   },
                   "spotifyUrl": {
                     "type": "string",
@@ -16894,7 +16902,7 @@
                   },
                   "csv": {
                     "type": "string",
-                    "maxLength": 8192
+                    "maxLength": 52428800
                   },
                   "files": {
                     "type": "array",
@@ -16907,7 +16915,7 @@
                         },
                         "content": {
                           "type": "string",
-                          "maxLength": 8192
+                          "maxLength": 52428800
                         }
                       },
                       "required": [],
@@ -16916,7 +16924,7 @@
                   },
                   "zipBase64": {
                     "type": "string",
-                    "maxLength": 8192
+                    "maxLength": 52428800
                   },
                   "playlistName": {
                     "type": "string",
@@ -17399,11 +17407,19 @@
                     "maxLength": 8192
                   },
                   "urls": {
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "maxLength": 8192
-                    }
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 52428800
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "maxLength": 52428800
+                        }
+                      }
+                    ]
                   },
                   "spotifyUrl": {
                     "type": "string",
@@ -17883,7 +17899,7 @@
                 "properties": {
                   "csv": {
                     "type": "string",
-                    "maxLength": 8192
+                    "maxLength": 52428800
                   },
                   "files": {
                     "type": "array",
@@ -17896,7 +17912,7 @@
                         },
                         "content": {
                           "type": "string",
-                          "maxLength": 8192
+                          "maxLength": 52428800
                         }
                       },
                       "required": [],
@@ -17905,7 +17921,7 @@
                   },
                   "zipBase64": {
                     "type": "string",
-                    "maxLength": 8192
+                    "maxLength": 52428800
                   },
                   "playlistName": {
                     "type": "string",
@@ -42570,11 +42586,19 @@
                     "maxLength": 8192
                   },
                   "urls": {
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "maxLength": 8192
-                    }
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 52428800
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "maxLength": 52428800
+                        }
+                      }
+                    ]
                   },
                   "spotifyUrl": {
                     "type": "string",
@@ -42582,7 +42606,7 @@
                   },
                   "csv": {
                     "type": "string",
-                    "maxLength": 8192
+                    "maxLength": 52428800
                   },
                   "files": {
                     "type": "array",
@@ -42595,7 +42619,7 @@
                         },
                         "content": {
                           "type": "string",
-                          "maxLength": 8192
+                          "maxLength": 52428800
                         }
                       },
                       "required": [],
@@ -42604,7 +42628,7 @@
                   },
                   "zipBase64": {
                     "type": "string",
-                    "maxLength": 8192
+                    "maxLength": 52428800
                   },
                   "playlistName": {
                     "type": "string",
@@ -43083,11 +43107,19 @@
                     "maxLength": 8192
                   },
                   "urls": {
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "maxLength": 8192
-                    }
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 52428800
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "maxLength": 52428800
+                        }
+                      }
+                    ]
                   },
                   "spotifyUrl": {
                     "type": "string",
@@ -43563,7 +43595,7 @@
                 "properties": {
                   "csv": {
                     "type": "string",
-                    "maxLength": 8192
+                    "maxLength": 52428800
                   },
                   "files": {
                     "type": "array",
@@ -43576,7 +43608,7 @@
                         },
                         "content": {
                           "type": "string",
-                          "maxLength": 8192
+                          "maxLength": 52428800
                         }
                       },
                       "required": [],
@@ -43585,7 +43617,7 @@
                   },
                   "zipBase64": {
                     "type": "string",
-                    "maxLength": 8192
+                    "maxLength": 52428800
                   },
                   "playlistName": {
                     "type": "string",

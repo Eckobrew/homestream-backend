@@ -9018,7 +9018,7 @@ export interface operations {
             content: {
                 "application/json": {
                     url?: string;
-                    urls?: string[];
+                    urls?: string | string[];
                     spotifyUrl?: string;
                     csv?: string;
                     files?: ({
@@ -9227,7 +9227,7 @@ export interface operations {
             content: {
                 "application/json": {
                     url?: string;
-                    urls?: string[];
+                    urls?: string | string[];
                     spotifyUrl?: string;
                 } & {
                     [key: string]: unknown;
@@ -19535,7 +19535,7 @@ export interface operations {
             content: {
                 "application/json": {
                     url?: string;
-                    urls?: string[];
+                    urls?: string | string[];
                     spotifyUrl?: string;
                     csv?: string;
                     files?: ({
@@ -19744,7 +19744,7 @@ export interface operations {
             content: {
                 "application/json": {
                     url?: string;
-                    urls?: string[];
+                    urls?: string | string[];
                     spotifyUrl?: string;
                 } & {
                     [key: string]: unknown;

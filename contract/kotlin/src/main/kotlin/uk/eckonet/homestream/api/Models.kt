@@ -914,7 +914,7 @@ data class WebPostMusicPlaylistsImportQuery(
 @Serializable
 data class WebPostMusicPlaylistsImportBody(
     @SerialName("url") val `url`: String? = null,
-    @SerialName("urls") val `urls`: List<String>? = null,
+    @SerialName("urls") val `urls`: JsonElement? = null,
     @SerialName("spotifyUrl") val `spotifyUrl`: String? = null,
     @SerialName("csv") val `csv`: String? = null,
     @SerialName("files") val `files`: List<WebPostMusicPlaylistsImportBodyFilesItem>? = null,
@@ -944,7 +944,7 @@ data class WebPostMusicPlaylistsImportSpotifyQuery(
 @Serializable
 data class WebPostMusicPlaylistsImportSpotifyBody(
     @SerialName("url") val `url`: String? = null,
-    @SerialName("urls") val `urls`: List<String>? = null,
+    @SerialName("urls") val `urls`: JsonElement? = null,
     @SerialName("spotifyUrl") val `spotifyUrl`: String? = null
 )
 
@@ -1594,7 +1594,7 @@ data class MobilePostMusicPlaylistsImportQuery(
 @Serializable
 data class MobilePostMusicPlaylistsImportBody(
     @SerialName("url") val `url`: String? = null,
-    @SerialName("urls") val `urls`: List<String>? = null,
+    @SerialName("urls") val `urls`: JsonElement? = null,
     @SerialName("spotifyUrl") val `spotifyUrl`: String? = null,
     @SerialName("csv") val `csv`: String? = null,
     @SerialName("files") val `files`: List<MobilePostMusicPlaylistsImportBodyFilesItem>? = null,
@@ -1624,7 +1624,7 @@ data class MobilePostMusicPlaylistsImportSpotifyQuery(
 @Serializable
 data class MobilePostMusicPlaylistsImportSpotifyBody(
     @SerialName("url") val `url`: String? = null,
-    @SerialName("urls") val `urls`: List<String>? = null,
+    @SerialName("urls") val `urls`: JsonElement? = null,
     @SerialName("spotifyUrl") val `spotifyUrl`: String? = null
 )
 
