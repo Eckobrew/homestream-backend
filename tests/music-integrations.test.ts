@@ -110,8 +110,8 @@ test('music requests, authenticated range streaming, all-media queue and admin c
     `INSERT INTO music_tracks (id, album_id, title, artist, album, track_number, disc_number, duration_seconds, file_path, file_size, format, created_at) VALUES (?, ?, ?, ?, ?, 1, 1, 90, ?, 9, 'mp3', ?)`
   ).run('track-1', mbid, 'Example Track', 'Example Artist', 'Example Album', audioPath, now);
   db.prepare(
-    `INSERT INTO music_requests (id, musicbrainz_id, album_title, artist_name, year, status, progress, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run('req-1', mbid, 'Example Album', 'Example Artist', 2027, 'downloading', 37.5, now);
+    `INSERT INTO music_requests (id, musicbrainz_id, album_title, artist_name, year, status, progress, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run('req-1', mbid, 'Example Album', 'Example Artist', 2027, 'downloading', 37.5, now, now);
 
   try {
     const music = await app.inject('/api/v1/music');
