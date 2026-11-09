@@ -196,6 +196,21 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         return executeStream(url.build().toString(), "GET", null, range)
     }
 
+    fun `web_get_stream_torrent`(query: WebGetStreamTorrentQuery, range: String? = null): okhttp3.Response {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("stream").addPathSegment("torrent")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`tmdbId`?.let { url.addQueryParameter("tmdbId", it.toString()) }
+        query.`type`?.let { url.addQueryParameter("type", it.toString()) }
+        query.`season`?.let { url.addQueryParameter("season", it.toString()) }
+        query.`episode`?.let { url.addQueryParameter("episode", it.toString()) }
+        query.`title`?.let { url.addQueryParameter("title", it.toString()) }
+        query.`magnet`?.let { url.addQueryParameter("magnet", it.toString()) }
+        query.`forceTranscode`?.let { url.addQueryParameter("forceTranscode", it.toString()) }
+        query.`canPlayHevc`?.let { url.addQueryParameter("canPlayHevc", it.toString()) }
+        query.`receiver`?.let { url.addQueryParameter("receiver", it.toString()) }
+        return executeStream(url.build().toString(), "GET", null, range)
+    }
+
     fun `web_get_webhook_arr`(query: WebGetWebhookArrQuery): ApiResponse<WebGetWebhookArrResponse> {
         val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("webhook").addPathSegment("arr")
         query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
@@ -376,6 +391,21 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         query.`source`?.let { url.addQueryParameter("source", it.toString()) }
         query.`probe`?.let { url.addQueryParameter("probe", it.toString()) }
         query.`growing`?.let { url.addQueryParameter("growing", it.toString()) }
+        return executeStream(url.build().toString(), "GET", null, range)
+    }
+
+    fun `mobile_get_stream_torrent`(query: MobileGetStreamTorrentQuery, range: String? = null): okhttp3.Response {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("stream").addPathSegment("torrent")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`tmdbId`?.let { url.addQueryParameter("tmdbId", it.toString()) }
+        query.`type`?.let { url.addQueryParameter("type", it.toString()) }
+        query.`season`?.let { url.addQueryParameter("season", it.toString()) }
+        query.`episode`?.let { url.addQueryParameter("episode", it.toString()) }
+        query.`title`?.let { url.addQueryParameter("title", it.toString()) }
+        query.`magnet`?.let { url.addQueryParameter("magnet", it.toString()) }
+        query.`forceTranscode`?.let { url.addQueryParameter("forceTranscode", it.toString()) }
+        query.`canPlayHevc`?.let { url.addQueryParameter("canPlayHevc", it.toString()) }
+        query.`receiver`?.let { url.addQueryParameter("receiver", it.toString()) }
         return executeStream(url.build().toString(), "GET", null, range)
     }
 

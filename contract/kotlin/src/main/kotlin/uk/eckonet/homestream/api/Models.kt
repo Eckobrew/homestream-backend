@@ -366,6 +366,11 @@ data class WebPostConfigBody(
     @SerialName("qbittorrentUsername") val `qbittorrentUsername`: String? = null,
     @SerialName("qbittorrentPassword") val `qbittorrentPassword`: String? = null,
     @SerialName("downloadsPath") val `downloadsPath`: String? = null,
+    @SerialName("radarrUrl") val `radarrUrl`: String? = null,
+    @SerialName("radarrApiKey") val `radarrApiKey`: String? = null,
+    @SerialName("sonarrUrl") val `sonarrUrl`: String? = null,
+    @SerialName("sonarrApiKey") val `sonarrApiKey`: String? = null,
+    @SerialName("tmdbApiKey") val `tmdbApiKey`: String? = null,
     @SerialName("url") val `url`: String? = null,
     @SerialName("apiKey") val `apiKey`: String? = null,
     @SerialName("userId") val `userId`: String? = null,
@@ -629,6 +634,20 @@ data class WebGetStreamDownloadQuery(
     @SerialName("source") val `source`: String? = null,
     @SerialName("probe") val `probe`: String? = null,
     @SerialName("growing") val `growing`: String? = null
+)
+
+@Serializable
+data class WebGetStreamTorrentQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("tmdbId") val `tmdbId`: String? = null,
+    @SerialName("type") val `type`: String? = null,
+    @SerialName("season") val `season`: String? = null,
+    @SerialName("episode") val `episode`: String? = null,
+    @SerialName("title") val `title`: String? = null,
+    @SerialName("magnet") val `magnet`: String? = null,
+    @SerialName("forceTranscode") val `forceTranscode`: String? = null,
+    @SerialName("canPlayHevc") val `canPlayHevc`: String? = null,
+    @SerialName("receiver") val `receiver`: String? = null
 )
 
 @Serializable
@@ -912,6 +931,20 @@ data class MobileGetStreamDownloadQuery(
     @SerialName("source") val `source`: String? = null,
     @SerialName("probe") val `probe`: String? = null,
     @SerialName("growing") val `growing`: String? = null
+)
+
+@Serializable
+data class MobileGetStreamTorrentQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("tmdbId") val `tmdbId`: String? = null,
+    @SerialName("type") val `type`: String? = null,
+    @SerialName("season") val `season`: String? = null,
+    @SerialName("episode") val `episode`: String? = null,
+    @SerialName("title") val `title`: String? = null,
+    @SerialName("magnet") val `magnet`: String? = null,
+    @SerialName("forceTranscode") val `forceTranscode`: String? = null,
+    @SerialName("canPlayHevc") val `canPlayHevc`: String? = null,
+    @SerialName("receiver") val `receiver`: String? = null
 )
 
 @Serializable

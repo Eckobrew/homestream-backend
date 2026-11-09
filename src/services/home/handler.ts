@@ -6,6 +6,9 @@ import { withJellyfinSession } from '@/lib/jellyfin-session';
 import { HttpRequest, HttpResponse } from '@/http';
 import { JellyfinClient } from '@/lib/jellyfin';
 import { SeerrClient } from '@/lib/seerr';
+import { TmdbClient } from '@/lib/tmdb';
+import { SmartRecommendationEngine } from '@/lib/recommendations';
+import { getNativeUserRequests } from '@/lib/user-requests';
 import { QBittorrentClient } from '@/lib/qbittorrent';
 import { resolveJellyfinUserId } from '@/lib/profiles';
 import {
@@ -28,6 +31,7 @@ async function handleGET(request: HttpRequest) {
   const targetUserId = await resolveJellyfinUserId(profileId);
   const jellyfin = new JellyfinClient(undefined, undefined, targetUserId);
   const seerr = new SeerrClient();
+  const tmdb = new TmdbClient();
 
   const isJellyfinActive = jellyfin.isConfigured();
 
@@ -237,8 +241,73 @@ async function handleGET(request: HttpRequest) {
 
     const requestSections: MediaRowSection[] = [];
 
-    // Comprehensive Request Content Page rows from Seerr
-    if (seerr.isConfigured()) {
+    if (tmdb.isConfigured()) {
+      try {
+        const engine = new SmartRecommendationEngine(tmdb);
+        const [
+          nativeRequests,
+          personalizedSections,
+          trending,
+          popularMovies,
+          popularTv,
+        ] = await Promise.all([
+          getNativeUserRequests(targetUserId),
+          engine.getPersonalizedSections(jellyfin, targetUserId),
+          tmdb.getTrending(),
+          tmdb.getPopularMovies(),
+          tmdb.getPopularTv(),
+        ]);
+
+        if (trending.length > 0) {
+          sections.push({
+            id: 'trending-tmdb',
+            title: 'Trending Worldwide',
+            items: trending,
+          });
+        }
+
+        // Add personalized recommendations ("Recommended for You", "Because You Watched...")
+        requestSections.push(...personalizedSections);
+
+        // Popular Titles
+        if (trending.length > 0) {
+          requestSections.push({
+            id: 'requests-popular',
+            title: 'Popular Titles',
+            items: trending,
+          });
+        }
+
+        // Top Movies
+        if (popularMovies.length > 0) {
+          requestSections.push({
+            id: 'requests-top-movies',
+            title: 'Top Movies',
+            items: popularMovies,
+          });
+        }
+
+        // Top TV Shows
+        if (popularTv.length > 0) {
+          requestSections.push({
+            id: 'requests-top-tv',
+            title: 'Top TV Shows',
+            items: popularTv,
+          });
+        }
+
+        // Native Auto-Approved User Requests
+        if (nativeRequests.length > 0) {
+          requestSections.push({
+            id: 'my-requests',
+            title: '⚡ Your Requested Media (Auto-Approved & In-Progress)',
+            items: nativeRequests,
+          });
+        }
+      } catch (e) {
+        log.error('Failed fetching TMDB discovery rows:', e);
+      }
+    } else if (seerr.isConfigured()) {
       try {
         const topGenres = await jellyfin.getUserTopGenres(targetUserId);
 
@@ -338,7 +407,8 @@ async function handleGET(request: HttpRequest) {
       requestSections,
       isDemoMode: false,
       jellyfinConnected: true,
-      seerrConnected: seerr.isConfigured(),
+      seerrConnected: seerr.isConfigured() || tmdb.isConfigured(),
+      tmdbConnected: tmdb.isConfigured(),
     });
   } catch (err: unknown) {
     log.error('Error fetching home data from Jellyfin:', err);

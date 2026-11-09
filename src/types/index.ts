@@ -111,6 +111,7 @@ export interface ServerConfig {
   jellyfinUserId: string;
   seerrUrl: string;
   seerrApiKey: string;
+  tmdbApiKey?: string;
   droppedneedleUrl?: string;
   droppedneedleToken?: string;
   qbittorrentUrl?: string;
@@ -203,7 +204,7 @@ export interface RequestedItem {
   id: string;
   title: string;
   kind: 'movie' | 'tv' | 'music';
-  source: 'seerr' | 'qbittorrent' | 'droppedneedle';
+  source: 'seerr' | 'tmdb' | 'qbittorrent' | 'droppedneedle' | 'radarr' | 'sonarr';
   status: string;
   artist?: string;
   posterUrl?: string;
@@ -216,7 +217,7 @@ export interface RequestedItem {
 }
 export interface RequestedResponse { items: RequestedItem[]; warnings: string[]; updatedAt: string; }
 export interface IntegrationSummary {
-  id: 'jellyfin' | 'seerr' | 'qbittorrent' | 'droppedneedle';
+  id: 'jellyfin' | 'seerr' | 'qbittorrent' | 'droppedneedle' | 'radarr' | 'sonarr' | 'tmdb';
   name: string;
   url: string;
   configured: boolean;

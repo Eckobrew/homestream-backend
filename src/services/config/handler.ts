@@ -5,6 +5,7 @@ import { SeerrClient } from '@/lib/seerr';
 import { QBittorrentClient } from '@/lib/qbittorrent';
 import { RadarrClient } from '@/lib/radarr';
 import { SonarrClient } from '@/lib/sonarr';
+import { TmdbClient } from '@/lib/tmdb';
 import { getServerConfig, saveServerConfig } from '@/lib/config';
 import { getHomeflixProfiles } from '@/lib/profiles';
 
@@ -14,6 +15,7 @@ async function handleGET(_request: HttpRequest) {
 
   const isJellyfinConfigured = Boolean(config.jellyfinUrl && config.jellyfinApiKey);
   const isSeerrConfigured = Boolean(config.seerrUrl && config.seerrApiKey);
+  const isTmdbConfigured = Boolean(config.tmdbApiKey);
   const isQbittorrentConfigured = Boolean(config.qbittorrentUrl);
   const isRadarrConfigured = Boolean(config.radarrUrl && config.radarrApiKey);
   const isSonarrConfigured = Boolean(config.sonarrUrl && config.sonarrApiKey);
@@ -26,6 +28,8 @@ async function handleGET(_request: HttpRequest) {
     jellyfinUserId: config.jellyfinUserId,
     seerrUrl: config.seerrUrl,
     hasSeerrKey: Boolean(config.seerrApiKey),
+    hasTmdbKey: Boolean(config.tmdbApiKey),
+    isTmdbConfigured,
     qbittorrentUrl: config.qbittorrentUrl,
     qbittorrentUsername: config.qbittorrentUsername,
     hasQbittorrentPassword: Boolean(config.qbittorrentPassword),
@@ -56,6 +60,7 @@ async function handlePOST(request: HttpRequest) {
         jellyfinApiKey: body.jellyfinApiKey,
         seerrUrl: body.seerrUrl,
         seerrApiKey: body.seerrApiKey,
+        tmdbApiKey: body.tmdbApiKey,
         jellyfinUserId: body.jellyfinUserId,
         qbittorrentUrl: body.qbittorrentUrl,
         qbittorrentUsername: body.qbittorrentUsername,
@@ -74,6 +79,7 @@ async function handlePOST(request: HttpRequest) {
           hasJellyfinKey: Boolean(saved.jellyfinApiKey),
           seerrUrl: saved.seerrUrl,
           hasSeerrKey: Boolean(saved.seerrApiKey),
+          hasTmdbKey: Boolean(saved.tmdbApiKey),
           qbittorrentUrl: saved.qbittorrentUrl,
           hasQbittorrentPassword: Boolean(saved.qbittorrentPassword),
           downloadsPath: saved.downloadsPath,
@@ -94,6 +100,12 @@ async function handlePOST(request: HttpRequest) {
 
     if (action === 'test-seerr') {
       const client = new SeerrClient(body.url, body.apiKey);
+      const res = await client.testConnection();
+      return HttpResponse.json(res);
+    }
+
+    if (action === 'test-tmdb') {
+      const client = new TmdbClient(body.apiKey);
       const res = await client.testConnection();
       return HttpResponse.json(res);
     }

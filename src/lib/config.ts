@@ -72,6 +72,11 @@ export const getServerConfig = (): ServerConfig => {
     process.env.SONARR_API_KEY ||
     '';
 
+  const tmdbApiKey =
+    fileConfig.tmdbApiKey ||
+    process.env.TMDB_API_KEY ||
+    '';
+
   const appName =
     fileConfig.appName ||
     process.env.APP_NAME ||
@@ -79,7 +84,7 @@ export const getServerConfig = (): ServerConfig => {
     'HomeStream';
 
   const isConfigured = Boolean(
-    (jellyfinUrl && jellyfinApiKey) || (seerrUrl && seerrApiKey)
+    (jellyfinUrl && jellyfinApiKey) || (seerrUrl && seerrApiKey) || tmdbApiKey
   );
 
   return {
@@ -89,6 +94,7 @@ export const getServerConfig = (): ServerConfig => {
     jellyfinUserId,
     seerrUrl: sanitizeUrl(seerrUrl),
     seerrApiKey,
+    tmdbApiKey,
     droppedneedleUrl: sanitizeUrl(fileConfig.droppedneedleUrl ?? process.env.DROPPEDNEEDLE_URL ?? ''),
     droppedneedleToken: fileConfig.droppedneedleToken || process.env.DROPPEDNEEDLE_TOKEN || '',
     qbittorrentUrl: sanitizeUrl(qbittorrentUrl),
@@ -113,6 +119,7 @@ export const saveServerConfig = (newConfig: Partial<ServerConfig>): ServerConfig
     seerrUrl: sanitizeUrl(newConfig.seerrUrl !== undefined ? newConfig.seerrUrl : current.seerrUrl),
     jellyfinApiKey: newConfig.jellyfinApiKey !== undefined ? newConfig.jellyfinApiKey : current.jellyfinApiKey,
     seerrApiKey: newConfig.seerrApiKey !== undefined ? newConfig.seerrApiKey : current.seerrApiKey,
+    tmdbApiKey: newConfig.tmdbApiKey !== undefined ? newConfig.tmdbApiKey : current.tmdbApiKey,
     jellyfinUserId: newConfig.jellyfinUserId !== undefined ? newConfig.jellyfinUserId : current.jellyfinUserId,
     qbittorrentUrl: sanitizeUrl(newConfig.qbittorrentUrl !== undefined ? newConfig.qbittorrentUrl : current.qbittorrentUrl || ''),
     qbittorrentUsername: newConfig.qbittorrentUsername !== undefined ? newConfig.qbittorrentUsername : current.qbittorrentUsername,
@@ -126,7 +133,7 @@ export const saveServerConfig = (newConfig: Partial<ServerConfig>): ServerConfig
   };
 
   merged.isConfigured = Boolean(
-    (merged.jellyfinUrl && merged.jellyfinApiKey) || (merged.seerrUrl && merged.seerrApiKey)
+    (merged.jellyfinUrl && merged.jellyfinApiKey) || (merged.seerrUrl && merged.seerrApiKey) || merged.tmdbApiKey
   );
 
   try {

@@ -4,6 +4,7 @@ import { withJellyfinSession } from '@/lib/jellyfin-session';
 import { HttpRequest, HttpResponse } from '@/http';
 import { JellyfinClient } from '@/lib/jellyfin';
 import { SeerrClient } from '@/lib/seerr';
+import { TmdbClient } from '@/lib/tmdb';
 import { QBittorrentClient } from '@/lib/qbittorrent';
 import { resolveJellyfinUserId } from '@/lib/profiles';
 import {
@@ -32,6 +33,7 @@ async function handleGET(
   const targetUserId = await resolveJellyfinUserId(profileId);
   const jellyfin = new JellyfinClient(undefined, undefined, targetUserId);
   const seerr = new SeerrClient();
+  const tmdb = new TmdbClient();
 
   // 0. If it's an actively downloading torrent item (dl-hash)
   if (id.startsWith('dl-')) {
@@ -48,18 +50,18 @@ async function handleGET(
             .replace(/\b(1080p|720p|2160p|4k|web-dl|bluray|x264|x265|hevc|ddp\d\.\d).*$/i, '')
             .trim();
 
-          if (seerr.isConfigured() && cleanTitle) {
-            const searchResults = await seerr.search(cleanTitle);
+          const hasDiscovery = tmdb.isConfigured() || seerr.isConfigured();
+          if (hasDiscovery && cleanTitle) {
+            const searchResults = tmdb.isConfigured() ? await tmdb.search(cleanTitle) : await seerr.search(cleanTitle);
             const matched = searchResults.find(
               (r) =>
                 r.title.toLowerCase().includes(cleanTitle.toLowerCase()) ||
                 cleanTitle.toLowerCase().includes(r.title.toLowerCase())
             );
             if (matched && matched.tmdbId) {
-              const fullDetails =
-                matched.type === 'Series'
-                  ? await seerr.getTvDetails(matched.tmdbId)
-                  : await seerr.getMovieDetails(matched.tmdbId);
+              const fullDetails = tmdb.isConfigured()
+                ? (matched.type === 'Series' ? await tmdb.getTvDetails(matched.tmdbId) : await tmdb.getMovieDetails(matched.tmdbId))
+                : (matched.type === 'Series' ? await seerr.getTvDetails(matched.tmdbId) : await seerr.getMovieDetails(matched.tmdbId));
               if (fullDetails) {
                 fullDetails.id = id;
                 fullDetails.torrentHash = hash;
@@ -80,7 +82,7 @@ async function handleGET(
   }
 
   // 1. If it's a Jellyfin ID, fetch full details & episodes from Jellyfin
-  if (jellyfin.isConfigured() && !id.startsWith('seerr-') && !id.startsWith('hero-') && !id.startsWith('cw-') && !id.startsWith('mov-') && !id.startsWith('ser-')) {
+  if (jellyfin.isConfigured() && !id.startsWith('seerr-') && !id.startsWith('tmdb-') && !id.startsWith('hero-') && !id.startsWith('cw-') && !id.startsWith('mov-') && !id.startsWith('ser-')) {
     const item = await jellyfin.getItemDetails(id);
     if (item) {
       return HttpResponse.json(
@@ -90,19 +92,20 @@ async function handleGET(
     }
   }
 
-  // 2. If it's a Seerr item or TMDB ID, fetch full Movie or TV details & episodes from Seerr
-  if (seerr.isConfigured() && (id.startsWith('seerr-') || /^\d+$/.test(id))) {
+  // 2. If it's a discovery item or TMDB ID, fetch full Movie or TV details & episodes
+  const isDiscoveryConfigured = tmdb.isConfigured() || seerr.isConfigured();
+  if (isDiscoveryConfigured && (id.startsWith('seerr-') || id.startsWith('tmdb-') || /^\d+$/.test(id))) {
     let tmdbId = 0;
     let explicitType: 'movie' | 'tv' | null = null;
 
-    if (id.startsWith('seerr-movie-')) {
+    if (id.startsWith('seerr-movie-') || id.startsWith('tmdb-movie-')) {
       explicitType = 'movie';
-      tmdbId = Number(id.replace('seerr-movie-', ''));
-    } else if (id.startsWith('seerr-tv-')) {
+      tmdbId = Number(id.replace(/^(?:seerr|tmdb)-movie-/, ''));
+    } else if (id.startsWith('seerr-tv-') || id.startsWith('tmdb-tv-')) {
       explicitType = 'tv';
-      tmdbId = Number(id.replace('seerr-tv-', ''));
-    } else if (id.startsWith('seerr-')) {
-      tmdbId = Number(id.replace('seerr-', ''));
+      tmdbId = Number(id.replace(/^(?:seerr|tmdb)-tv-/, ''));
+    } else if (id.startsWith('seerr-') || id.startsWith('tmdb-')) {
+      tmdbId = Number(id.replace(/^(?:seerr|tmdb)-/, ''));
     } else {
       tmdbId = Number(id);
     }
@@ -138,8 +141,20 @@ async function handleGET(
           return item;
         };
 
+        const fetchMovieDetails = async (idNum: number) => {
+          if (tmdb.isConfigured()) return tmdb.getMovieDetails(idNum);
+          if (seerr.isConfigured()) return seerr.getMovieDetails(idNum);
+          return null;
+        };
+
+        const fetchTvDetails = async (idNum: number) => {
+          if (tmdb.isConfigured()) return tmdb.getTvDetails(idNum);
+          if (seerr.isConfigured()) return seerr.getTvDetails(idNum);
+          return null;
+        };
+
         if (explicitType === 'movie') {
-          let movieItem = await seerr.getMovieDetails(tmdbId);
+          let movieItem = await fetchMovieDetails(tmdbId);
           if (movieItem) {
             movieItem = await attachJellyfinMatch(movieItem, 'movie');
             return HttpResponse.json(
@@ -148,7 +163,7 @@ async function handleGET(
             );
           }
         } else if (explicitType === 'tv') {
-          let tvItem = await seerr.getTvDetails(tmdbId);
+          let tvItem = await fetchTvDetails(tmdbId);
           if (tvItem) {
             tvItem = await attachJellyfinMatch(tvItem, 'tv');
             return HttpResponse.json(
@@ -159,7 +174,7 @@ async function handleGET(
         } else {
           // If no type was specified (legacy ID e.g. seerr-27205 without type param),
           // Check movie details first
-          let movieItem = await seerr.getMovieDetails(tmdbId);
+          let movieItem = await fetchMovieDetails(tmdbId);
           if (movieItem) {
             movieItem = await attachJellyfinMatch(movieItem, 'movie');
             return HttpResponse.json(
@@ -167,7 +182,7 @@ async function handleGET(
               { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' } }
             );
           }
-          let tvItem = await seerr.getTvDetails(tmdbId);
+          let tvItem = await fetchTvDetails(tmdbId);
           if (tvItem) {
             tvItem = await attachJellyfinMatch(tvItem, 'tv');
             return HttpResponse.json(
@@ -177,7 +192,7 @@ async function handleGET(
           }
         }
       } catch (e) {
-        log.error(`Error querying Seerr for media ${id}:`, e);
+        log.error(`Error querying discovery for media ${id}:`, e);
       }
     }
   }

@@ -139,6 +139,63 @@ export class SonarrClient {
     }
   }
 
+  async requestSeries(
+    titleOrTvdb: string | number,
+    seasons?: number[] | 'all'
+  ): Promise<{ success: boolean; error?: string; series?: SonarrSeries }> {
+    if (!this.isConfigured()) return { success: false, error: 'Sonarr is not configured' };
+
+    let series = await this.findSeries(titleOrTvdb);
+    if (!series) {
+      const lookupRes = await fetch(`${this.baseUrl}/api/v3/series/lookup?term=${encodeURIComponent(String(titleOrTvdb))}`, {
+        headers: this.getHeaders(),
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!lookupRes.ok) return { success: false, error: 'Series lookup failed' };
+      const lookupList = await lookupRes.json();
+      if (!Array.isArray(lookupList) || lookupList.length === 0) {
+        return { success: false, error: 'Series not found in Sonarr indexers' };
+      }
+      const found = lookupList[0];
+
+      const payload = {
+        ...found,
+        monitored: true,
+        addOptions: {
+          searchForMissingEpisodes: true,
+        },
+        rootFolderPath: found.rootFolderPath || '/tv',
+        qualityProfileId: found.qualityProfileId || 1,
+      };
+
+      const addRes = await fetch(`${this.baseUrl}/api/v3/series`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(15000),
+      });
+
+      if (!addRes.ok) {
+        const errData = await addRes.json().catch(() => null);
+        return { success: false, error: errData?.[0]?.errorMessage || `HTTP ${addRes.status}` };
+      }
+      series = await addRes.json();
+    } else {
+      // Trigger search command for series
+      await fetch(`${this.baseUrl}/api/v3/command`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({
+          name: 'SeriesSearch',
+          seriesId: series.id,
+        }),
+        signal: AbortSignal.timeout(10000),
+      }).catch(() => {});
+    }
+
+    return { success: true, series: series || undefined };
+  }
+
   async getEpisodes(seriesId: number, seasonNumber?: number): Promise<any[]> {
     if (!this.isConfigured()) return [];
     try {

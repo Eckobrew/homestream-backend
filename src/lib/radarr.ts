@@ -134,6 +134,52 @@ export class RadarrClient {
     }
   }
 
+  async requestMovie(tmdbId: number): Promise<{ success: boolean; error?: string; movie?: RadarrMovie }> {
+    if (!this.isConfigured()) return { success: false, error: 'Radarr is not configured' };
+
+    let movie = await this.getMovieByTmdb(tmdbId);
+    if (!movie) {
+      const lookup = await this.lookupMovie(tmdbId);
+      if (!lookup) return { success: false, error: 'Movie not found on TMDB / Radarr' };
+
+      const payload = {
+        ...lookup,
+        monitored: true,
+        addOptions: {
+          searchForMovie: true,
+        },
+        rootFolderPath: lookup.rootFolderPath || '/movies',
+        qualityProfileId: lookup.qualityProfileId || 1,
+      };
+
+      const res = await fetch(`${this.baseUrl}/api/v3/movie`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(15000),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        return { success: false, error: errData?.[0]?.errorMessage || `HTTP ${res.status}` };
+      }
+      movie = await res.json();
+    } else {
+      // Trigger search command if already added
+      await fetch(`${this.baseUrl}/api/v3/command`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({
+          name: 'MoviesSearch',
+          movieIds: [movie.id],
+        }),
+        signal: AbortSignal.timeout(10000),
+      }).catch(() => {});
+    }
+
+    return { success: true, movie: movie || undefined };
+  }
+
   async getReleases(movieId: number, timeoutMs = 45000): Promise<RadarrRelease[]> {
     if (!this.isConfigured()) return [];
     try {

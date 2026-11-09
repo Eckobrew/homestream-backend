@@ -2,6 +2,7 @@ import { withParentalControls } from '@/lib/parental-controls';
 import { withJellyfinSession } from '@/lib/jellyfin-session';
 import { HttpRequest, HttpResponse } from '@/http';
 import { SeerrClient } from '@/lib/seerr';
+import { TmdbClient } from '@/lib/tmdb';
 import { JellyfinClient } from '@/lib/jellyfin';
 import { MediaItem } from '@/types';
 import { resolveJellyfinUserId } from '@/lib/profiles';
@@ -12,15 +13,16 @@ const normalize = (text: string) => text.normalize('NFKD').replace(/[\u0300-\u03
 async function handleGET(request: HttpRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const query = request.nextUrl.searchParams;
-  let type: 'movie' | 'tv' = /^(tv|Series|Episode)$/.test(query.get('type') || '') || id.startsWith('seerr-tv-') ? 'tv' : 'movie';
-  let tmdb = Number(query.get('tmdbId')) || Number(/^seerr-(?:movie-|tv-)?(\d+)$/.exec(id)?.[1]) || (/^\d+$/.test(id) ? Number(id) : 0);
+  let type: 'movie' | 'tv' = /^(tv|Series|Episode)$/.test(query.get('type') || '') || id.startsWith('seerr-tv-') || id.startsWith('tmdb-tv-') ? 'tv' : 'movie';
+  let tmdb = Number(query.get('tmdbId')) || Number(/^(?:seerr|tmdb)-(?:movie-|tv-)?(\d+)$/.exec(id)?.[1]) || (/^\d+$/.test(id) ? Number(id) : 0);
   if (!Number.isSafeInteger(tmdb) || tmdb < 0) return HttpResponse.json({ error: 'Invalid TMDB ID' }, { status: 400 });
   const seerr = new SeerrClient();
+  const tmdbClient = new TmdbClient();
   const userId = await resolveJellyfinUserId(query.get('userId') || request.cookies.get('homeflix_profile_id')?.value);
   const jellyfin = new JellyfinClient(undefined, undefined, userId);
   let seed: MediaItem | null = null;
   let sourceId = id;
-  if (!id.startsWith('seerr-') && !/^\d+$/.test(id) && jellyfin.isConfigured()) {
+  if (!id.startsWith('seerr-') && !id.startsWith('tmdb-') && !/^\d+$/.test(id) && jellyfin.isConfigured()) {
     seed = await jellyfin.getRecommendationSeed(id);
     // Episode TMDB IDs belong to episodes; TV recommendations require the series ID.
     if (seed?.type === 'Episode' && seed.seriesId) {
@@ -33,8 +35,9 @@ async function handleGET(request: HttpRequest, { params }: { params: Promise<{ i
       tmdb = seed.tmdbId || tmdb;
     }
   }
-  if (!tmdb && seed && seerr.isConfigured()) {
-    const matches = await seerr.search(seed.title);
+  const hasDiscovery = tmdbClient.isConfigured() || seerr.isConfigured();
+  if (!tmdb && seed && hasDiscovery) {
+    const matches = tmdbClient.isConfigured() ? await tmdbClient.search(seed.title) : await seerr.search(seed.title);
     const match = matches.find(candidate => candidate.type === (type === 'tv' ? 'Series' : 'Movie') &&
       [seed!.title, seed!.originalTitle || ''].some(title => title && normalize(title) === normalize(candidate.title)) &&
       (!seed!.year || !candidate.year || Math.abs(seed!.year - candidate.year) <= 1));
@@ -43,7 +46,13 @@ async function handleGET(request: HttpRequest, { params }: { params: Promise<{ i
 
   let recommendations: MediaItem[] = [];
   let source = 'discovery';
-  if (tmdb && seerr.isConfigured()) recommendations = await seerr.getRecommendations(tmdb, type);
+  if (tmdb) {
+    if (tmdbClient.isConfigured()) {
+      recommendations = await tmdbClient.getRecommendations(tmdb, type);
+    } else if (seerr.isConfigured()) {
+      recommendations = await seerr.getRecommendations(tmdb, type);
+    }
+  }
   if (recommendations.length) {
     // Preserve the discovery service's relevance ranking. Library membership only
     // changes availability; it never earns an unrelated title a recommendation slot.
