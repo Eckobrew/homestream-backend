@@ -1,5 +1,6 @@
 import * as integrationsService from '@/services/integrations/handler';
 import * as musicService from '@/services/music/handler';
+import * as youtubeService from '@/services/youtube/handler';
 import * as requestedService from '@/services/requested/handler';
 import { validateApiRequest } from '@/api-schema';
 import { fetch } from '@/upstream';
@@ -152,6 +153,12 @@ async function dispatchContent(request: HttpRequest, context: Context) {
   if (get && route === 'requested') return requestedService.GET(request);
   if (get && (route === 'music' || route.startsWith('music/'))) return musicService.GET(request);
   if (!get && route === 'music/request') return musicService.POST(request);
+  if (route === 'youtube' || route.startsWith('youtube/')) {
+    if (get || request.method === 'HEAD') return youtubeService.GET(request);
+    if (request.method === 'POST') return youtubeService.POST(request);
+    if (request.method === 'PUT') return youtubeService.PUT(request);
+    if (request.method === 'DELETE') return youtubeService.DELETE(request);
+  }
   if (get && route === 'trailer') return trailer(request);
   if (get && route === 'capabilities') return HttpResponse.json({ apiVersion: 1, appName: getServerConfig().appName || 'HomeStream', cast: true, jellyfinLogin: true, canManageIntegrations:session?.admin===true });
   if (get && route === 'session/status') {

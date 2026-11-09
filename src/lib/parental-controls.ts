@@ -166,7 +166,7 @@ export async function parentalResponse(request: HttpRequest, response: Response,
     return HttpResponse.redirect(new URL(resourceUrl(new URL(location, request.url).toString(), profile, 'stream', age), request.url), 307);
   }
   if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) return response;
-  if (name.startsWith('profiles')) return response;
+  if (name.startsWith('profiles') || name.startsWith('youtube')) return response;
   if (isKids(profile) && name === 'trailer') return HttpResponse.json({ success: true, trailer: null });
   const data = await response.json();
   if (name === 'subtitles' && Array.isArray(data.subtitles)) {

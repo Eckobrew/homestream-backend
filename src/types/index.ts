@@ -233,3 +233,91 @@ export interface IntegrationSummary {
   username?: string;
 }
 export interface IntegrationsResponse { integrations: IntegrationSummary[]; downloadsPath: string; }
+
+export interface YouTubeSearchResult {
+  id: string;
+  title: string;
+  channelId: string;
+  channelTitle: string;
+  channelAvatarUrl?: string;
+  durationSeconds: number;
+  durationFormatted: string;
+  thumbnailUrl: string;
+  uploadDate?: string;
+  viewCount?: string;
+  description?: string;
+  isShort: boolean;
+  isDownloaded?: boolean;
+}
+
+export interface YouTubeSearchResponse {
+  results: YouTubeSearchResult[];
+}
+
+export interface YouTubeStreamResponse {
+  videoId: string;
+  streamUrl: string;
+  title?: string;
+  durationSeconds?: number;
+}
+
+export interface YouTubeSubscription {
+  id: string;
+  title: string;
+  handle?: string;
+  avatarUrl?: string;
+  bannerUrl?: string;
+  description?: string;
+  subscribedAt: string;
+  autoDownload: boolean;
+  minDurationSeconds: number;
+  maxDurationSeconds?: number;
+  includeKeywords?: string[];
+  excludeKeywords?: string[];
+  ignoreShorts: boolean;
+  lastCheckedAt?: string;
+  lastVideoId?: string;
+  downloadCount?: number;
+}
+
+export interface YouTubeSubscriptionsResponse {
+  subscriptions: YouTubeSubscription[];
+}
+
+export interface YouTubeDownloadItem {
+  videoId: string;
+  channelId?: string;
+  channelTitle?: string;
+  title: string;
+  durationSeconds?: number;
+  thumbnailUrl?: string;
+  uploadDate?: string;
+  status: 'queued' | 'downloading' | 'completed' | 'failed' | 'ignored';
+  progressPercent: number;
+  speedBytes: number;
+  etaSeconds?: number;
+  filePath?: string;
+  errorMessage?: string;
+  createdAt: string;
+  completedAt?: string;
+}
+
+export interface YouTubeQueueResponse {
+  queue: YouTubeDownloadItem[];
+}
+
+export interface YouTubeArchiveItem {
+  id: string;
+  title: string;
+  channelName: string;
+  filePath: string;
+  fileSize: number;
+  thumbnailUrl?: string;
+  modifiedAt: string;
+  streamUrl: string;
+}
+
+export interface YouTubeArchiveResponse {
+  items: YouTubeArchiveItem[];
+}
+

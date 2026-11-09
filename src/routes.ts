@@ -1,6 +1,7 @@
 import * as music from './services/music/handler';
 import * as requested from './services/requested/handler';
 import * as integrations from './services/integrations/handler';
+import * as youtube from './services/youtube/handler';
 import * as service0 from './services/auth/handler';
 import * as service1 from './services/categories/[type]/handler';
 import * as service2 from './services/config/handler';
@@ -29,6 +30,15 @@ export const routes = [
   {path:'/api/music/request',methods:['POST'],service:music},
   {path:'/api/requested',methods:['GET'],service:requested},
   {path:'/api/integrations',methods:['GET','POST'],service:integrations},
+  {path:'/api/youtube/search',methods:['GET'],service:youtube},
+  {path:'/api/youtube/stream',methods:['GET'],service:youtube},
+  {path:'/api/youtube/download',methods:['POST'],service:youtube},
+  {path:'/api/youtube/subscriptions',methods:['GET','POST','PUT','DELETE'],service:youtube},
+  {path:'/api/youtube/subscriptions/check',methods:['POST'],service:youtube},
+  {path:'/api/youtube/queue',methods:['GET','DELETE'],service:youtube},
+  {path:'/api/youtube/archive',methods:['GET'],service:youtube},
+  {path:'/api/youtube/stream-local',methods:['GET'],service:youtube},
+  {path:'/api/youtube/thumbnail',methods:['GET'],service:youtube},
   { path: "/api/auth", methods: ["GET", "POST"], service: service0 },
   { path: "/api/categories/:type", methods: ["GET"], service: service1 },
   { path: "/api/config", methods: ["GET", "POST"], service: service2 },

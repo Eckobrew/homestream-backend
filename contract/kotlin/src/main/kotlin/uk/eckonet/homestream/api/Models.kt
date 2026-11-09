@@ -311,6 +311,102 @@ data class IntegrationsResponse(
 )
 
 @Serializable
+data class YouTubeSearchResult(
+    @SerialName("id") val `id`: String,
+    @SerialName("title") val `title`: String,
+    @SerialName("channelId") val `channelId`: String,
+    @SerialName("channelTitle") val `channelTitle`: String,
+    @SerialName("channelAvatarUrl") val `channelAvatarUrl`: String? = null,
+    @SerialName("durationSeconds") val `durationSeconds`: Double,
+    @SerialName("durationFormatted") val `durationFormatted`: String,
+    @SerialName("thumbnailUrl") val `thumbnailUrl`: String,
+    @SerialName("uploadDate") val `uploadDate`: String? = null,
+    @SerialName("viewCount") val `viewCount`: String? = null,
+    @SerialName("description") val `description`: String? = null,
+    @SerialName("isShort") val `isShort`: Boolean,
+    @SerialName("isDownloaded") val `isDownloaded`: Boolean? = null
+)
+
+@Serializable
+data class YouTubeSearchResponse(
+    @SerialName("results") val `results`: List<YouTubeSearchResult>
+)
+
+@Serializable
+data class YouTubeStreamResponse(
+    @SerialName("videoId") val `videoId`: String,
+    @SerialName("streamUrl") val `streamUrl`: String,
+    @SerialName("title") val `title`: String? = null,
+    @SerialName("durationSeconds") val `durationSeconds`: Double? = null
+)
+
+@Serializable
+data class YouTubeSubscription(
+    @SerialName("id") val `id`: String,
+    @SerialName("title") val `title`: String,
+    @SerialName("handle") val `handle`: String? = null,
+    @SerialName("avatarUrl") val `avatarUrl`: String? = null,
+    @SerialName("bannerUrl") val `bannerUrl`: String? = null,
+    @SerialName("description") val `description`: String? = null,
+    @SerialName("subscribedAt") val `subscribedAt`: String,
+    @SerialName("autoDownload") val `autoDownload`: Boolean,
+    @SerialName("minDurationSeconds") val `minDurationSeconds`: Double,
+    @SerialName("maxDurationSeconds") val `maxDurationSeconds`: Double? = null,
+    @SerialName("includeKeywords") val `includeKeywords`: List<String>? = null,
+    @SerialName("excludeKeywords") val `excludeKeywords`: List<String>? = null,
+    @SerialName("ignoreShorts") val `ignoreShorts`: Boolean,
+    @SerialName("lastCheckedAt") val `lastCheckedAt`: String? = null,
+    @SerialName("lastVideoId") val `lastVideoId`: String? = null,
+    @SerialName("downloadCount") val `downloadCount`: Double? = null
+)
+
+@Serializable
+data class YouTubeSubscriptionsResponse(
+    @SerialName("subscriptions") val `subscriptions`: List<YouTubeSubscription>
+)
+
+@Serializable
+data class YouTubeDownloadItem(
+    @SerialName("videoId") val `videoId`: String,
+    @SerialName("channelId") val `channelId`: String? = null,
+    @SerialName("channelTitle") val `channelTitle`: String? = null,
+    @SerialName("title") val `title`: String,
+    @SerialName("durationSeconds") val `durationSeconds`: Double? = null,
+    @SerialName("thumbnailUrl") val `thumbnailUrl`: String? = null,
+    @SerialName("uploadDate") val `uploadDate`: String? = null,
+    @SerialName("status") val `status`: String,
+    @SerialName("progressPercent") val `progressPercent`: Double,
+    @SerialName("speedBytes") val `speedBytes`: Double,
+    @SerialName("etaSeconds") val `etaSeconds`: Double? = null,
+    @SerialName("filePath") val `filePath`: String? = null,
+    @SerialName("errorMessage") val `errorMessage`: String? = null,
+    @SerialName("createdAt") val `createdAt`: String,
+    @SerialName("completedAt") val `completedAt`: String? = null
+)
+
+@Serializable
+data class YouTubeQueueResponse(
+    @SerialName("queue") val `queue`: List<YouTubeDownloadItem>
+)
+
+@Serializable
+data class YouTubeArchiveItem(
+    @SerialName("id") val `id`: String,
+    @SerialName("title") val `title`: String,
+    @SerialName("channelName") val `channelName`: String,
+    @SerialName("filePath") val `filePath`: String,
+    @SerialName("fileSize") val `fileSize`: Double,
+    @SerialName("thumbnailUrl") val `thumbnailUrl`: String? = null,
+    @SerialName("modifiedAt") val `modifiedAt`: String,
+    @SerialName("streamUrl") val `streamUrl`: String
+)
+
+@Serializable
+data class YouTubeArchiveResponse(
+    @SerialName("items") val `items`: List<YouTubeArchiveItem>
+)
+
+@Serializable
 data class WebGetAuthQuery(
     @SerialName("userId") val `userId`: String? = null,
     @SerialName("action") val `action`: String? = null
@@ -772,6 +868,149 @@ data class WebPostIntegrationsBody(
 )
 
 @Serializable
+data class WebGetYoutubeSearchQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("q") val `q`: String? = null
+)
+
+@Serializable
+data class WebGetYoutubeStreamQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("videoId") val `videoId`: String
+)
+
+@Serializable
+data class WebPostYoutubeDownloadQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class WebPostYoutubeDownloadBody(
+    @SerialName("videoId") val `videoId`: String,
+    @SerialName("channelId") val `channelId`: String? = null,
+    @SerialName("channelTitle") val `channelTitle`: String? = null,
+    @SerialName("title") val `title`: String,
+    @SerialName("durationSeconds") val `durationSeconds`: Long? = null,
+    @SerialName("thumbnailUrl") val `thumbnailUrl`: String? = null,
+    @SerialName("uploadDate") val `uploadDate`: String? = null
+)
+
+@Serializable
+data class WebPostYoutubeDownloadResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null
+)
+
+@Serializable
+data class WebGetYoutubeSubscriptionsQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class WebPostYoutubeSubscriptionsQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class WebPostYoutubeSubscriptionsBody(
+    @SerialName("channelUrlOrHandle") val `channelUrlOrHandle`: String,
+    @SerialName("autoDownload") val `autoDownload`: Boolean? = null,
+    @SerialName("minDurationSeconds") val `minDurationSeconds`: Long? = null,
+    @SerialName("maxDurationSeconds") val `maxDurationSeconds`: Long? = null,
+    @SerialName("includeKeywords") val `includeKeywords`: List<String>? = null,
+    @SerialName("excludeKeywords") val `excludeKeywords`: List<String>? = null,
+    @SerialName("ignoreShorts") val `ignoreShorts`: Boolean? = null
+)
+
+@Serializable
+data class WebPostYoutubeSubscriptionsResponse(
+    @SerialName("success") val `success`: Boolean? = null
+)
+
+@Serializable
+data class WebPutYoutubeSubscriptionsQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class WebPutYoutubeSubscriptionsBody(
+    @SerialName("id") val `id`: String,
+    @SerialName("autoDownload") val `autoDownload`: Boolean? = null,
+    @SerialName("minDurationSeconds") val `minDurationSeconds`: Long? = null,
+    @SerialName("maxDurationSeconds") val `maxDurationSeconds`: Long? = null,
+    @SerialName("includeKeywords") val `includeKeywords`: List<String>? = null,
+    @SerialName("excludeKeywords") val `excludeKeywords`: List<String>? = null,
+    @SerialName("ignoreShorts") val `ignoreShorts`: Boolean? = null
+)
+
+@Serializable
+data class WebPutYoutubeSubscriptionsResponse(
+    @SerialName("success") val `success`: Boolean? = null
+)
+
+@Serializable
+data class WebDeleteYoutubeSubscriptionsQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("id") val `id`: String
+)
+
+@Serializable
+data class WebDeleteYoutubeSubscriptionsResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null
+)
+
+@Serializable
+data class WebPostYoutubeSubscriptionsCheckQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class WebPostYoutubeSubscriptionsCheckBody(
+    @SerialName("channelId") val `channelId`: String? = null
+)
+
+@Serializable
+data class WebPostYoutubeSubscriptionsCheckResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("downloadedCount") val `downloadedCount`: Long? = null
+)
+
+@Serializable
+data class WebGetYoutubeQueueQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class WebDeleteYoutubeQueueQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("videoId") val `videoId`: String
+)
+
+@Serializable
+data class WebDeleteYoutubeQueueResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null
+)
+
+@Serializable
+data class WebGetYoutubeArchiveQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class WebGetYoutubeStreamLocalQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("path") val `path`: String
+)
+
+@Serializable
+data class WebGetYoutubeThumbnailQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("path") val `path`: String
+)
+
+@Serializable
 data class MobileGetHomeQuery(
     @SerialName("userId") val `userId`: String? = null
 )
@@ -1020,6 +1259,149 @@ data class MobilePostIntegrationsBody(
     @SerialName("username") val `username`: String? = null,
     @SerialName("downloadsPath") val `downloadsPath`: String? = null,
     @SerialName("parentPin") val `parentPin`: String? = null
+)
+
+@Serializable
+data class MobileGetYoutubeSearchQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("q") val `q`: String? = null
+)
+
+@Serializable
+data class MobileGetYoutubeStreamQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("videoId") val `videoId`: String
+)
+
+@Serializable
+data class MobilePostYoutubeDownloadQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class MobilePostYoutubeDownloadBody(
+    @SerialName("videoId") val `videoId`: String,
+    @SerialName("channelId") val `channelId`: String? = null,
+    @SerialName("channelTitle") val `channelTitle`: String? = null,
+    @SerialName("title") val `title`: String,
+    @SerialName("durationSeconds") val `durationSeconds`: Long? = null,
+    @SerialName("thumbnailUrl") val `thumbnailUrl`: String? = null,
+    @SerialName("uploadDate") val `uploadDate`: String? = null
+)
+
+@Serializable
+data class MobilePostYoutubeDownloadResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null
+)
+
+@Serializable
+data class MobileGetYoutubeSubscriptionsQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class MobilePostYoutubeSubscriptionsQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class MobilePostYoutubeSubscriptionsBody(
+    @SerialName("channelUrlOrHandle") val `channelUrlOrHandle`: String,
+    @SerialName("autoDownload") val `autoDownload`: Boolean? = null,
+    @SerialName("minDurationSeconds") val `minDurationSeconds`: Long? = null,
+    @SerialName("maxDurationSeconds") val `maxDurationSeconds`: Long? = null,
+    @SerialName("includeKeywords") val `includeKeywords`: List<String>? = null,
+    @SerialName("excludeKeywords") val `excludeKeywords`: List<String>? = null,
+    @SerialName("ignoreShorts") val `ignoreShorts`: Boolean? = null
+)
+
+@Serializable
+data class MobilePostYoutubeSubscriptionsResponse(
+    @SerialName("success") val `success`: Boolean? = null
+)
+
+@Serializable
+data class MobilePutYoutubeSubscriptionsQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class MobilePutYoutubeSubscriptionsBody(
+    @SerialName("id") val `id`: String,
+    @SerialName("autoDownload") val `autoDownload`: Boolean? = null,
+    @SerialName("minDurationSeconds") val `minDurationSeconds`: Long? = null,
+    @SerialName("maxDurationSeconds") val `maxDurationSeconds`: Long? = null,
+    @SerialName("includeKeywords") val `includeKeywords`: List<String>? = null,
+    @SerialName("excludeKeywords") val `excludeKeywords`: List<String>? = null,
+    @SerialName("ignoreShorts") val `ignoreShorts`: Boolean? = null
+)
+
+@Serializable
+data class MobilePutYoutubeSubscriptionsResponse(
+    @SerialName("success") val `success`: Boolean? = null
+)
+
+@Serializable
+data class MobileDeleteYoutubeSubscriptionsQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("id") val `id`: String
+)
+
+@Serializable
+data class MobileDeleteYoutubeSubscriptionsResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null
+)
+
+@Serializable
+data class MobilePostYoutubeSubscriptionsCheckQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class MobilePostYoutubeSubscriptionsCheckBody(
+    @SerialName("channelId") val `channelId`: String? = null
+)
+
+@Serializable
+data class MobilePostYoutubeSubscriptionsCheckResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("downloadedCount") val `downloadedCount`: Long? = null
+)
+
+@Serializable
+data class MobileGetYoutubeQueueQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class MobileDeleteYoutubeQueueQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("videoId") val `videoId`: String
+)
+
+@Serializable
+data class MobileDeleteYoutubeQueueResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null
+)
+
+@Serializable
+data class MobileGetYoutubeArchiveQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class MobileGetYoutubeStreamLocalQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("path") val `path`: String
+)
+
+@Serializable
+data class MobileGetYoutubeThumbnailQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("path") val `path`: String
 )
 
 @Serializable

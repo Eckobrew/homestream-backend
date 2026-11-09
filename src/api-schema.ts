@@ -56,8 +56,21 @@ add('music/request','POST',success,{},object({musicbrainzId:id},['musicbrainzId'
 add('requested','GET',object(),{},undefined,{responseModel:'RequestedResponse'});
 add('integrations','GET',object(),{},undefined,{responseModel:'IntegrationsResponse'});
 add('integrations','POST',object(),{},object({integration:{type:'string',enum:['jellyfin','seerr','qbittorrent','droppedneedle','radarr','sonarr','tmdb']},action:{type:'string',enum:['save','test']},url:text,secret:text,username:text,downloadsPath:text,parentPin:text},['integration','action']));
+add('youtube/search','GET',object(),{q:text},undefined,{responseModel:'YouTubeSearchResponse'});
+add('youtube/stream','GET',object(),{videoId:id},undefined,{requiredQuery:['videoId'],responseModel:'YouTubeStreamResponse'});
+add('youtube/download','POST',success,{},object({videoId:id,channelId:text,channelTitle:text,title:text,durationSeconds:integer,thumbnailUrl:text,uploadDate:text},['videoId','title']));
+add('youtube/subscriptions','GET',object(),{},undefined,{responseModel:'YouTubeSubscriptionsResponse'});
+add('youtube/subscriptions','POST',object({success:boolean}),{},object({channelUrlOrHandle:text,autoDownload:boolean,minDurationSeconds:integer,maxDurationSeconds:integer,includeKeywords:list(text),excludeKeywords:list(text),ignoreShorts:boolean},['channelUrlOrHandle']));
+add('youtube/subscriptions','PUT',object({success:boolean}),{},object({id:text,autoDownload:boolean,minDurationSeconds:integer,maxDurationSeconds:integer,includeKeywords:list(text),excludeKeywords:list(text),ignoreShorts:boolean},['id']));
+add('youtube/subscriptions','DELETE',success,{id:text},undefined,{requiredQuery:['id']});
+add('youtube/subscriptions/check','POST',object({success:boolean,downloadedCount:integer}),{},object({channelId:text}));
+add('youtube/queue','GET',object(),{},undefined,{responseModel:'YouTubeQueueResponse'});
+add('youtube/queue','DELETE',success,{videoId:id},undefined,{requiredQuery:['videoId']});
+add('youtube/archive','GET',object(),{},undefined,{responseModel:'YouTubeArchiveResponse'});
+add('youtube/stream-local','GET',object(),{path:text},undefined,{requiredQuery:['path'],binary:true});
+add('youtube/thumbnail','GET',object(),{path:text},undefined,{requiredQuery:['path'],binary:true});
 export const webOperations = operations;
-const shared = ['integrations','requested','music','music/album','music/artwork','music/stream','music/request','home','library/{type}','categories/{type}','media/{id}','media/{id}/recommendations','search','downloads','playback','request','subtitles','trailer','stream/download','stream/torrent'];
+const shared = ['integrations','requested','music','music/album','music/artwork','music/stream','music/request','youtube/search','youtube/stream','youtube/download','youtube/subscriptions','youtube/subscriptions/check','youtube/queue','youtube/archive','youtube/stream-local','youtube/thumbnail','home','library/{type}','categories/{type}','media/{id}','media/{id}/recommendations','search','downloads','playback','request','subtitles','trailer','stream/download','stream/torrent'];
 export const mobileOperations: Operation[] = operations.filter(operation => shared.includes(operation.path)).map(operation => ({...operation}));
 function native(path:string,method:string,response:Schema,query:Record<string,Schema>={},body?:Schema,extra:Partial<Operation>={}) { mobileOperations.push({path,method,response,query:{userId:id,...query},body,...extra}); }
 native('discovery','GET',object({apiVersion:integer,appName:text,cast:boolean,pairing:text,localPairing:boolean,jellyfinLogin:boolean}),{},undefined,{public:true});

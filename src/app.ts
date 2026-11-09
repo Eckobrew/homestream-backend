@@ -94,7 +94,7 @@ export function createApp() {
           return reply.send(response.body ? Readable.fromWeb(response.body as import('node:stream/web').ReadableStream) : null);
         } catch (error) {
           // Do not log upstream error objects: they can include tokens or URLs.
-          console.error('API request failed', { method: incoming.method, route: legacyPath, type: error instanceof Error ? error.name : 'unknown', requestId: reply.getHeader('x-request-id') });
+          console.error('API request failed', { method: incoming.method, route: legacyPath, type: error instanceof Error ? error.name : 'unknown', message: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined, requestId: reply.getHeader('x-request-id') });
           return reply.code(500).header('cache-control', 'no-store').send({ error: 'API request failed' });
         }
       },
