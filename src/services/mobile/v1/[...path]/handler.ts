@@ -348,6 +348,7 @@ async function handle(request: HttpRequest, context: Context) {
 
 export const GET = withJellyfinSession(handle);
 export const POST = withJellyfinSession(handle);
-
-export const HEAD = withJellyfinSession(handle);
+export const PUT = withJellyfinSession(handle);
+export const DELETE = withJellyfinSession(handle);
+export const HEAD = GET;
 export function OPTIONS() { return new HttpResponse(null, { status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,HEAD,OPTIONS', 'Access-Control-Allow-Headers': 'Range,Content-Type', 'Access-Control-Max-Age': '600' } }); }
