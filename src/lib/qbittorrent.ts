@@ -327,6 +327,12 @@ export class QBittorrentClient {
     const results: DownloadingTorrentItem[] = [];
 
     for (const t of rawList) {
+      // Skip torrents in metadata download state or without media files
+      const state = (t.state || '').toLowerCase();
+      if (state === 'metadl') {
+        continue;
+      }
+
       // Auto-enforce sequential mode if from Sonarr or Radarr
       const isArr =
         (t.tags && /sonarr|radarr/i.test(t.tags)) ||
@@ -354,6 +360,10 @@ export class QBittorrentClient {
           }
           return b.size - a.size;
         });
+
+      if (mediaFiles.length === 0) {
+        continue;
+      }
 
       const allVideoFiles: DownloadingTorrentFile[] = mediaFiles.map((f) => ({
         index: f.index,

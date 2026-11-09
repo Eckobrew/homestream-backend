@@ -99,8 +99,9 @@ export async function getNativeUserRequests(targetUserId?: string): Promise<Medi
       if (status !== 'available' && qbDownloads.length > 0) {
         const cleanReq = r.title.toLowerCase().replace(/[^a-z0-9]/g, '');
         const matchedDl = qbDownloads.find(d => {
+          if (!d.streamUrl || (!d.streamable && d.progressPercent === 0)) return false;
           const cleanDl = d.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-          return cleanDl.includes(cleanReq) || cleanReq.includes(cleanDl);
+          return cleanDl === cleanReq || (cleanDl.startsWith(cleanReq) && cleanReq.length >= 3);
         });
 
         if (matchedDl) {

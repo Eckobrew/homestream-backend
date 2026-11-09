@@ -27,8 +27,19 @@ async function image(url: string, headers: Record<string, string> = {}): Promise
   return new Response(Buffer.concat(chunks), { headers: { 'Content-Type': response.headers.get('content-type')!, 'Cache-Control': 'public, max-age=86400', 'X-Content-Type-Options': 'nosniff' } });
 }
 
+function wrapResponse(res: Response, method: string): Response {
+  if (method === 'HEAD') {
+    return new Response(null, {
+      status: res.status,
+      headers: res.headers,
+    });
+  }
+  return res;
+}
+
 /** Public image-only proxy for native artwork and the default Cast receiver. */
 export async function handleImage(request: HttpRequest): Promise<Response> {
+  const isHead = request.method === 'HEAD';
   if ((await getHomeflixProfiles()).some(isKids)) {
     try {
       const profile = await activeProfile(request);
@@ -45,7 +56,8 @@ export async function handleImage(request: HttpRequest): Promise<Response> {
     if (raw) {
       const url = new URL(raw);
       if (url.protocol === 'https:' && !url.username && !url.password && !url.port && ['image.tmdb.org', 'images.unsplash.com'].includes(url.hostname)) {
-        const result = await image(url.toString()); if (result) return result;
+        const result = await image(url.toString());
+        if (result) return wrapResponse(result, request.method);
       }
     } else {
       const item = params.get('itemId');
@@ -61,8 +73,9 @@ export async function handleImage(request: HttpRequest): Promise<Response> {
           const prefix = `${config.jellyfinUrl}/${item ? 'Items' : 'Users'}/${encodeURIComponent(id)}/Images/${type}`;
           const headers: Record<string, string> = token ? { 'X-Emby-Token': token, Authorization: `MediaBrowser Client="HomeStream", Device="Artwork", DeviceId="homestream-artwork", Version="1", Token="${token}"` } : {};
           const resized = await image(`${prefix}?maxWidth=${width}&quality=${quality}`, headers);
-          if (resized) return resized;
-          const original = await image(prefix, headers); if (original) return original;
+          if (resized) return wrapResponse(resized, request.method);
+          const original = await image(prefix, headers);
+          if (original) return wrapResponse(original, request.method);
           if (item) {
             const details = await fetch(`${config.jellyfinUrl}/Items/${encodeURIComponent(id)}?Fields=SeriesId,SeasonId`, { headers, redirect: 'error', signal: AbortSignal.timeout(10000) });
             if (details.ok) {
@@ -70,7 +83,7 @@ export async function handleImage(request: HttpRequest): Promise<Response> {
               const parent = data.SeriesId || data.SeasonId;
               if (typeof parent === 'string' && /^[a-zA-Z0-9_-]{1,128}$/.test(parent) && parent !== id) {
                 const parentImage = await image(`${config.jellyfinUrl}/Items/${encodeURIComponent(parent)}/Images/Primary`, headers);
-                if (parentImage) return parentImage;
+                if (parentImage) return wrapResponse(parentImage, request.method);
               }
             }
           }
@@ -78,5 +91,5 @@ export async function handleImage(request: HttpRequest): Promise<Response> {
       }
     }
   } catch { /* Missing artwork has a valid, bounded image fallback. */ }
-  return new Response(fallback, { headers: { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=300', 'X-Content-Type-Options': 'nosniff' } });
+  return wrapResponse(new Response(fallback, { headers: { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=300', 'X-Content-Type-Options': 'nosniff' } }), request.method);
 }

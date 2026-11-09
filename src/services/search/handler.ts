@@ -70,20 +70,23 @@ async function handleGET(request: HttpRequest) {
         const dlList = await qb.getStreamableDownloads();
         if (dlList.length > 0) {
           results.forEach((item) => {
-            if (item.source === 'jellyfin' || item.jellyfinId) return;
+            if (item.source === 'jellyfin' || item.jellyfinId || item.status === 'available') return;
+            const cleanTitle = (item.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
             const matchedDl = dlList.find(
-              (d) =>
-                d.name.toLowerCase().includes(item.title.toLowerCase()) ||
-                item.title.toLowerCase().includes(d.name.toLowerCase())
+              (d) => {
+                if (!d.streamUrl || (!d.streamable && d.progressPercent === 0)) return false;
+                const cleanD = (d.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                return cleanD === cleanTitle || (cleanD.startsWith(cleanTitle) && cleanTitle.length >= 3);
+              }
             );
-            if (matchedDl) {
+            if (matchedDl && matchedDl.streamUrl) {
               item.isDownloading = true;
               item.downloadProgress = matchedDl.progressPercent;
               item.downloadSpeed = matchedDl.downloadSpeed;
               item.downloadEta = matchedDl.eta;
               item.torrentHash = matchedDl.hash;
-              item.videoStreamUrl = matchedDl.streamUrl || `/api/stream/download?hash=${matchedDl.hash}`;
-              item.downloadStreamUrl = matchedDl.streamUrl || `/api/stream/download?hash=${matchedDl.hash}`;
+              item.videoStreamUrl = matchedDl.streamUrl;
+              item.downloadStreamUrl = matchedDl.streamUrl;
               item.status = 'processing';
             }
           });

@@ -76,7 +76,7 @@ async function dispatch(request: HttpRequest, context: Context) {
     return HttpResponse.json({ apiVersion: 1, appName: getServerConfig().appName || 'HomeStream', cast: true, pairing: 'local', localPairing: directLocal(request), jellyfinLogin: true });
   }
   if ((get || request.method === 'HEAD') && route === 'parental-resource') return parentalResource(request);
-  if (get && route === 'image') return handleImage(request);
+  if ((get || request.method === 'HEAD') && route === 'image') return handleImage(request);
   if (get && route === 'auth/users') return HttpResponse.json({ users: [] });
   if (!get && route === 'auth/login') {
     if (!await allowLogin(request)) return HttpResponse.json({ error: 'Too many login attempts. Try again in a minute.' }, { status: 429 });

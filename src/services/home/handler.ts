@@ -166,16 +166,48 @@ async function handleGET(request: HttpRequest) {
       try {
         const dlList = await qb.getStreamableDownloads();
         if (dlList.length > 0) {
-          const downloadItems: MediaItem[] = dlList.map((d) => {
+          const downloadItems: MediaItem[] = [];
+
+          for (const d of dlList) {
+            // Must have a real stream URL or active progress to be shown
+            if (!d.streamUrl || (!d.streamable && d.progressPercent === 0)) {
+              continue;
+            }
+
             const cleanD = (d.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
             const matchedReq = initialUserRequests.find((r) => {
               const cleanR = (r.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-              return cleanD.includes(cleanR) || cleanR.includes(cleanD);
+              return cleanD === cleanR || (cleanD.startsWith(cleanR) && cleanR.length >= 3);
             });
 
-            return {
+            const candidateTitle = matchedReq ? matchedReq.title : (d.videoFile?.name ? d.videoFile.name.replace(/\.[^/.]+$/, '') : d.name);
+
+            // Check if already available in Jellyfin (or in hero/resume/topRated)
+            const cleanCand = candidateTitle.toLowerCase().replace(/[^a-z0-9]/g, '');
+            const alreadyInLibrary = [...heroCandidates, ...resumeItems, ...topRated, ...latestMovies].some(
+              (it) => it.title.toLowerCase().replace(/[^a-z0-9]/g, '') === cleanCand
+            );
+
+            if (alreadyInLibrary) {
+              continue;
+            }
+
+            if (jellyfin.isConfigured()) {
+              const jfFound = await jellyfin.findItemByName(candidateTitle).catch(() => null);
+              if (jfFound) {
+                continue;
+              }
+              if (matchedReq?.tmdbId) {
+                const jfByTmdb = await jellyfin.findItemByTmdbId(matchedReq.tmdbId, matchedReq.type === 'Series' ? 'tv' : 'movie').catch(() => null);
+                if (jfByTmdb) {
+                  continue;
+                }
+              }
+            }
+
+            downloadItems.push({
               id: matchedReq ? matchedReq.id : `dl-${d.hash}`,
-              title: matchedReq ? matchedReq.title : (d.videoFile?.name ? d.videoFile.name.replace(/\.[^/.]+$/, '') : d.name),
+              title: candidateTitle,
               overview: matchedReq ? matchedReq.overview : `Actively downloading via qBittorrent (${d.progressPercent}% complete, ${(d.downloadSpeed / 1024 / 1024).toFixed(1)} MB/s). Ready to stream live.`,
               type: matchedReq ? matchedReq.type : (/s\d{1,2}e\d{1,2}|season|episode/i.test(d.name) ? 'Series' : 'Movie'),
               posterUrl: matchedReq?.posterUrl || 'https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?w=500&auto=format&fit=crop&q=60',
@@ -190,16 +222,18 @@ async function handleGET(request: HttpRequest) {
               downloadSpeed: d.downloadSpeed,
               downloadEta: d.eta,
               torrentHash: d.hash,
-              videoStreamUrl: d.streamUrl || `/api/stream/download?hash=${d.hash}`,
-              downloadStreamUrl: d.streamUrl || `/api/stream/download?hash=${d.hash}`,
-            };
-          });
+              videoStreamUrl: d.streamUrl,
+              downloadStreamUrl: d.streamUrl,
+            });
+          }
 
-          sections.push({
-            id: 'currently-downloading',
-            title: '⬇ Actively Downloading (Stream In-Progress)',
-            items: downloadItems,
-          });
+          if (downloadItems.length > 0) {
+            sections.push({
+              id: 'currently-downloading',
+              title: '⬇ Actively Downloading (Stream In-Progress)',
+              items: downloadItems,
+            });
+          }
         }
       } catch (err) {
         log.warn('Failed to load active downloads for home feed:', err);
@@ -324,19 +358,23 @@ async function handleGET(request: HttpRequest) {
           try {
             const dlList = await qb.getStreamableDownloads();
             userRequests.forEach((req) => {
+              if (req.status === 'available') return;
+              const cleanReq = req.title.toLowerCase().replace(/[^a-z0-9]/g, '');
               const matchedDl = dlList.find(
-                (d) =>
-                  d.name.toLowerCase().includes(req.title.toLowerCase()) ||
-                  req.title.toLowerCase().includes(d.name.toLowerCase())
+                (d) => {
+                  if (!d.streamUrl || (!d.streamable && d.progressPercent === 0)) return false;
+                  const cleanD = (d.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                  return cleanD === cleanReq || (cleanD.startsWith(cleanReq) && cleanReq.length >= 3);
+                }
               );
-              if (matchedDl) {
+              if (matchedDl && matchedDl.streamUrl) {
                 req.isDownloading = true;
                 req.downloadProgress = matchedDl.progressPercent;
                 req.downloadSpeed = matchedDl.downloadSpeed;
                 req.downloadEta = matchedDl.eta;
                 req.torrentHash = matchedDl.hash;
-                req.videoStreamUrl = matchedDl.streamUrl || `/api/stream/download?hash=${matchedDl.hash}`;
-                req.downloadStreamUrl = matchedDl.streamUrl || `/api/stream/download?hash=${matchedDl.hash}`;
+                req.videoStreamUrl = matchedDl.streamUrl;
+                req.downloadStreamUrl = matchedDl.streamUrl;
                 req.status = 'processing';
               }
             });
