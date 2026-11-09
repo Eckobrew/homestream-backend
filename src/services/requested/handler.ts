@@ -22,7 +22,16 @@ async function get(_request:HttpRequest) {
     const [seerrVideos,nativeVideos,musicItems,downloads]=await Promise.all([
       seerr.isConfigured()?safe('Seerr',()=>seerr.getRequestQueue(),[]):Promise.resolve([]),
       safe('HomeStream Requests',()=>getNativeUserRequests(),[]),
-      !kids ? Promise.resolve(getRequestedMusicItems()) : Promise.resolve([]),
+      !kids
+        ? (music.isConfigured()
+            ? safe('DroppedNeedle', async () => {
+                const dnItems = await music.requested();
+                const nativeItems = getRequestedMusicItems();
+                const ids = new Set(dnItems.map((i) => i.id));
+                return [...dnItems, ...nativeItems.filter((i) => !ids.has(i.id))];
+              }, getRequestedMusicItems())
+            : Promise.resolve(getRequestedMusicItems()))
+        : Promise.resolve([]),
       !kids && qb.isConfigured()?safe('qBittorrent',()=>qb.getDownloadingTorrents(),[]):Promise.resolve([])
     ]);
     const seen=new Set<string>();
