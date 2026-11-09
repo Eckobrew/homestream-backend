@@ -1219,6 +1219,16 @@ export async function fetchProxyStream(videoId: string, rangeHeader: string | nu
   });
 }
 
+interface CachedRecommendations {
+  data: {
+    hero: YouTubeSearchResult | null;
+    sections: Array<{ id: string; title: string; items: YouTubeSearchResult[] }>;
+  };
+  timestamp: number;
+}
+const recommendationsCache: Record<string, CachedRecommendations> = {};
+const RECOMMENDATIONS_CACHE_TTL = 15 * 60 * 1000; // 15 minutes
+
 /**
  * Returns Netflix-style media sections and hero for the YouTube Hub
  */
@@ -1227,25 +1237,55 @@ export async function getYouTubeRecommendations(profileId?: string): Promise<{
   sections: Array<{ id: string; title: string; items: YouTubeSearchResult[] }>;
 }> {
   ensureYouTubeTables();
+
+  const cacheKey = profileId || 'global';
+  const existing = recommendationsCache[cacheKey];
+  const now = Date.now();
+
+  // If we have valid cached recommendations, return immediately (<1ms)
+  if (existing && now - existing.timestamp < RECOMMENDATIONS_CACHE_TTL) {
+    // Refresh local archive dynamically so newly downloaded videos appear right away
+    const archive = getLocalYouTubeArchive();
+    const localArchiveResults: YouTubeSearchResult[] = archive.slice(0, 15).map((a) => ({
+      id: a.id,
+      title: a.title,
+      channelId: '',
+      channelTitle: a.channelName,
+      durationSeconds: 0,
+      durationFormatted: 'Downloaded',
+      thumbnailUrl: a.thumbnailUrl || `https://i.ytimg.com/vi/${a.id}/hqdefault.jpg`,
+      isShort: false,
+      isDownloaded: true,
+    }));
+
+    const updatedSections = existing.data.sections.filter((s) => s.id !== 'downloaded');
+    if (localArchiveResults.length > 0) {
+      updatedSections.unshift({
+        id: 'downloaded',
+        title: 'Downloaded to NAS (Instant Playback)',
+        items: localArchiveResults,
+      });
+    }
+
+    return {
+      hero: localArchiveResults[0] || existing.data.hero,
+      sections: updatedSections,
+    };
+  }
+
   const sections: Array<{ id: string; title: string; items: YouTubeSearchResult[] }> = [];
 
   // 1. Check if profile is logged in for personalized subscriptions/feed
-  let personalizedVideos: YouTubeSearchResult[] = [];
   if (profileId) {
     const auth = getYouTubeAuth(profileId);
     if (auth.connected) {
-      // In future can query feed with cookies; for now, search subscribed channels
+      // Background check feed
     }
   }
 
-  // 2. Subscribed Channels latest uploads
+  // 2. Subscribed Channels latest uploads (run in background, do not block)
   const subs = getSubscriptions();
-  const subVideos: YouTubeSearchResult[] = [];
-  for (const s of subs.slice(0, 5)) {
-    try {
-      const channelFeed = await checkChannelNewUploads(s.id);
-    } catch {}
-  }
+  Promise.all(subs.slice(0, 3).map((s) => checkChannelNewUploads(s.id).catch(() => []))).catch(() => {});
 
   // 3. Local NAS archive items formatted as results
   const archive = getLocalYouTubeArchive();
@@ -1293,8 +1333,11 @@ export async function getYouTubeRecommendations(profileId?: string): Promise<{
 
   const heroCandidate = localArchiveResults[0] || podcastResults[0] || null;
 
-  return {
+  const result = {
     hero: heroCandidate,
     sections,
   };
+
+  recommendationsCache[cacheKey] = { data: result, timestamp: now };
+  return result;
 }
