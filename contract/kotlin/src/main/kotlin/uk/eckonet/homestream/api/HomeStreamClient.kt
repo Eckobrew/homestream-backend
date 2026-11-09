@@ -284,6 +284,65 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         return execute(url.build().toString(), "DELETE", null, null)
     }
 
+    fun `web_get_music_playlists`(query: WebGetMusicPlaylistsQuery): ApiResponse<JsonElement> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("music").addPathSegment("playlists")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`profileId`?.let { url.addQueryParameter("profileId", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `web_post_music_playlists`(query: WebPostMusicPlaylistsQuery, body: WebPostMusicPlaylistsBody): ApiResponse<WebPostMusicPlaylistsResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("music").addPathSegment("playlists")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
+    fun `web_post_music_playlists_import`(query: WebPostMusicPlaylistsImportQuery, body: WebPostMusicPlaylistsImportBody): ApiResponse<WebPostMusicPlaylistsImportResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("music").addPathSegment("playlists").addPathSegment("import")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
+    fun `web_post_music_playlists_import_spotify`(query: WebPostMusicPlaylistsImportSpotifyQuery, body: WebPostMusicPlaylistsImportSpotifyBody): ApiResponse<WebPostMusicPlaylistsImportSpotifyResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("music").addPathSegment("playlists").addPathSegment("import-spotify")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
+    fun `web_post_music_playlists_import_exportify`(query: WebPostMusicPlaylistsImportExportifyQuery, body: WebPostMusicPlaylistsImportExportifyBody): ApiResponse<WebPostMusicPlaylistsImportExportifyResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("music").addPathSegment("playlists").addPathSegment("import-exportify")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
+    fun `web_get_music_playlist`(query: WebGetMusicPlaylistQuery, body: JsonElement): ApiResponse<JsonElement> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("music").addPathSegment("playlist")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`playlistId`?.let { url.addQueryParameter("playlistId", it.toString()) }
+        return execute(url.build().toString(), "GET", json.encodeToString(body), null)
+    }
+
+    fun `web_delete_music_playlist`(query: WebDeleteMusicPlaylistQuery, body: JsonElement): ApiResponse<WebDeleteMusicPlaylistResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("music").addPathSegment("playlist")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`playlistId`?.let { url.addQueryParameter("playlistId", it.toString()) }
+        return execute(url.build().toString(), "DELETE", json.encodeToString(body), null)
+    }
+
+    fun `web_post_music_playlist_track`(query: WebPostMusicPlaylistTrackQuery, body: WebPostMusicPlaylistTrackBody): ApiResponse<WebPostMusicPlaylistTrackResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("music").addPathSegment("playlist").addPathSegment("track")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
+    fun `web_delete_music_playlist_track`(query: WebDeleteMusicPlaylistTrackQuery, body: JsonElement): ApiResponse<WebDeleteMusicPlaylistTrackResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("music").addPathSegment("playlist").addPathSegment("track")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`playlistId`?.let { url.addQueryParameter("playlistId", it.toString()) }
+        query.`trackId`?.let { url.addQueryParameter("trackId", it.toString()) }
+        return execute(url.build().toString(), "DELETE", json.encodeToString(body), null)
+    }
+
     fun `web_get_requested`(query: WebGetRequestedQuery): ApiResponse<RequestedResponse> {
         val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("requested")
         query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
@@ -603,6 +662,78 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("music").addPathSegment("request")
         query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
         return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
+    fun `mobile_post_music_profile_album`(query: MobilePostMusicProfileAlbumQuery, body: MobilePostMusicProfileAlbumBody): ApiResponse<MobilePostMusicProfileAlbumResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("music").addPathSegment("profile-album")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
+    fun `mobile_delete_music_profile_album`(query: MobileDeleteMusicProfileAlbumQuery): ApiResponse<MobileDeleteMusicProfileAlbumResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("music").addPathSegment("profile-album")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`albumId`?.let { url.addQueryParameter("albumId", it.toString()) }
+        return execute(url.build().toString(), "DELETE", null, null)
+    }
+
+    fun `mobile_get_music_playlists`(query: MobileGetMusicPlaylistsQuery): ApiResponse<JsonElement> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("music").addPathSegment("playlists")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`profileId`?.let { url.addQueryParameter("profileId", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `mobile_post_music_playlists`(query: MobilePostMusicPlaylistsQuery, body: MobilePostMusicPlaylistsBody): ApiResponse<MobilePostMusicPlaylistsResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("music").addPathSegment("playlists")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
+    fun `mobile_post_music_playlists_import`(query: MobilePostMusicPlaylistsImportQuery, body: MobilePostMusicPlaylistsImportBody): ApiResponse<MobilePostMusicPlaylistsImportResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("music").addPathSegment("playlists").addPathSegment("import")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
+    fun `mobile_post_music_playlists_import_spotify`(query: MobilePostMusicPlaylistsImportSpotifyQuery, body: MobilePostMusicPlaylistsImportSpotifyBody): ApiResponse<MobilePostMusicPlaylistsImportSpotifyResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("music").addPathSegment("playlists").addPathSegment("import-spotify")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
+    fun `mobile_post_music_playlists_import_exportify`(query: MobilePostMusicPlaylistsImportExportifyQuery, body: MobilePostMusicPlaylistsImportExportifyBody): ApiResponse<MobilePostMusicPlaylistsImportExportifyResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("music").addPathSegment("playlists").addPathSegment("import-exportify")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
+    fun `mobile_get_music_playlist`(query: MobileGetMusicPlaylistQuery, body: JsonElement): ApiResponse<JsonElement> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("music").addPathSegment("playlist")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`playlistId`?.let { url.addQueryParameter("playlistId", it.toString()) }
+        return execute(url.build().toString(), "GET", json.encodeToString(body), null)
+    }
+
+    fun `mobile_delete_music_playlist`(query: MobileDeleteMusicPlaylistQuery, body: JsonElement): ApiResponse<MobileDeleteMusicPlaylistResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("music").addPathSegment("playlist")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`playlistId`?.let { url.addQueryParameter("playlistId", it.toString()) }
+        return execute(url.build().toString(), "DELETE", json.encodeToString(body), null)
+    }
+
+    fun `mobile_post_music_playlist_track`(query: MobilePostMusicPlaylistTrackQuery, body: MobilePostMusicPlaylistTrackBody): ApiResponse<MobilePostMusicPlaylistTrackResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("music").addPathSegment("playlist").addPathSegment("track")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
+    fun `mobile_delete_music_playlist_track`(query: MobileDeleteMusicPlaylistTrackQuery, body: JsonElement): ApiResponse<MobileDeleteMusicPlaylistTrackResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("music").addPathSegment("playlist").addPathSegment("track")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`playlistId`?.let { url.addQueryParameter("playlistId", it.toString()) }
+        query.`trackId`?.let { url.addQueryParameter("trackId", it.toString()) }
+        return execute(url.build().toString(), "DELETE", json.encodeToString(body), null)
     }
 
     fun `mobile_get_requested`(query: MobileGetRequestedQuery): ApiResponse<RequestedResponse> {

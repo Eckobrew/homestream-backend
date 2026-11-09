@@ -884,6 +884,154 @@ data class WebDeleteMusicProfileAlbumResponse(
 )
 
 @Serializable
+data class WebGetMusicPlaylistsQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("profileId") val `profileId`: String? = null
+)
+
+@Serializable
+data class WebPostMusicPlaylistsQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class WebPostMusicPlaylistsBody(
+    @SerialName("name") val `name`: String,
+    @SerialName("description") val `description`: String? = null
+)
+
+@Serializable
+data class WebPostMusicPlaylistsResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("playlist") val `playlist`: JsonElement? = null
+)
+
+@Serializable
+data class WebPostMusicPlaylistsImportQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class WebPostMusicPlaylistsImportBody(
+    @SerialName("url") val `url`: String? = null,
+    @SerialName("urls") val `urls`: List<String>? = null,
+    @SerialName("spotifyUrl") val `spotifyUrl`: String? = null,
+    @SerialName("csv") val `csv`: String? = null,
+    @SerialName("files") val `files`: List<WebPostMusicPlaylistsImportBodyFilesItem>? = null,
+    @SerialName("zipBase64") val `zipBase64`: String? = null,
+    @SerialName("playlistName") val `playlistName`: String? = null
+)
+
+@Serializable
+data class WebPostMusicPlaylistsImportBodyFilesItem(
+    @SerialName("name") val `name`: String? = null,
+    @SerialName("content") val `content`: String? = null
+)
+
+@Serializable
+data class WebPostMusicPlaylistsImportResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null,
+    @SerialName("playlists") val `playlists`: List<JsonElement>? = null,
+    @SerialName("totalTracksQueued") val `totalTracksQueued`: Long? = null
+)
+
+@Serializable
+data class WebPostMusicPlaylistsImportSpotifyQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class WebPostMusicPlaylistsImportSpotifyBody(
+    @SerialName("url") val `url`: String? = null,
+    @SerialName("urls") val `urls`: List<String>? = null,
+    @SerialName("spotifyUrl") val `spotifyUrl`: String? = null
+)
+
+@Serializable
+data class WebPostMusicPlaylistsImportSpotifyResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null,
+    @SerialName("playlists") val `playlists`: List<JsonElement>? = null,
+    @SerialName("totalTracksQueued") val `totalTracksQueued`: Long? = null
+)
+
+@Serializable
+data class WebPostMusicPlaylistsImportExportifyQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class WebPostMusicPlaylistsImportExportifyBody(
+    @SerialName("csv") val `csv`: String? = null,
+    @SerialName("files") val `files`: List<WebPostMusicPlaylistsImportExportifyBodyFilesItem>? = null,
+    @SerialName("zipBase64") val `zipBase64`: String? = null,
+    @SerialName("playlistName") val `playlistName`: String? = null
+)
+
+@Serializable
+data class WebPostMusicPlaylistsImportExportifyBodyFilesItem(
+    @SerialName("name") val `name`: String? = null,
+    @SerialName("content") val `content`: String? = null
+)
+
+@Serializable
+data class WebPostMusicPlaylistsImportExportifyResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null,
+    @SerialName("playlists") val `playlists`: List<JsonElement>? = null,
+    @SerialName("totalTracksQueued") val `totalTracksQueued`: Long? = null
+)
+
+@Serializable
+data class WebGetMusicPlaylistQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("playlistId") val `playlistId`: String? = null
+)
+
+@Serializable
+data class WebDeleteMusicPlaylistQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("playlistId") val `playlistId`: String? = null
+)
+
+@Serializable
+data class WebDeleteMusicPlaylistResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null
+)
+
+@Serializable
+data class WebPostMusicPlaylistTrackQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class WebPostMusicPlaylistTrackBody(
+    @SerialName("playlistId") val `playlistId`: String,
+    @SerialName("trackId") val `trackId`: String
+)
+
+@Serializable
+data class WebPostMusicPlaylistTrackResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null
+)
+
+@Serializable
+data class WebDeleteMusicPlaylistTrackQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("playlistId") val `playlistId`: String? = null,
+    @SerialName("trackId") val `trackId`: String? = null
+)
+
+@Serializable
+data class WebDeleteMusicPlaylistTrackResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null
+)
+
+@Serializable
 data class WebGetRequestedQuery(
     @SerialName("userId") val `userId`: String? = null
 )
@@ -1383,6 +1531,182 @@ data class MobilePostMusicRequestBody(
 
 @Serializable
 data class MobilePostMusicRequestResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null
+)
+
+@Serializable
+data class MobilePostMusicProfileAlbumQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class MobilePostMusicProfileAlbumBody(
+    @SerialName("albumId") val `albumId`: String? = null
+)
+
+@Serializable
+data class MobilePostMusicProfileAlbumResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null
+)
+
+@Serializable
+data class MobileDeleteMusicProfileAlbumQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("albumId") val `albumId`: String? = null
+)
+
+@Serializable
+data class MobileDeleteMusicProfileAlbumResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null
+)
+
+@Serializable
+data class MobileGetMusicPlaylistsQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("profileId") val `profileId`: String? = null
+)
+
+@Serializable
+data class MobilePostMusicPlaylistsQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class MobilePostMusicPlaylistsBody(
+    @SerialName("name") val `name`: String,
+    @SerialName("description") val `description`: String? = null
+)
+
+@Serializable
+data class MobilePostMusicPlaylistsResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("playlist") val `playlist`: JsonElement? = null
+)
+
+@Serializable
+data class MobilePostMusicPlaylistsImportQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class MobilePostMusicPlaylistsImportBody(
+    @SerialName("url") val `url`: String? = null,
+    @SerialName("urls") val `urls`: List<String>? = null,
+    @SerialName("spotifyUrl") val `spotifyUrl`: String? = null,
+    @SerialName("csv") val `csv`: String? = null,
+    @SerialName("files") val `files`: List<MobilePostMusicPlaylistsImportBodyFilesItem>? = null,
+    @SerialName("zipBase64") val `zipBase64`: String? = null,
+    @SerialName("playlistName") val `playlistName`: String? = null
+)
+
+@Serializable
+data class MobilePostMusicPlaylistsImportBodyFilesItem(
+    @SerialName("name") val `name`: String? = null,
+    @SerialName("content") val `content`: String? = null
+)
+
+@Serializable
+data class MobilePostMusicPlaylistsImportResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null,
+    @SerialName("playlists") val `playlists`: List<JsonElement>? = null,
+    @SerialName("totalTracksQueued") val `totalTracksQueued`: Long? = null
+)
+
+@Serializable
+data class MobilePostMusicPlaylistsImportSpotifyQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class MobilePostMusicPlaylistsImportSpotifyBody(
+    @SerialName("url") val `url`: String? = null,
+    @SerialName("urls") val `urls`: List<String>? = null,
+    @SerialName("spotifyUrl") val `spotifyUrl`: String? = null
+)
+
+@Serializable
+data class MobilePostMusicPlaylistsImportSpotifyResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null,
+    @SerialName("playlists") val `playlists`: List<JsonElement>? = null,
+    @SerialName("totalTracksQueued") val `totalTracksQueued`: Long? = null
+)
+
+@Serializable
+data class MobilePostMusicPlaylistsImportExportifyQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class MobilePostMusicPlaylistsImportExportifyBody(
+    @SerialName("csv") val `csv`: String? = null,
+    @SerialName("files") val `files`: List<MobilePostMusicPlaylistsImportExportifyBodyFilesItem>? = null,
+    @SerialName("zipBase64") val `zipBase64`: String? = null,
+    @SerialName("playlistName") val `playlistName`: String? = null
+)
+
+@Serializable
+data class MobilePostMusicPlaylistsImportExportifyBodyFilesItem(
+    @SerialName("name") val `name`: String? = null,
+    @SerialName("content") val `content`: String? = null
+)
+
+@Serializable
+data class MobilePostMusicPlaylistsImportExportifyResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null,
+    @SerialName("playlists") val `playlists`: List<JsonElement>? = null,
+    @SerialName("totalTracksQueued") val `totalTracksQueued`: Long? = null
+)
+
+@Serializable
+data class MobileGetMusicPlaylistQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("playlistId") val `playlistId`: String? = null
+)
+
+@Serializable
+data class MobileDeleteMusicPlaylistQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("playlistId") val `playlistId`: String? = null
+)
+
+@Serializable
+data class MobileDeleteMusicPlaylistResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null
+)
+
+@Serializable
+data class MobilePostMusicPlaylistTrackQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class MobilePostMusicPlaylistTrackBody(
+    @SerialName("playlistId") val `playlistId`: String,
+    @SerialName("trackId") val `trackId`: String
+)
+
+@Serializable
+data class MobilePostMusicPlaylistTrackResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null
+)
+
+@Serializable
+data class MobileDeleteMusicPlaylistTrackQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("playlistId") val `playlistId`: String? = null,
+    @SerialName("trackId") val `trackId`: String? = null
+)
+
+@Serializable
+data class MobileDeleteMusicPlaylistTrackResponse(
     @SerialName("success") val `success`: Boolean? = null,
     @SerialName("message") val `message`: String? = null
 )
