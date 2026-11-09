@@ -106,6 +106,8 @@ export const getServerConfig = (): ServerConfig => {
     radarrApiKey,
     sonarrUrl: sanitizeUrl(sonarrUrl),
     sonarrApiKey,
+    spotifyClientId: fileConfig.spotifyClientId || process.env.SPOTIFY_CLIENT_ID || '',
+    spotifyClientSecret: fileConfig.spotifyClientSecret || process.env.SPOTIFY_CLIENT_SECRET || '',
     isConfigured,
   };
 };
@@ -133,6 +135,8 @@ export const saveServerConfig = (newConfig: Partial<ServerConfig>): ServerConfig
     radarrApiKey: newConfig.radarrApiKey !== undefined ? newConfig.radarrApiKey : current.radarrApiKey,
     sonarrUrl: sanitizeUrl(newConfig.sonarrUrl !== undefined ? newConfig.sonarrUrl : current.sonarrUrl || ''),
     sonarrApiKey: newConfig.sonarrApiKey !== undefined ? newConfig.sonarrApiKey : current.sonarrApiKey,
+    spotifyClientId: newConfig.spotifyClientId !== undefined ? newConfig.spotifyClientId : current.spotifyClientId,
+    spotifyClientSecret: newConfig.spotifyClientSecret !== undefined ? newConfig.spotifyClientSecret : current.spotifyClientSecret,
     isConfigured: false,
   };
 

@@ -1,11 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { fetch } from '@/upstream';
 import { readState, stateDatabase, dataDirectory } from '@/state/database';
 import { getServerConfig } from './config';
 import { SlskdClient } from './slskd';
-import type { MusicAlbum, MusicTrack, RequestedItem } from '@/types';
+import { extractSpotifyTargets, getSpotifyPlaylist, getSpotifyUserPlaylists, SpotifyPlaylistMeta } from './spotify';
+import type { MusicAlbum, MusicTrack, RequestedItem, Playlist, PlaylistTrack } from '@/types';
 
 export const safeMusicId = (id: string) => /^[a-zA-Z0-9_-]{1,128}$/.test(id);
 
@@ -82,6 +83,37 @@ export function ensureMusicTables() {
         PRIMARY KEY (profile_id, album_id)
       );
 
+      CREATE TABLE IF NOT EXISTS playlists (
+        id TEXT PRIMARY KEY,
+        profile_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT,
+        cover_url TEXT,
+        spotify_id TEXT,
+        total_tracks INTEGER DEFAULT 0,
+        downloaded_tracks INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS playlist_tracks (
+        id TEXT PRIMARY KEY,
+        playlist_id TEXT NOT NULL,
+        track_id TEXT,
+        title TEXT NOT NULL,
+        artist TEXT NOT NULL,
+        album TEXT NOT NULL,
+        duration_seconds REAL DEFAULT 0,
+        cover_url TEXT,
+        spotify_track_id TEXT,
+        position INTEGER DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'pending',
+        username TEXT,
+        filename TEXT,
+        error_message TEXT,
+        created_at TEXT NOT NULL
+      );
+
       CREATE TABLE IF NOT EXISTS music_requests (
         id TEXT PRIMARY KEY,
         musicbrainz_id TEXT NOT NULL UNIQUE,
@@ -106,6 +138,9 @@ export function ensureMusicTables() {
       CREATE INDEX IF NOT EXISTS idx_music_tracks_album ON music_tracks(album_id);
       CREATE INDEX IF NOT EXISTS idx_profile_music_profile ON profile_music_albums(profile_id);
       CREATE INDEX IF NOT EXISTS idx_profile_music_album ON profile_music_albums(album_id);
+      CREATE INDEX IF NOT EXISTS idx_playlists_profile ON playlists(profile_id);
+      CREATE INDEX IF NOT EXISTS idx_playlist_tracks_playlist ON playlist_tracks(playlist_id);
+      CREATE INDEX IF NOT EXISTS idx_playlist_tracks_status ON playlist_tracks(status);
     `);
     seedNathanProfileMusic(db);
     dbInitialized = true;
@@ -1089,7 +1124,14 @@ async function monitorActiveDownloads() {
     WHERE status IN ('downloading', 'importing')
   `).all() as any[];
 
-  if (!activeRequests.length) return;
+  const activePlaylistTracks = db.prepare(`
+    SELECT pt.*, p.profile_id
+    FROM playlist_tracks pt
+    JOIN playlists p ON pt.playlist_id = p.id
+    WHERE pt.status IN ('downloading', 'searching')
+  `).all() as any[];
+
+  if (!activeRequests.length && !activePlaylistTracks.length) return;
 
   const slskd = new SlskdClient();
   if (!slskd.isConfigured()) return;
@@ -1101,6 +1143,7 @@ async function monitorActiveDownloads() {
     return;
   }
 
+  // 1. Process active album requests
   for (const req of activeRequests) {
     const queuedFiles: Array<{ filename: string; size: number }> = req.files_json ? JSON.parse(req.files_json) : [];
     if (!queuedFiles.length) continue;
@@ -1155,6 +1198,24 @@ async function monitorActiveDownloads() {
         etaSeconds,
         new Date().toISOString(),
         req.id
+      );
+    }
+  }
+
+  // 2. Process active playlist track downloads
+  for (const track of activePlaylistTracks) {
+    if (!track.username || !track.filename) continue;
+    const match = allDownloads.find(d => d.username === track.username && d.filename === track.filename);
+    if (!match) continue;
+
+    if (['Completed', 'Succeeded'].includes(match.status)) {
+      console.log(`[music] Download finished for playlist track ${track.artist} - ${track.title}. Importing...`);
+      await importDownloadedPlaylistTrack(track);
+    } else if (['Errored', 'Cancelled'].includes(match.status)) {
+      db.prepare('UPDATE playlist_tracks SET status=?, error_message=? WHERE id=?').run(
+        'failed',
+        `slskd transfer ${match.status.toLowerCase()}`,
+        track.id
       );
     }
   }
@@ -1257,4 +1318,500 @@ export function getRequestedMusicItems(): RequestedItem[] {
     downloadSpeed: r.download_speed ? Number(r.download_speed) : undefined,
     etaSeconds: r.eta_seconds ? Number(r.eta_seconds) : undefined,
   }));
+}
+
+// -----------------------------------------------------------------------------------------
+// Playlist Management & Spotify Import
+// -----------------------------------------------------------------------------------------
+
+export function updatePlaylistCounts(playlistId: string) {
+  const db = stateDatabase();
+  const total = (db.prepare('SELECT COUNT(*) as c FROM playlist_tracks WHERE playlist_id=?').get(playlistId) as any)?.c || 0;
+  const downloaded = (db.prepare("SELECT COUNT(*) as c FROM playlist_tracks WHERE playlist_id=? AND status='completed'").get(playlistId) as any)?.c || 0;
+  db.prepare('UPDATE playlists SET total_tracks=?, downloaded_tracks=?, updated_at=? WHERE id=?').run(
+    total,
+    downloaded,
+    new Date().toISOString(),
+    playlistId
+  );
+}
+
+export async function getPlaylists(profileId?: string): Promise<{ playlists: Playlist[]; total: number }> {
+  ensureMusicTables();
+  const db = stateDatabase();
+  const pid = profileId || resolveDefaultProfileId();
+
+  const rows = db.prepare(`
+    SELECT * FROM playlists
+    WHERE profile_id = ?
+    ORDER BY updated_at DESC
+  `).all(pid) as any[];
+
+  const playlists: Playlist[] = rows.map((r) => ({
+    id: r.id,
+    profileId: r.profile_id,
+    name: r.name,
+    description: r.description || undefined,
+    coverUrl: r.cover_url || undefined,
+    spotifyId: r.spotify_id || undefined,
+    totalTracks: r.total_tracks || 0,
+    downloadedTracks: r.downloaded_tracks || 0,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }));
+
+  return { playlists, total: playlists.length };
+}
+
+export async function getPlaylist(playlistId: string, profileId?: string): Promise<{ playlist: Playlist; tracks: PlaylistTrack[] } | null> {
+  ensureMusicTables();
+  const db = stateDatabase();
+  const pid = profileId || resolveDefaultProfileId();
+
+  const r = db.prepare(`
+    SELECT * FROM playlists
+    WHERE id = ? AND profile_id = ?
+  `).get(playlistId, pid) as any;
+
+  if (!r) return null;
+
+  const trackRows = db.prepare(`
+    SELECT * FROM playlist_tracks
+    WHERE playlist_id = ?
+    ORDER BY position ASC, created_at ASC
+  `).all(playlistId) as any[];
+
+  const tracks: PlaylistTrack[] = trackRows.map((t) => ({
+    id: t.id,
+    playlistId: t.playlist_id,
+    trackId: t.track_id || undefined,
+    title: t.title,
+    artist: t.artist,
+    album: t.album,
+    durationSeconds: t.duration_seconds || 0,
+    coverUrl: t.cover_url || undefined,
+    spotifyTrackId: t.spotify_track_id || undefined,
+    position: t.position || 0,
+    status: t.status,
+    errorMessage: t.error_message || undefined,
+    streamUrl: t.track_id ? `/api/v1/music/stream?trackId=${encodeURIComponent(t.track_id)}` : undefined,
+    createdAt: t.created_at,
+  }));
+
+  const playlist: Playlist = {
+    id: r.id,
+    profileId: r.profile_id,
+    name: r.name,
+    description: r.description || undefined,
+    coverUrl: r.cover_url || undefined,
+    spotifyId: r.spotify_id || undefined,
+    totalTracks: r.total_tracks || 0,
+    downloadedTracks: r.downloaded_tracks || 0,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+    tracks,
+  };
+
+  return { playlist, tracks };
+}
+
+export async function createPlaylist(profileId?: string, name: string = '', description?: string): Promise<Playlist> {
+  ensureMusicTables();
+  const db = stateDatabase();
+  const pid = profileId || resolveDefaultProfileId();
+  const id = randomUUID().replace(/-/g, '').slice(0, 32);
+  const now = new Date().toISOString();
+
+  db.prepare(`
+    INSERT INTO playlists (id, profile_id, name, description, cover_url, total_tracks, downloaded_tracks, created_at, updated_at)
+    VALUES (?, ?, ?, ?, NULL, 0, 0, ?, ?)
+  `).run(id, pid, name.trim(), description?.trim() || null, now, now);
+
+  return {
+    id,
+    profileId: pid,
+    name: name.trim(),
+    description: description?.trim() || undefined,
+    totalTracks: 0,
+    downloadedTracks: 0,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+export async function deletePlaylist(playlistId: string, profileId?: string): Promise<boolean> {
+  ensureMusicTables();
+  const db = stateDatabase();
+  const pid = profileId || resolveDefaultProfileId();
+
+  const res = db.prepare('DELETE FROM playlists WHERE id=? AND profile_id=?').run(playlistId, pid);
+  if (res.changes > 0) {
+    db.prepare('DELETE FROM playlist_tracks WHERE playlist_id=?').run(playlistId);
+    return true;
+  }
+  return false;
+}
+
+export async function addTrackToPlaylist(playlistId: string, trackId: string, profileId?: string): Promise<boolean> {
+  ensureMusicTables();
+  const db = stateDatabase();
+  const pid = profileId || resolveDefaultProfileId();
+
+  const playlist = db.prepare('SELECT id FROM playlists WHERE id=? AND profile_id=?').get(playlistId, pid);
+  if (!playlist) return false;
+
+  const track = db.prepare('SELECT * FROM music_tracks WHERE id=?').get(trackId) as any;
+  if (!track) return false;
+
+  const id = randomUUID().replace(/-/g, '').slice(0, 32);
+  const now = new Date().toISOString();
+  const posRow = db.prepare('SELECT MAX(position) as m FROM playlist_tracks WHERE playlist_id=?').get(playlistId) as any;
+  const position = (posRow?.m ?? -1) + 1;
+
+  db.prepare(`
+    INSERT INTO playlist_tracks (id, playlist_id, track_id, title, artist, album, duration_seconds, position, status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?)
+  `).run(id, playlistId, trackId, track.title, track.artist, track.album, track.duration_seconds || 0, position, now);
+
+  updatePlaylistCounts(playlistId);
+  return true;
+}
+
+export async function removeTrackFromPlaylist(playlistId: string, playlistTrackId: string, profileId?: string): Promise<boolean> {
+  ensureMusicTables();
+  const db = stateDatabase();
+  const pid = profileId || resolveDefaultProfileId();
+
+  const playlist = db.prepare('SELECT id FROM playlists WHERE id=? AND profile_id=?').get(playlistId, pid);
+  if (!playlist) return false;
+
+  const res = db.prepare('DELETE FROM playlist_tracks WHERE id=? AND playlist_id=?').run(playlistTrackId, playlistId);
+  if (res.changes > 0) {
+    updatePlaylistCounts(playlistId);
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Imports one or multiple Spotify playlists for a profile, creating playlist records
+ * and queueing track downloads via slskd.
+ */
+export async function importSpotifyPlaylists(
+  input: string,
+  profileId?: string
+): Promise<{ importedPlaylists: Array<{ id: string; name: string; trackCount: number }>; totalTracksQueued: number }> {
+  ensureMusicTables();
+  const db = stateDatabase();
+  const pid = profileId || resolveDefaultProfileId();
+
+  const targets = extractSpotifyTargets(input);
+  const playlistIds = [...targets.playlistIds];
+
+  // Resolve user profile playlists if a user profile was supplied
+  for (const userId of targets.userIds) {
+    const userPlaylists = await getSpotifyUserPlaylists(userId);
+    for (const p of userPlaylists) {
+      if (!playlistIds.includes(p)) playlistIds.push(p);
+    }
+  }
+
+  if (!playlistIds.length) {
+    throw new Error('No valid Spotify playlist or user profile link found');
+  }
+
+  const importedPlaylists: Array<{ id: string; name: string; trackCount: number }> = [];
+  let totalTracksQueued = 0;
+
+  for (const spId of playlistIds) {
+    try {
+      const meta = await getSpotifyPlaylist(spId);
+      if (!meta || !meta.tracks.length) continue;
+
+      const now = new Date().toISOString();
+      const existing = db.prepare('SELECT id FROM playlists WHERE spotify_id=? AND profile_id=?').get(spId, pid) as any;
+      const playlistId = existing?.id || randomUUID().replace(/-/g, '').slice(0, 32);
+
+      if (existing) {
+        db.prepare(`
+          UPDATE playlists SET
+            name = ?,
+            description = ?,
+            cover_url = ?,
+            updated_at = ?
+          WHERE id = ?
+        `).run(meta.name, meta.description || null, meta.coverUrl || null, now, playlistId);
+      } else {
+        db.prepare(`
+          INSERT INTO playlists (id, profile_id, name, description, cover_url, spotify_id, total_tracks, downloaded_tracks, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+        `).run(playlistId, pid, meta.name, meta.description || null, meta.coverUrl || null, spId, meta.tracks.length, now, now);
+      }
+
+      // Process tracks
+      let pos = 0;
+      for (const t of meta.tracks) {
+        pos++;
+        const ptId = randomUUID().replace(/-/g, '').slice(0, 32);
+
+        // Check if track is already locally available
+        const local = db.prepare(`
+          SELECT id, album_id FROM music_tracks
+          WHERE LOWER(artist) = ? AND LOWER(title) = ?
+          LIMIT 1
+        `).get(t.artist.toLowerCase().trim(), t.title.toLowerCase().trim()) as { id: string; album_id: string } | undefined;
+
+        if (local) {
+          db.prepare(`
+            INSERT INTO playlist_tracks (id, playlist_id, track_id, title, artist, album, duration_seconds, cover_url, spotify_track_id, position, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?)
+          `).run(ptId, playlistId, local.id, t.title, t.artist, t.album, t.durationSeconds, t.coverUrl || null, t.spotifyTrackId || null, pos, now);
+
+          // Link album to profile
+          db.prepare('INSERT OR IGNORE INTO profile_music_albums (profile_id, album_id, added_at) VALUES (?, ?, ?)').run(pid, local.album_id, now);
+        } else {
+          db.prepare(`
+            INSERT INTO playlist_tracks (id, playlist_id, track_id, title, artist, album, duration_seconds, cover_url, spotify_track_id, position, status, created_at)
+            VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+          `).run(ptId, playlistId, t.title, t.artist, t.album, t.durationSeconds, t.coverUrl || null, t.spotifyTrackId || null, pos, now);
+
+          totalTracksQueued++;
+
+          // Asynchronously dispatch slskd download worker
+          dispatchTrackDownload(ptId, t.artist, t.title, t.album, playlistId, pid).catch((err) => {
+            console.warn(`[music] Failed dispatching track download for ${t.artist} - ${t.title}:`, err);
+          });
+        }
+      }
+
+      updatePlaylistCounts(playlistId);
+      importedPlaylists.push({ id: playlistId, name: meta.name, trackCount: meta.tracks.length });
+    } catch (err: any) {
+      console.error(`[music] Failed importing playlist ${spId}:`, err);
+    }
+  }
+
+  startDownloadMonitor();
+  return { importedPlaylists, totalTracksQueued };
+}
+
+/**
+ * Searches Soulseek via slskd for an MP3 of a track and enqueues download.
+ */
+export async function dispatchTrackDownload(
+  playlistTrackId: string,
+  artist: string,
+  title: string,
+  album: string,
+  playlistId: string,
+  profileId: string
+) {
+  const db = stateDatabase();
+  const slskd = new SlskdClient();
+
+  // 1. Double check local library
+  const local = db.prepare(`
+    SELECT id, album_id FROM music_tracks
+    WHERE LOWER(artist) = ? AND LOWER(title) = ?
+    LIMIT 1
+  `).get(artist.toLowerCase().trim(), title.toLowerCase().trim()) as { id: string; album_id: string } | undefined;
+
+  if (local) {
+    db.prepare('UPDATE playlist_tracks SET track_id=?, status=?, error_message=NULL WHERE id=?').run(
+      local.id,
+      'completed',
+      playlistTrackId
+    );
+    db.prepare('INSERT OR IGNORE INTO profile_music_albums (profile_id, album_id, added_at) VALUES (?, ?, ?)').run(
+      profileId,
+      local.album_id,
+      new Date().toISOString()
+    );
+    updatePlaylistCounts(playlistId);
+    return;
+  }
+
+  if (!slskd.isConfigured()) {
+    db.prepare('UPDATE playlist_tracks SET status=?, error_message=? WHERE id=?').run(
+      'failed',
+      'slskd downloader is not configured',
+      playlistTrackId
+    );
+    return;
+  }
+
+  db.prepare('UPDATE playlist_tracks SET status=? WHERE id=?').run('searching', playlistTrackId);
+
+  const cleanArtist = artist.replace(/[^\w\s-]/g, '').trim();
+  const cleanTitle = title.replace(/[^\w\s-]/g, '').trim();
+  const query = `${cleanArtist} ${cleanTitle}`.trim();
+
+  let searchRes: { id: string };
+  try {
+    searchRes = await slskd.startSearch(query, 20);
+  } catch (err: any) {
+    db.prepare('UPDATE playlist_tracks SET status=?, error_message=? WHERE id=?').run(
+      'failed',
+      `Search failed: ${err.message}`,
+      playlistTrackId
+    );
+    return;
+  }
+
+  // Poll for responses (up to 12s)
+  let responses: any[] = [];
+  for (let i = 0; i < 5; i++) {
+    await new Promise((r) => {
+      const t = setTimeout(r, process.env.NODE_ENV === 'test' ? 50 : 2500);
+      t.unref();
+    });
+    try {
+      responses = await slskd.getSearchResponses(searchRes.id);
+      if (responses.length >= 3) break;
+    } catch {}
+  }
+
+  if (!responses.length) {
+    db.prepare('UPDATE playlist_tracks SET status=?, error_message=? WHERE id=?').run(
+      'failed',
+      'No sources found on Soulseek network',
+      playlistTrackId
+    );
+    return;
+  }
+
+  // Find best MP3 file
+  let bestUser = '';
+  let bestFile: { filename: string; size: number } | null = null;
+  let bestScore = -1;
+
+  for (const resp of responses) {
+    const user = resp.username;
+    const files = resp.files || [];
+    for (const f of files) {
+      if (f.isLocked) continue;
+      const fn = f.filename || '';
+      const ext = path.extname(fn).toLowerCase();
+      if (!AUDIO_EXTS.has(ext)) continue;
+
+      let score = 0;
+      if (ext === '.mp3') score += 50;
+      if (f.bitRate && f.bitRate >= 320) score += 40;
+      else if (f.bitRate && f.bitRate >= 256) score += 25;
+      else if (f.bitRate && f.bitRate >= 192) score += 10;
+      if (resp.hasFreeUploadSlot) score += 30;
+      if (resp.uploadSpeed && resp.uploadSpeed > 500000) score += 20;
+
+      const lowerFn = path.basename(fn).toLowerCase();
+      if (lowerFn.includes(cleanTitle.toLowerCase())) score += 40;
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestUser = user;
+        bestFile = { filename: fn, size: f.size };
+      }
+    }
+  }
+
+  if (!bestUser || !bestFile) {
+    db.prepare('UPDATE playlist_tracks SET status=?, error_message=? WHERE id=?').run(
+      'failed',
+      'No matching MP3 files found',
+      playlistTrackId
+    );
+    return;
+  }
+
+  try {
+    await slskd.enqueue(bestUser, [bestFile]);
+    db.prepare('UPDATE playlist_tracks SET status=?, username=?, filename=?, error_message=NULL WHERE id=?').run(
+      'downloading',
+      bestUser,
+      bestFile.filename,
+      playlistTrackId
+    );
+    console.log(`[music] Enqueued slskd MP3 download for "${artist} - ${title}" from peer "${bestUser}"`);
+  } catch (err: any) {
+    db.prepare('UPDATE playlist_tracks SET status=?, error_message=? WHERE id=?').run(
+      'failed',
+      `Enqueue download failed: ${err.message}`,
+      playlistTrackId
+    );
+  }
+}
+
+/**
+ * Move downloaded track from slskd into /music/<Artist>/<Album>/ and index it.
+ */
+async function importDownloadedPlaylistTrack(track: any) {
+  const db = stateDatabase();
+  const downloadsRoot = getDownloadsPath();
+  const musicRoot = getMusicPath();
+
+  const safeArtist = (track.artist || 'Unknown Artist').replace(/[^\w\s-]/g, '').trim() || 'Unknown Artist';
+  const safeAlbum = (track.album || 'Singles').replace(/[^\w\s-]/g, '').trim() || 'Singles';
+  const targetDir = path.join(musicRoot, safeArtist, safeAlbum);
+
+  try {
+    fs.mkdirSync(targetDir, { recursive: true });
+
+    const baseName = path.basename(track.filename);
+    const candidates = [
+      path.join(downloadsRoot, track.filename),
+      path.join(downloadsRoot, baseName),
+      path.join(downloadsRoot, track.username, track.filename),
+      path.join(downloadsRoot, track.username, baseName),
+    ];
+
+    let foundSource = '';
+    for (const c of candidates) {
+      if (fs.existsSync(c)) {
+        foundSource = c;
+        break;
+      }
+    }
+
+    if (foundSource) {
+      const dest = path.join(targetDir, path.basename(foundSource));
+      try {
+        fs.copyFileSync(foundSource, dest);
+        try { fs.unlinkSync(foundSource); } catch {}
+      } catch {}
+
+      // Re-scan local library
+      await scanLocalMusicLibrary();
+
+      // Find the newly indexed track in music_tracks
+      const indexed = db.prepare(`
+        SELECT id, album_id FROM music_tracks
+        WHERE file_path = ? OR (LOWER(artist) = ? AND LOWER(title) = ?)
+        LIMIT 1
+      `).get(dest, track.artist.toLowerCase().trim(), track.title.toLowerCase().trim()) as { id: string; album_id: string } | undefined;
+
+      const trackId = indexed?.id || null;
+      db.prepare('UPDATE playlist_tracks SET track_id=?, status=?, error_message=NULL WHERE id=?').run(
+        trackId,
+        'completed',
+        track.id
+      );
+
+      if (indexed?.album_id && track.profile_id) {
+        db.prepare('INSERT OR IGNORE INTO profile_music_albums (profile_id, album_id, added_at) VALUES (?, ?, ?)').run(
+          track.profile_id,
+          indexed.album_id,
+          new Date().toISOString()
+        );
+      }
+
+      updatePlaylistCounts(track.playlist_id);
+      console.log(`[music] Successfully imported playlist track ${track.artist} - ${track.title}`);
+    }
+  } catch (err: any) {
+    console.error(`[music] Failed importing playlist track ${track.title}:`, err);
+    db.prepare('UPDATE playlist_tracks SET status=?, error_message=? WHERE id=?').run(
+      'failed',
+      `Import failed: ${err.message}`,
+      track.id
+    );
+  }
 }
