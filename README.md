@@ -17,7 +17,8 @@ The backend listens on **3001**. The reference gateway exposes the complete appl
 - `/api/v1/*`: canonical web API.
 - Existing `/api/*` and `/api/mobile/v1/*`: retained compatibility interfaces.
 - `/api/v1/music/playlists` & `/api/mobile/v1/music/playlists`: per-profile playlist management (`GET`, `POST`).
-- `/api/v1/music/playlists/import` & `/api/mobile/v1/music/playlists/import`: zero-developer-key Spotify playlist and user profile importer with automated MP3 downloading via Soulseek (`slskd`).
+- `/api/v1/music/playlists/import` & `/api/mobile/v1/music/playlists/import`: zero-developer-key Spotify playlist/profile importer and Exportify CSV/ZIP importer with automated MP3 downloading via Soulseek (`slskd`).
+- `/api/v1/music/playlists/import-exportify`: dedicated Exportify endpoint accepting single CSV files, multiple CSV files, or "Export All" `.zip` archives.
 - `/openapi.json`: generated public contract.
 - `/health/live` and `/health/ready`: independent service checks.
 

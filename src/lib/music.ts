@@ -6,6 +6,7 @@ import { readState, stateDatabase, dataDirectory } from '@/state/database';
 import { getServerConfig } from './config';
 import { SlskdClient } from './slskd';
 import { extractSpotifyTargets, getSpotifyPlaylist, getSpotifyUserPlaylists, SpotifyPlaylistMeta } from './spotify';
+import { isExportifyCsv, parseExportifyCsv, parseExportifyZip } from './exportify';
 import type { MusicAlbum, MusicTrack, RequestedItem, Playlist, PlaylistTrack } from '@/types';
 
 export const safeMusicId = (id: string) => /^[a-zA-Z0-9_-]{1,128}$/.test(id);
@@ -1494,6 +1495,160 @@ export async function removeTrackFromPlaylist(playlistId: string, playlistTrackI
 }
 
 /**
+ * Internal helper to create or update a playlist and populate its tracks,
+ * checking against local library tracks and dispatching slskd downloads for missing ones.
+ */
+export async function populatePlaylistWithTracks(
+  name: string,
+  tracks: Array<{
+    title: string;
+    artist: string;
+    album: string;
+    durationSeconds: number;
+    coverUrl?: string;
+    spotifyTrackId?: string;
+  }>,
+  profileId?: string,
+  options?: {
+    description?: string;
+    coverUrl?: string;
+    spotifyId?: string;
+  }
+): Promise<{ playlistId: string; trackCount: number; queuedCount: number }> {
+  ensureMusicTables();
+  const db = stateDatabase();
+  const pid = profileId || resolveDefaultProfileId();
+  const now = new Date().toISOString();
+
+  let existing: any = null;
+  if (options?.spotifyId) {
+    existing = db.prepare('SELECT id FROM playlists WHERE spotify_id=? AND profile_id=?').get(options.spotifyId, pid);
+  }
+  if (!existing) {
+    existing = db.prepare('SELECT id FROM playlists WHERE LOWER(name)=? AND profile_id=?').get(name.trim().toLowerCase(), pid);
+  }
+
+  const playlistId = existing?.id || randomUUID().replace(/-/g, '').slice(0, 32);
+
+  if (existing) {
+    db.prepare(`
+      UPDATE playlists SET
+        name = ?,
+        description = COALESCE(?, description),
+        cover_url = COALESCE(?, cover_url),
+        updated_at = ?
+      WHERE id = ?
+    `).run(name, options?.description || null, options?.coverUrl || null, now, playlistId);
+    // Remove existing tracks to cleanly re-populate
+    db.prepare('DELETE FROM playlist_tracks WHERE playlist_id=?').run(playlistId);
+  } else {
+    db.prepare(`
+      INSERT INTO playlists (id, profile_id, name, description, cover_url, spotify_id, total_tracks, downloaded_tracks, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+    `).run(playlistId, pid, name, options?.description || null, options?.coverUrl || null, options?.spotifyId || null, tracks.length, now, now);
+  }
+
+  let queuedCount = 0;
+  let pos = 0;
+
+  for (const t of tracks) {
+    pos++;
+    const ptId = randomUUID().replace(/-/g, '').slice(0, 32);
+
+    const local = db.prepare(`
+      SELECT id, album_id FROM music_tracks
+      WHERE LOWER(artist) = ? AND LOWER(title) = ?
+      LIMIT 1
+    `).get(t.artist.toLowerCase().trim(), t.title.toLowerCase().trim()) as { id: string; album_id: string } | undefined;
+
+    if (local) {
+      db.prepare(`
+        INSERT INTO playlist_tracks (id, playlist_id, track_id, title, artist, album, duration_seconds, cover_url, spotify_track_id, position, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?)
+      `).run(ptId, playlistId, local.id, t.title, t.artist, t.album, t.durationSeconds, t.coverUrl || null, t.spotifyTrackId || null, pos, now);
+
+      db.prepare('INSERT OR IGNORE INTO profile_music_albums (profile_id, album_id, added_at) VALUES (?, ?, ?)').run(pid, local.album_id, now);
+    } else {
+      db.prepare(`
+        INSERT INTO playlist_tracks (id, playlist_id, track_id, title, artist, album, duration_seconds, cover_url, spotify_track_id, position, status, created_at)
+        VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+      `).run(ptId, playlistId, t.title, t.artist, t.album, t.durationSeconds, t.coverUrl || null, t.spotifyTrackId || null, pos, now);
+
+      queuedCount++;
+
+      dispatchTrackDownload(ptId, t.artist, t.title, t.album, playlistId, pid).catch((err) => {
+        console.warn(`[music] Failed dispatching track download for ${t.artist} - ${t.title}:`, err);
+      });
+    }
+  }
+
+  updatePlaylistCounts(playlistId);
+  return { playlistId, trackCount: tracks.length, queuedCount };
+}
+
+/**
+ * Imports one or multiple playlists from Exportify CSV or ZIP archives.
+ */
+export async function importExportifyPlaylists(
+  input: {
+    csv?: string;
+    playlistName?: string;
+    files?: Array<{ name: string; content: string }>;
+    zipBase64?: string;
+  },
+  profileId?: string
+): Promise<{ importedPlaylists: Array<{ id: string; name: string; trackCount: number }>; totalTracksQueued: number }> {
+  ensureMusicTables();
+  const importedPlaylists: Array<{ id: string; name: string; trackCount: number }> = [];
+  let totalTracksQueued = 0;
+
+  const filesToProcess: Array<{ name: string; content: string }> = [];
+
+  if (input.zipBase64) {
+    const buf = Buffer.from(input.zipBase64, 'base64');
+    const zipFiles = parseExportifyZip(buf);
+    filesToProcess.push(...zipFiles);
+  }
+
+  if (input.files && input.files.length) {
+    filesToProcess.push(...input.files);
+  }
+
+  if (input.csv) {
+    filesToProcess.push({
+      name: input.playlistName || 'Exportify Playlist',
+      content: input.csv,
+    });
+  }
+
+  if (!filesToProcess.length) {
+    throw new Error('No CSV content or files provided for Exportify import');
+  }
+
+  for (const file of filesToProcess) {
+    const tracks = parseExportifyCsv(file.content);
+    if (!tracks.length) continue;
+
+    const res = await populatePlaylistWithTracks(
+      file.name,
+      tracks,
+      profileId,
+      { description: `Imported from Exportify • ${tracks.length} tracks` }
+    );
+
+    importedPlaylists.push({ id: res.playlistId, name: file.name, trackCount: res.trackCount });
+    totalTracksQueued += res.queuedCount;
+  }
+
+  if (!importedPlaylists.length) {
+    throw new Error('No valid tracks found in the provided Exportify CSV/ZIP');
+  }
+
+  startDownloadMonitor();
+  return { importedPlaylists, totalTracksQueued };
+}
+
+/**
  * Imports one or multiple Spotify playlists for a profile, creating playlist records
  * and queueing track downloads via slskd.
  */
@@ -1502,8 +1657,12 @@ export async function importSpotifyPlaylists(
   profileId?: string
 ): Promise<{ importedPlaylists: Array<{ id: string; name: string; trackCount: number }>; totalTracksQueued: number }> {
   ensureMusicTables();
-  const db = stateDatabase();
   const pid = profileId || resolveDefaultProfileId();
+
+  // If the input string is an Exportify CSV, redirect directly to importExportifyPlaylists!
+  if (isExportifyCsv(input)) {
+    return importExportifyPlaylists({ csv: input }, pid);
+  }
 
   const targets = extractSpotifyTargets(input);
   const playlistIds = [...targets.playlistIds];
@@ -1528,64 +1687,19 @@ export async function importSpotifyPlaylists(
       const meta = await getSpotifyPlaylist(spId);
       if (!meta || !meta.tracks.length) continue;
 
-      const now = new Date().toISOString();
-      const existing = db.prepare('SELECT id FROM playlists WHERE spotify_id=? AND profile_id=?').get(spId, pid) as any;
-      const playlistId = existing?.id || randomUUID().replace(/-/g, '').slice(0, 32);
-
-      if (existing) {
-        db.prepare(`
-          UPDATE playlists SET
-            name = ?,
-            description = ?,
-            cover_url = ?,
-            updated_at = ?
-          WHERE id = ?
-        `).run(meta.name, meta.description || null, meta.coverUrl || null, now, playlistId);
-      } else {
-        db.prepare(`
-          INSERT INTO playlists (id, profile_id, name, description, cover_url, spotify_id, total_tracks, downloaded_tracks, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
-        `).run(playlistId, pid, meta.name, meta.description || null, meta.coverUrl || null, spId, meta.tracks.length, now, now);
-      }
-
-      // Process tracks
-      let pos = 0;
-      for (const t of meta.tracks) {
-        pos++;
-        const ptId = randomUUID().replace(/-/g, '').slice(0, 32);
-
-        // Check if track is already locally available
-        const local = db.prepare(`
-          SELECT id, album_id FROM music_tracks
-          WHERE LOWER(artist) = ? AND LOWER(title) = ?
-          LIMIT 1
-        `).get(t.artist.toLowerCase().trim(), t.title.toLowerCase().trim()) as { id: string; album_id: string } | undefined;
-
-        if (local) {
-          db.prepare(`
-            INSERT INTO playlist_tracks (id, playlist_id, track_id, title, artist, album, duration_seconds, cover_url, spotify_track_id, position, status, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?)
-          `).run(ptId, playlistId, local.id, t.title, t.artist, t.album, t.durationSeconds, t.coverUrl || null, t.spotifyTrackId || null, pos, now);
-
-          // Link album to profile
-          db.prepare('INSERT OR IGNORE INTO profile_music_albums (profile_id, album_id, added_at) VALUES (?, ?, ?)').run(pid, local.album_id, now);
-        } else {
-          db.prepare(`
-            INSERT INTO playlist_tracks (id, playlist_id, track_id, title, artist, album, duration_seconds, cover_url, spotify_track_id, position, status, created_at)
-            VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
-          `).run(ptId, playlistId, t.title, t.artist, t.album, t.durationSeconds, t.coverUrl || null, t.spotifyTrackId || null, pos, now);
-
-          totalTracksQueued++;
-
-          // Asynchronously dispatch slskd download worker
-          dispatchTrackDownload(ptId, t.artist, t.title, t.album, playlistId, pid).catch((err) => {
-            console.warn(`[music] Failed dispatching track download for ${t.artist} - ${t.title}:`, err);
-          });
+      const res = await populatePlaylistWithTracks(
+        meta.name,
+        meta.tracks,
+        pid,
+        {
+          description: meta.description,
+          coverUrl: meta.coverUrl,
+          spotifyId: spId,
         }
-      }
+      );
 
-      updatePlaylistCounts(playlistId);
-      importedPlaylists.push({ id: playlistId, name: meta.name, trackCount: meta.tracks.length });
+      importedPlaylists.push({ id: res.playlistId, name: meta.name, trackCount: res.trackCount });
+      totalTracksQueued += res.queuedCount;
     } catch (err: any) {
       console.error(`[music] Failed importing playlist ${spId}:`, err);
     }

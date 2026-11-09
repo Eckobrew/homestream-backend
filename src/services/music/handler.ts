@@ -17,6 +17,7 @@ import {
   addTrackToPlaylist,
   removeTrackFromPlaylist,
   importSpotifyPlaylists,
+  importExportifyPlaylists,
 } from '@/lib/music';
 import { withParentalControls } from '@/lib/parental-controls';
 
@@ -196,10 +197,29 @@ async function post(request: HttpRequest) {
     return HttpResponse.json({ success: true, playlist: pl });
   }
 
-  if ((route === 'music/playlists/import' || route === 'music/playlists/import-spotify') && (body?.url || body?.urls || body?.spotifyUrl)) {
-    const input = body.url || body.urls || body.spotifyUrl;
+  if (
+    (route === 'music/playlists/import' ||
+      route === 'music/playlists/import-spotify' ||
+      route === 'music/playlists/import-exportify') &&
+    (body?.url || body?.urls || body?.spotifyUrl || body?.csv || body?.files || body?.zipBase64)
+  ) {
     try {
-      const res = await importSpotifyPlaylists(input, profileId);
+      let res;
+      if (body?.csv || body?.files || body?.zipBase64) {
+        res = await importExportifyPlaylists(
+          {
+            csv: body.csv,
+            playlistName: body.playlistName,
+            files: body.files,
+            zipBase64: body.zipBase64,
+          },
+          profileId
+        );
+      } else {
+        const input = body.url || body.urls || body.spotifyUrl;
+        res = await importSpotifyPlaylists(input, profileId);
+      }
+
       return HttpResponse.json({
         success: true,
         message: `Queued ${res.totalTracksQueued} tracks from ${res.importedPlaylists.length} playlists for download`,
@@ -207,7 +227,7 @@ async function post(request: HttpRequest) {
         totalTracksQueued: res.totalTracksQueued,
       });
     } catch (err: any) {
-      return HttpResponse.json({ error: err.message || 'Failed importing Spotify playlists' }, { status: 400 });
+      return HttpResponse.json({ error: err.message || 'Failed importing playlists' }, { status: 400 });
     }
   }
 
