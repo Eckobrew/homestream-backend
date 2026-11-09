@@ -10,6 +10,7 @@ import { getServerConfig } from '@/lib/config';
 import { requestRevision } from '@/lib/request-cache';
 import { videoQueue } from '@/lib/requested-media';
 import { getNativeUserRequests } from '@/lib/user-requests';
+import { getRequestedMusicItems } from '@/lib/music';
 import type { QBittorrentRawTorrent } from '@/lib/qbittorrent';
 let cache:{key:string;until:number;promise:Promise<{videos:MediaItem[];music:RequestedItem[];downloads:QBittorrentRawTorrent[];warnings:string[];updatedAt:string}>}|undefined;
 async function get(_request:HttpRequest) {
@@ -21,7 +22,7 @@ async function get(_request:HttpRequest) {
     const [seerrVideos,nativeVideos,musicItems,downloads]=await Promise.all([
       seerr.isConfigured()?safe('Seerr',()=>seerr.getRequestQueue(),[]):Promise.resolve([]),
       safe('HomeStream Requests',()=>getNativeUserRequests(),[]),
-      !kids && music.isConfigured()?safe('DroppedNeedle',()=>music.requested(),[]):Promise.resolve([]),
+      !kids ? Promise.resolve(getRequestedMusicItems()) : Promise.resolve([]),
       !kids && qb.isConfigured()?safe('qBittorrent',()=>qb.getDownloadingTorrents(),[]):Promise.resolve([])
     ]);
     const seen=new Set<string>();
