@@ -61,10 +61,10 @@ Pushing a `vX.Y.Z` tag publishes the corresponding version; stable version tags 
 
 Use a commit tag or image digest for controlled deployments. `edge` tracks tested main and is not an automatic production redeployment. Pair tested backend/web revisions before upgrading. Newly created GHCR packages default to private; package visibility must be public to permit anonymous pulls.
 
-## HomeStream 1.2: music and all-media requests
+## HomeStream 1.2: music, YouTube, and all-media requests
 
-Discover and Requested cover movies, TV and music. DroppedNeedle provides catalog search, album acquisition, imported-track playback and music download state; Seerr and qBittorrent continue to provide video requests and progress. Set DROPPEDNEEDLE_URL and DROPPEDNEEDLE_TOKEN on the backend, or configure the connection in Admin integrations. Use an independently revocable companion token; a trusted non-admin DroppedNeedle account can dispatch requests without requiring settings access. Ordinary DroppedNeedle user accounts may require approval. No service credential is delivered to the browser or native player.
+Discover and Requested cover movies, TV and music. Native Music integration provides catalog search via MusicBrainz, peer-to-peer album acquisition via Soulseek (`slskd`), imported-track playback, artwork proxying and music download states; Seerr and qBittorrent continue to provide video requests and progress. Set `SLSKD_URL` and `SLSKD_API_KEY` on the backend, or configure the connection in Admin integrations. No service credential is delivered to the browser or native player.
 
-Music streams and artwork are proxied through HomeStream with authentication and byte-range support. Unknown download progress/release dates remain unknown. Music is unavailable in Kids mode until explicit-content policy can be verified. Admin integration editing requires the existing local/admin web policy or an actual signed mobile administrator session, not a household pairing token.
+Music streams, YouTube video streams, and artwork are proxied through HomeStream with authentication and byte-range support. YouTube videos stream via `/api/mobile/v1/youtube/stream-video?videoId=...` with full caching and seeking support. Music is unavailable in Kids mode until explicit-content policy can be verified. Admin integration editing requires the existing local/admin web policy or an actual signed mobile administrator session, not a household pairing token.
 
 See [the Android implementation handoff](HANDOFF.md) for API 1.2.0 models, native routes, Admin authorization, tab behavior and tests. Existing port-3000 LAN pairing remains enabled by the live gateway's explicit policy.

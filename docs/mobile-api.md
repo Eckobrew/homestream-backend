@@ -22,6 +22,13 @@ Rotate the token and re-pair devices to revoke access. Do not share it publicly.
 | GET | subtitles?itemId=… | subtitles: SubtitleTrack[] |
 | POST | progress | {itemId, userId, positionTicks, isPaused, isStopped} |
 | POST | request | Existing RequestMediaPayload (mediaType, mediaId, seasons) |
+| GET | music?q=…&offset=… | configured: boolean, albums: MusicAlbum[], total: number |
+| GET | music/album?albumId=… | album: MusicAlbum, tracks: MusicTrack[] |
+| POST | music/request | {musicbrainzId: string} -> album request & slskd download dispatch |
+| GET | music/stream?trackId=… | Authenticated audio byte-range streaming proxy |
+| GET | music/artwork?albumId=… | Authenticated cover art proxy |
+| GET | youtube/recommendations | hero: MediaItem, sections: RowSection[] |
+| GET | youtube/stream-video?videoId=… | Authenticated YouTube video/audio streaming proxy with range seeking |
 
 Types are defined in `src/types/index.ts`. Ticks are 100 nanoseconds. Responses
 are `no-store`. Error responses contain `error`. HomeStream may explicitly return
