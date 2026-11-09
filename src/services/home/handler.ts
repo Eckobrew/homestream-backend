@@ -106,7 +106,6 @@ async function handleGET(request: HttpRequest) {
       isDemoMode: true,
       jellyfinConnected: false,
       seerrConnected: seerr.isConfigured() || tmdb.isConfigured(),
-      tmdbConnected: tmdb.isConfigured(),
     });
   }
 
@@ -409,7 +408,6 @@ async function handleGET(request: HttpRequest) {
       isDemoMode: false,
       jellyfinConnected: true,
       seerrConnected: seerr.isConfigured() || tmdb.isConfigured(),
-      tmdbConnected: tmdb.isConfigured(),
     });
   } catch (err: unknown) {
     log.error('Error fetching home data from Jellyfin:', err);
