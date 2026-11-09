@@ -122,6 +122,9 @@ export interface ServerConfig {
   tmdbApiKey?: string;
   droppedneedleUrl?: string;
   droppedneedleToken?: string;
+  slskdUrl?: string;
+  slskdApiKey?: string;
+  musicPath?: string;
   qbittorrentUrl?: string;
   qbittorrentUsername?: string;
   qbittorrentPassword?: string;
