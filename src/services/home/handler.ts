@@ -4,7 +4,7 @@ import { log } from '@/log';
 import { withParentalControls } from '@/lib/parental-controls';
 import { withJellyfinSession } from '@/lib/jellyfin-session';
 import { HttpRequest, HttpResponse } from '@/http';
-import { JellyfinClient } from '@/lib/jellyfin';
+import { JellyfinClient, isYouTubeItem } from '@/lib/jellyfin';
 import { SeerrClient } from '@/lib/seerr';
 import { TmdbClient } from '@/lib/tmdb';
 import { SmartRecommendationEngine } from '@/lib/recommendations';
@@ -240,28 +240,31 @@ async function handleGET(request: HttpRequest) {
       }
     }
 
-    if (resumeItems.length > 0) {
+    const safeResume = resumeItems.filter((i) => i.source !== 'youtube' && !isYouTubeItem(i));
+    if (safeResume.length > 0) {
       sections.push({
         id: 'continue-watching',
         title: 'Continue Watching',
-        items: resumeItems,
+        items: safeResume,
       });
     }
 
-    if (topRated.length > 0) {
+    const safeTopRated = topRated.filter((i) => i.source !== 'youtube' && !isYouTubeItem(i));
+    if (safeTopRated.length > 0) {
       sections.push({
         id: 'top-10',
         title: `Top 10 on ${getServerConfig().appName} Today`,
-        items: topRated.slice(0, 10),
+        items: safeTopRated.slice(0, 10),
         isTop10: true,
       });
     }
 
-    if (latestMovies.length > 0) {
+    const safeMovies = latestMovies.filter((i) => i.source !== 'youtube' && !isYouTubeItem(i));
+    if (safeMovies.length > 0) {
       sections.push({
         id: 'recent-movies',
         title: 'Recently Added Movies',
-        items: latestMovies,
+        items: safeMovies,
       });
     }
 

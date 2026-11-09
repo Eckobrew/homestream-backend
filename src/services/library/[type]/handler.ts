@@ -3,7 +3,7 @@ import { log } from '@/log';
 import { withParentalControls } from '@/lib/parental-controls';
 import { withJellyfinSession } from '@/lib/jellyfin-session';
 import { HttpRequest, HttpResponse } from '@/http';
-import { JellyfinClient } from '@/lib/jellyfin';
+import { JellyfinClient, isYouTubeItem } from '@/lib/jellyfin';
 import { resolveJellyfinUserId } from '@/lib/profiles';
 import { MediaItem } from '@/types';
 
@@ -114,7 +114,7 @@ async function handleGET(
 
     // 2. Query items sorted by SortName Ascending (A-Z)
     // Note: For TV Shows, per user instruction: "In the TV shows sidebar thing just show the series, not individual episodes/seasons"
-    let queryParams = `SortBy=SortName&SortOrder=Ascending&Recursive=true&Fields=ProviderIds,Overview,Genres,OfficialRating,CommunityRating,People,BackdropImageTags,ChildCount,RunTimeTicks,LocationType,MediaStreams,Width,Height,MediaSources`;
+    let queryParams = `SortBy=SortName&SortOrder=Ascending&Recursive=true&Fields=ProviderIds,Overview,Genres,OfficialRating,CommunityRating,People,BackdropImageTags,ChildCount,RunTimeTicks,LocationType,MediaStreams,Width,Height,MediaSources,Path,Tags`;
 
     if (libraryType === 'movies') {
       queryParams += `&IncludeItemTypes=Movie`;
@@ -140,7 +140,7 @@ async function handleGET(
 
     const data = await itemsRes.json();
     const rawItems: JellyfinRawItem[] = (data.Items || []).filter(
-      (item: JellyfinRawItem) => item.LocationType !== 'Virtual'
+      (item: any) => item.LocationType !== 'Virtual' && (libraryType === 'youtube' || !isYouTubeItem(item))
     );
 
     let mappedItems: MediaItem[] = rawItems.map((item) => jellyfin.mapJellyfinItem(item));

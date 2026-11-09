@@ -19,6 +19,8 @@ export interface JellyfinItem {
   CommunityRating?: number;
   RunTimeTicks?: number;
   Genres?: string[];
+  Tags?: string[];
+  Path?: string;
   ChildCount?: number; // Season count for Series
   UserData?: {
     PlaybackPositionTicks?: number;
@@ -82,10 +84,68 @@ export interface JellyfinItem {
   }[];
 }
 
+export function isYouTubeItem(item: any): boolean {
+  if (!item) return false;
+  if (item.source === 'youtube') return true;
+  const path = (item.Path || item.path || item.MediaSources?.[0]?.Path || '').toLowerCase();
+  if (
+    path.includes('/youtube/') ||
+    path.includes('\\youtube\\') ||
+    path.includes('/media/youtube/') ||
+    path.includes('nas-youtube') ||
+    path.includes('/mnt/youtube/')
+  ) {
+    return true;
+  }
+  if (item.ProviderIds?.youtube || item.ProviderIds?.YouTube) return true;
+  if (item.providerIds?.youtube || item.providerIds?.YouTube) return true;
+  const name = (item.Name || item.title || '').toLowerCase();
+  if (name.startsWith('[youtube]')) return true;
+  const genres = item.Genres || item.genres || [];
+  if (Array.isArray(genres) && genres.some((g: any) => typeof g === 'string' && /people\s*&\s*blogs|youtube/i.test(g))) return true;
+  const tags = item.Tags || item.tags || [];
+  if (Array.isArray(tags) && tags.some((t: any) => typeof t === 'string' && /youtube/i.test(t))) return true;
+  return false;
+}
+
 export class JellyfinClient {
   readonly url: string;
   private apiKey: string;
   private userId: string;
+  private viewsCache: { moviesId?: string; tvshowsId?: string; youtubeId?: string; timestamp: number } = { timestamp: 0 };
+
+  async getViewId(type: 'movies' | 'tvshows' | 'youtube'): Promise<string | undefined> {
+    if (!this.isConfigured()) return undefined;
+    const now = Date.now();
+    if (this.viewsCache.timestamp && now - this.viewsCache.timestamp < 300000) {
+      if (type === 'movies') return this.viewsCache.moviesId;
+      if (type === 'tvshows') return this.viewsCache.tvshowsId;
+      if (type === 'youtube') return this.viewsCache.youtubeId;
+    }
+    try {
+      const uid = await this.getFirstUserId();
+      const res = await this.fetch(`${this.url}/Users/${uid}/Views`, { headers: this.getHeaders() });
+      if (res.ok) {
+        const data = await res.json();
+        const views = data.Items || [];
+        const moviesMatch = views.find((v: any) => v.CollectionType === 'movies' && !/youtube/i.test(v.Name || '') && !/youtube/i.test(v.Path || '')) || views.find((v: any) => /movies/i.test(v.Name || '') && !/youtube/i.test(v.Name || ''));
+        const tvMatch = views.find((v: any) => v.CollectionType === 'tvshows' || /shows|tv/i.test(v.Name || ''));
+        const ytMatch = views.find((v: any) => /youtube/i.test(v.Name || '') || /youtube/i.test(v.Path || ''));
+        this.viewsCache = {
+          moviesId: moviesMatch?.Id,
+          tvshowsId: tvMatch?.Id,
+          youtubeId: ytMatch?.Id,
+          timestamp: now
+        };
+        if (type === 'movies') return this.viewsCache.moviesId;
+        if (type === 'tvshows') return this.viewsCache.tvshowsId;
+        if (type === 'youtube') return this.viewsCache.youtubeId;
+      }
+    } catch (e) {
+      log.warn('Failed to load Jellyfin views:', e);
+    }
+    return undefined;
+  }
 
   constructor(url?: string, apiKey?: string, userId?: string) {
     const config = getServerConfig();
@@ -815,7 +875,7 @@ export class JellyfinClient {
       durationMinutes,
       genres: item.Genres || [],
       seasonsCount: isSeries && typeof item.ChildCount === 'number' && item.ChildCount > 0 ? item.ChildCount : undefined,
-      source: 'jellyfin',
+      source: isYouTubeItem(item) ? 'youtube' : 'jellyfin',
       jellyfinId: item.Id,
       seriesId: item.SeriesId,
       seasonNumber: item.ParentIndexNumber,
@@ -893,12 +953,12 @@ export class JellyfinClient {
   async searchMedia(query: string): Promise<MediaItem[]> {
     if (!this.isConfigured() || !query.trim()) return [];
     const uid = await this.getFirstUserId();
-    const params = new URLSearchParams({ SearchTerm: query.trim().slice(0, 200), IncludeItemTypes: 'Movie,Series', Recursive: 'true', Limit: '40', Fields: 'ProviderIds,Overview,Genres,OfficialRating,CommunityRating,RunTimeTicks,LocationType,MediaStreams,SeriesId,SeriesName' });
+    const params = new URLSearchParams({ SearchTerm: query.trim().slice(0, 200), IncludeItemTypes: 'Movie,Series', Recursive: 'true', Limit: '40', Fields: 'ProviderIds,Overview,Genres,OfficialRating,CommunityRating,RunTimeTicks,LocationType,MediaStreams,SeriesId,SeriesName,Path,Tags' });
     try {
       const response = await this.fetch(`${this.url}/Users/${encodeURIComponent(uid)}/Items?${params}`, { headers: this.getHeaders(), cache: 'no-store' });
       if (!response.ok) return [];
       const data = await response.json();
-      return (data.Items || []).filter((item: JellyfinItem) => item.LocationType !== 'Virtual').map((item: JellyfinItem) => this.mapJellyfinItem(item));
+      return (data.Items || []).filter((item: JellyfinItem) => item.LocationType !== 'Virtual' && !isYouTubeItem(item)).map((item: JellyfinItem) => this.mapJellyfinItem(item));
     } catch { return []; }
   }
 
@@ -907,14 +967,14 @@ export class JellyfinClient {
     try {
       const uid = await this.getFirstUserId();
       const res = await this.fetch(
-        `${this.url}/UserItems/Resume?userId=${uid}&Limit=16&Fields=Overview,Genres,OfficialRating,CommunityRating,People,RunTimeTicks,LocationType,MediaStreams,Width,Height,MediaSources,SeriesId,SeriesName,SeasonId,IndexNumber,ParentIndexNumber`,
+        `${this.url}/UserItems/Resume?userId=${uid}&Limit=16&Fields=Overview,Genres,OfficialRating,CommunityRating,People,RunTimeTicks,LocationType,MediaStreams,Width,Height,MediaSources,SeriesId,SeriesName,SeasonId,IndexNumber,ParentIndexNumber,Path,ProviderIds,Tags`,
         { headers: this.getHeaders(), ...(strict ? { cache: 'no-store' as const } : { }) }
       );
       if (!res.ok) { if (strict) throw new Error(`Resume history unavailable (${res.status})`); return []; }
       const data = await res.json();
-      // Filter out Virtual items and Season containers (episodes and movies are what users actually resume)
+      // Filter out Virtual items and Season containers (episodes and movies are what users actually resume), and exclude YouTube videos
       const validItems = (data.Items || []).filter(
-        (item: JellyfinItem) => item.LocationType !== 'Virtual' && item.Type !== 'Season'
+        (item: JellyfinItem) => item.LocationType !== 'Virtual' && item.Type !== 'Season' && !isYouTubeItem(item)
       );
       const mapped = validItems.map((item: JellyfinItem) => this.mapJellyfinItem(item));
       return await this.attachPlayableStreamsToItems(mapped);
@@ -929,13 +989,21 @@ export class JellyfinClient {
     if (!this.isConfigured()) return [];
     try {
       const uid = await this.getFirstUserId();
+      let parentParam = '';
+      if (type === 'Movie') {
+        const moviesParentId = await this.getViewId('movies');
+        if (moviesParentId) parentParam = `&ParentId=${encodeURIComponent(moviesParentId)}`;
+      } else if (type === 'Series') {
+        const tvParentId = await this.getViewId('tvshows');
+        if (tvParentId) parentParam = `&ParentId=${encodeURIComponent(tvParentId)}`;
+      }
       const res = await this.fetch(
-        `${this.url}/Users/${uid}/Items?IncludeItemTypes=${type}&SortBy=DateCreated&SortOrder=Descending&Limit=${limit}&Recursive=true&Fields=Overview,Genres,OfficialRating,CommunityRating,People,BackdropImageTags,ChildCount,RunTimeTicks,LocationType,MediaStreams,Width,Height,MediaSources`,
+        `${this.url}/Users/${uid}/Items?IncludeItemTypes=${type}&SortBy=DateCreated&SortOrder=Descending&Limit=${limit * 2}&Recursive=true&Fields=Overview,Genres,OfficialRating,CommunityRating,People,BackdropImageTags,ChildCount,RunTimeTicks,LocationType,MediaStreams,Width,Height,MediaSources,Path,ProviderIds,Tags${parentParam}`,
         { headers: this.getHeaders(), }
       );
       if (!res.ok) return [];
       const data = await res.json();
-      const validItems = (data.Items || []).filter((item: JellyfinItem) => item.LocationType !== 'Virtual');
+      const validItems = (data.Items || []).filter((item: JellyfinItem) => item.LocationType !== 'Virtual' && !isYouTubeItem(item)).slice(0, limit);
       const mapped = validItems.map((item: JellyfinItem) => this.mapJellyfinItem(item));
       if (type === 'Series') {
         return await this.attachPlayableStreamsToItems(mapped);
@@ -952,12 +1020,12 @@ export class JellyfinClient {
     try {
       const uid = await this.getFirstUserId();
       const res = await this.fetch(
-        `${this.url}/Users/${uid}/Items?IncludeItemTypes=Movie,Series&SortBy=CommunityRating&SortOrder=Descending&Limit=${limit}&Recursive=true&Fields=Overview,Genres,OfficialRating,CommunityRating,People,BackdropImageTags,ChildCount,RunTimeTicks,LocationType,MediaStreams,Width,Height,MediaSources`,
+        `${this.url}/Users/${uid}/Items?IncludeItemTypes=Movie,Series&SortBy=CommunityRating&SortOrder=Descending&Limit=${limit * 2}&Recursive=true&Fields=Overview,Genres,OfficialRating,CommunityRating,People,BackdropImageTags,ChildCount,RunTimeTicks,LocationType,MediaStreams,Width,Height,MediaSources,Path,ProviderIds,Tags`,
         { headers: this.getHeaders(), }
       );
       if (!res.ok) return [];
       const data = await res.json();
-      const validItems = (data.Items || []).filter((item: JellyfinItem) => item.LocationType !== 'Virtual');
+      const validItems = (data.Items || []).filter((item: JellyfinItem) => item.LocationType !== 'Virtual' && !isYouTubeItem(item)).slice(0, limit);
       const mapped = validItems.map((item: JellyfinItem) => this.mapJellyfinItem(item));
       return await this.attachPlayableStreamsToItems(mapped);
     } catch (e) {

@@ -3,7 +3,7 @@ import { log } from '@/log';
 import { withParentalControls } from '@/lib/parental-controls';
 import { withJellyfinSession } from '@/lib/jellyfin-session';
 import { HttpRequest, HttpResponse } from '@/http';
-import { JellyfinClient } from '@/lib/jellyfin';
+import { JellyfinClient, isYouTubeItem } from '@/lib/jellyfin';
 import { SeerrClient } from '@/lib/seerr';
 import { resolveJellyfinUserId } from '@/lib/profiles';
 import { MediaItem, MediaRowSection } from '@/types';
@@ -135,13 +135,15 @@ async function handleGET(
     if (jellyfin.isConfigured()) {
       try {
         const itemType = isMovies ? 'Movie' : 'Series';
+        const parentId = isMovies ? await jellyfin.getViewId('movies') : await jellyfin.getViewId('tvshows');
+        const parentParam = parentId ? `&ParentId=${encodeURIComponent(parentId)}` : '';
         const jfRes = await fetch(
-          `${jellyfin.url}/Users/${uid}/Items?IncludeItemTypes=${itemType}&Recursive=true&Fields=Overview,Genres,OfficialRating,CommunityRating,People,BackdropImageTags,ChildCount,RunTimeTicks,ProviderIds,LocationType,MediaStreams,Width,Height,MediaSources`,
+          `${jellyfin.url}/Users/${uid}/Items?IncludeItemTypes=${itemType}&Recursive=true&Fields=Overview,Genres,OfficialRating,CommunityRating,People,BackdropImageTags,ChildCount,RunTimeTicks,ProviderIds,LocationType,MediaStreams,Width,Height,MediaSources,Path,Tags${parentParam}`,
           { headers: jellyfin.getHeaders(), }
         );
         if (jfRes.ok) {
           const jfData = await jfRes.json();
-          const valid = (jfData.Items || []).filter((i: any) => i.LocationType !== 'Virtual');
+          const valid = (jfData.Items || []).filter((i: any) => i.LocationType !== 'Virtual' && !isYouTubeItem(i));
           allJfItems = valid.map((i: any) => jellyfin.mapJellyfinItem(i));
           // Resolve a series episode only when the viewer opens or plays it,
           // rather than issuing one extra lookup for every series in the library.
