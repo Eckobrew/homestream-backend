@@ -8,6 +8,8 @@ import {
   getAlbumArtwork,
   getTrackStreamInfo,
   requestMusicAlbum,
+  addMusicAlbumToProfile,
+  removeMusicAlbumFromProfile,
 } from '@/lib/music';
 import { withParentalControls } from '@/lib/parental-controls';
 
@@ -29,19 +31,23 @@ async function get(request: HttpRequest) {
     );
 
   const route = request.nextUrl.pathname.replace(/^\/api\/(?:mobile\/v1\/|v1\/)?/, '');
+  const profileId =
+    request.nextUrl.searchParams.get('userId') ||
+    request.nextUrl.searchParams.get('profileId') ||
+    request.cookies.get('homeflix_profile_id')?.value;
 
   try {
     if (route === 'music') {
       const q = request.nextUrl.searchParams.get('q')?.trim() || '';
       const offset = Math.min(100000, Number(request.nextUrl.searchParams.get('offset')) || 0);
-      const data = await getAlbums(q, offset);
+      const data = await getAlbums(q, offset, profileId);
       return json(data);
     }
 
     if (route === 'music/album') {
       const id = request.nextUrl.searchParams.get('albumId') || '';
       if (!safeMusicId(id)) return HttpResponse.json({ error: 'Invalid album ID' }, { status: 400 });
-      const data = await getAlbum(id);
+      const data = await getAlbum(id, profileId);
       return json(data);
     }
 
@@ -157,18 +163,32 @@ async function get(request: HttpRequest) {
 }
 
 async function post(request: HttpRequest) {
+  const profileId =
+    request.nextUrl.searchParams.get('userId') ||
+    request.nextUrl.searchParams.get('profileId') ||
+    request.cookies.get('homeflix_profile_id')?.value;
   const body = await request.json().catch(() => null);
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body?.musicbrainzId || '')) {
-    return HttpResponse.json({ error: 'A valid MusicBrainz album ID is required' }, { status: 400 });
+
+  const route = request.nextUrl.pathname.replace(/^\/api\/(?:mobile\/v1\/|v1\/)?/, '');
+  if (route === 'music/profile-album' && body?.albumId) {
+    const result = addMusicAlbumToProfile(body.albumId, profileId);
+    return HttpResponse.json(result);
+  }
+
+  const musicId = body?.musicbrainzId || body?.albumId || '';
+  if (!/^[a-zA-Z0-9_-]{1,128}$/.test(musicId)) {
+    return HttpResponse.json({ error: 'A valid album or MusicBrainz ID is required' }, { status: 400 });
   }
 
   try {
-    const result = await requestMusicAlbum(body.musicbrainzId);
+    const result = await requestMusicAlbum(musicId, profileId);
     invalidateRequested();
     return HttpResponse.json({
       success: result.success !== false,
       message: result.message || 'Album requested',
       status: result.status || 'pending',
+      inLibrary: result.inLibrary,
+      isDownloaded: result.isDownloaded,
     });
   } catch (err: any) {
     return HttpResponse.json(
@@ -178,6 +198,25 @@ async function post(request: HttpRequest) {
   }
 }
 
+async function del(request: HttpRequest) {
+  const profileId =
+    request.nextUrl.searchParams.get('userId') ||
+    request.nextUrl.searchParams.get('profileId') ||
+    request.cookies.get('homeflix_profile_id')?.value;
+  const albumId = request.nextUrl.searchParams.get('albumId') || '';
+  if (!safeMusicId(albumId)) {
+    return HttpResponse.json({ error: 'Invalid album ID' }, { status: 400 });
+  }
+
+  try {
+    const result = removeMusicAlbumFromProfile(albumId, profileId);
+    return HttpResponse.json(result);
+  } catch (err: any) {
+    return HttpResponse.json({ error: err.message || 'Could not remove album' }, { status: 500 });
+  }
+}
+
 export const GET = withParentalControls(get);
 export const HEAD = GET;
 export const POST = withParentalControls(post);
+export const DELETE = withParentalControls(del);

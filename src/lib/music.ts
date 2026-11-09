@@ -2,14 +2,42 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { fetch } from '@/upstream';
-import { stateDatabase, dataDirectory } from '@/state/database';
+import { readState, stateDatabase, dataDirectory } from '@/state/database';
 import { getServerConfig } from './config';
 import { SlskdClient } from './slskd';
 import type { MusicAlbum, MusicTrack, RequestedItem } from '@/types';
 
 export const safeMusicId = (id: string) => /^[a-zA-Z0-9_-]{1,128}$/.test(id);
 
+export function resolveDefaultProfileId(): string {
+  try {
+    const profiles = readState<any[]>('profiles', []);
+    const nathan = profiles.find((p: any) => p.name?.toLowerCase() === 'nathan');
+    if (nathan?.id) return nathan.id;
+    if (profiles[0]?.id) return profiles[0].id;
+  } catch {}
+  return '76a8becc30804c2fb4914e6a6edeb2e2';
+}
+
 let dbInitialized = false;
+
+function seedNathanProfileMusic(db: any) {
+  try {
+    const row = db.prepare('SELECT COUNT(*) as c FROM profile_music_albums').get() as any;
+    if (row && row.c > 0) return;
+
+    const nathanId = resolveDefaultProfileId();
+    const now = new Date().toISOString();
+    const albums = db.prepare('SELECT id FROM music_albums WHERE in_library = 1').all() as { id: string }[];
+    const stmt = db.prepare('INSERT OR IGNORE INTO profile_music_albums (profile_id, album_id, added_at) VALUES (?, ?, ?)');
+    for (const alb of albums) {
+      stmt.run(nathanId, alb.id, now);
+    }
+    console.log(`[music] Initialized per-profile music: assigned all ${albums.length} albums to Nathan profile (${nathanId})`);
+  } catch (err) {
+    console.warn('[music] Failed seeding Nathan profile music:', err);
+  }
+}
 
 function ensureMusicTables() {
   if (dbInitialized) return;
@@ -47,6 +75,13 @@ function ensureMusicTables() {
         created_at TEXT NOT NULL
       );
 
+      CREATE TABLE IF NOT EXISTS profile_music_albums (
+        profile_id TEXT NOT NULL,
+        album_id TEXT NOT NULL,
+        added_at TEXT NOT NULL,
+        PRIMARY KEY (profile_id, album_id)
+      );
+
       CREATE TABLE IF NOT EXISTS music_requests (
         id TEXT PRIMARY KEY,
         musicbrainz_id TEXT NOT NULL UNIQUE,
@@ -69,7 +104,10 @@ function ensureMusicTables() {
       CREATE INDEX IF NOT EXISTS idx_music_albums_artist ON music_albums(artist);
       CREATE INDEX IF NOT EXISTS idx_music_albums_title ON music_albums(title);
       CREATE INDEX IF NOT EXISTS idx_music_tracks_album ON music_tracks(album_id);
+      CREATE INDEX IF NOT EXISTS idx_profile_music_profile ON profile_music_albums(profile_id);
+      CREATE INDEX IF NOT EXISTS idx_profile_music_album ON profile_music_albums(album_id);
     `);
+    seedNathanProfileMusic(db);
     dbInitialized = true;
   } catch (err) {
     console.warn('[music] Table initialization failed:', err);
@@ -322,7 +360,7 @@ export function initMusicLibrary() {
 /**
  * Format a database row into a public MusicAlbum object.
  */
-function rowToMusicAlbum(row: any): MusicAlbum {
+function rowToMusicAlbum(row: any, inLibraryOverride?: boolean, isDownloadedOverride?: boolean): MusicAlbum {
   const id = row.musicbrainz_id || row.id;
   return {
     id,
@@ -331,27 +369,36 @@ function rowToMusicAlbum(row: any): MusicAlbum {
     year: row.year ? Number(row.year) : undefined,
     releaseDate: row.release_date || (row.year ? String(row.year) : undefined),
     coverUrl: `/api/v1/music/artwork?albumId=${encodeURIComponent(id)}`,
-    inLibrary: Boolean(row.in_library),
+    inLibrary: inLibraryOverride !== undefined ? inLibraryOverride : Boolean(row.in_library),
+    isDownloaded: isDownloadedOverride !== undefined ? isDownloadedOverride : Boolean(row.in_library),
     requested: Boolean(row.requested),
     trackCount: row.track_count ? Number(row.track_count) : undefined,
   };
 }
 
 /**
- * Search MusicBrainz release-groups for music discovery.
+ * Search MusicBrainz release-groups for music discovery, with local library status.
  */
-export async function searchMusicBrainz(query: string): Promise<MusicAlbum[]> {
+export async function searchMusicBrainz(query: string, profileId?: string): Promise<MusicAlbum[]> {
   ensureMusicTables();
   const db = stateDatabase();
+  const pid = profileId || resolveDefaultProfileId();
+
+  // Find what this profile has in their personal collection
+  const profileRows = db.prepare('SELECT album_id FROM profile_music_albums WHERE profile_id=?').all(pid) as { album_id: string }[];
+  const profileSet = new Set(profileRows.map(r => r.album_id));
+
   const localAlbums = db.prepare(`
     SELECT * FROM music_albums
-    WHERE title LIKE ? OR artist LIKE ?
-    LIMIT 30
+    WHERE (title LIKE ? OR artist LIKE ?) AND in_library = 1
+    LIMIT 40
   `).all(`%${query}%`, `%${query}%`) as any[];
 
   const localMap = new Map<string, any>();
   for (const a of localAlbums) {
     localMap.set(`${a.artist.toLowerCase()}|${a.title.toLowerCase()}`, a);
+    if (a.musicbrainz_id) localMap.set(a.musicbrainz_id.toLowerCase(), a);
+    localMap.set(a.id.toLowerCase(), a);
   }
 
   const requestedRows = db.prepare('SELECT musicbrainz_id FROM music_requests').all() as { musicbrainz_id: string }[];
@@ -359,9 +406,13 @@ export async function searchMusicBrainz(query: string): Promise<MusicAlbum[]> {
 
   const results: MusicAlbum[] = [];
 
-  // Add local matches first
+  // Add local matches first (already downloaded on disk)
   for (const a of localAlbums) {
-    results.push(rowToMusicAlbum({ ...a, in_library: true, requested: requestedSet.has(a.id) }));
+    results.push(rowToMusicAlbum(
+      { ...a, requested: requestedSet.has(a.id) || (a.musicbrainz_id && requestedSet.has(a.musicbrainz_id)) },
+      profileSet.has(a.id),
+      true // isDownloaded
+    ));
   }
 
   // Fetch MusicBrainz online results
@@ -386,10 +437,19 @@ export async function searchMusicBrainz(query: string): Promise<MusicAlbum[]> {
         const year = date ? parseInt(date.slice(0, 4), 10) : undefined;
 
         const key = `${artist.toLowerCase()}|${title.toLowerCase()}`;
-        const local = localMap.get(key);
+        const local = localMap.get(key) || localMap.get(id.toLowerCase());
 
         // Don't duplicate if already in local results
         if (local) continue;
+
+        // Check if there is ANY local album that matches this release group
+        const existingLocal = db.prepare(`
+          SELECT * FROM music_albums
+          WHERE (musicbrainz_id = ? OR (LOWER(artist) = ? AND LOWER(title) = ?)) AND in_library = 1
+        `).get(id, artist.toLowerCase(), title.toLowerCase()) as any;
+
+        const isDownloaded = Boolean(existingLocal);
+        const inLibrary = existingLocal ? profileSet.has(existingLocal.id) : false;
 
         results.push({
           id,
@@ -398,7 +458,8 @@ export async function searchMusicBrainz(query: string): Promise<MusicAlbum[]> {
           year: Number.isFinite(year) ? year : undefined,
           releaseDate: date || (year ? String(year) : undefined),
           coverUrl: `/api/v1/music/artwork?albumId=${encodeURIComponent(id)}`,
-          inLibrary: false,
+          inLibrary,
+          isDownloaded,
           requested: requestedSet.has(id),
           trackCount: undefined,
         });
@@ -412,15 +473,16 @@ export async function searchMusicBrainz(query: string): Promise<MusicAlbum[]> {
 }
 
 /**
- * List library albums or search both local and remote.
+ * List library albums for a profile or search both local and remote.
  */
-export async function getAlbums(query = '', offset = 0): Promise<{ configured: boolean; albums: MusicAlbum[]; total: number }> {
+export async function getAlbums(query = '', offset = 0, profileId?: string): Promise<{ configured: boolean; albums: MusicAlbum[]; total: number }> {
   ensureMusicTables();
   initMusicLibrary();
   const db = stateDatabase();
+  const pid = profileId || resolveDefaultProfileId();
 
   if (query.trim()) {
-    const albums = await searchMusicBrainz(query.trim());
+    const albums = await searchMusicBrainz(query.trim(), pid);
     return {
       configured: true,
       albums: albums.slice(offset, offset + 50),
@@ -431,37 +493,45 @@ export async function getAlbums(query = '', offset = 0): Promise<{ configured: b
   const requestedRows = db.prepare('SELECT musicbrainz_id FROM music_requests').all() as { musicbrainz_id: string }[];
   const requestedSet = new Set(requestedRows.map(r => r.musicbrainz_id));
 
-  const totalRow = db.prepare('SELECT COUNT(*) as count FROM music_albums WHERE in_library=1').get() as { count: number };
+  const totalRow = db.prepare(`
+    SELECT COUNT(*) as count FROM profile_music_albums p
+    JOIN music_albums m ON m.id = p.album_id
+    WHERE p.profile_id = ? AND m.in_library = 1
+  `).get(pid) as { count: number } | undefined;
+
   const rows = db.prepare(`
-    SELECT * FROM music_albums
-    WHERE in_library=1
-    ORDER BY updated_at DESC, title ASC
+    SELECT m.*, p.added_at FROM profile_music_albums p
+    JOIN music_albums m ON m.id = p.album_id
+    WHERE p.profile_id = ? AND m.in_library = 1
+    ORDER BY p.added_at DESC, m.title ASC
     LIMIT 200 OFFSET ?
-  `).all(offset) as any[];
+  `).all(pid, offset) as any[];
 
   const albums = rows.map(r => rowToMusicAlbum({
     ...r,
     requested: requestedSet.has(r.id) || (r.musicbrainz_id && requestedSet.has(r.musicbrainz_id)),
-  }));
+  }, true, true));
 
   return {
     configured: true,
     albums,
-    total: totalRow.count || 0,
+    total: totalRow?.count || 0,
   };
 }
 
 /**
- * Get album details and track list.
+ * Get album details and track list with profile-specific library state.
  */
-export async function getAlbum(id: string): Promise<{ album: MusicAlbum; tracks: MusicTrack[] }> {
+export async function getAlbum(id: string, profileId?: string): Promise<{ album: MusicAlbum; tracks: MusicTrack[] }> {
   ensureMusicTables();
   const db = stateDatabase();
+  const pid = profileId || resolveDefaultProfileId();
 
   // 1. Try local library first by id or musicbrainz_id
   const localAlbum = db.prepare('SELECT * FROM music_albums WHERE id=? OR musicbrainz_id=?').get(id, id) as any;
 
   if (localAlbum) {
+    const inProfile = db.prepare('SELECT 1 FROM profile_music_albums WHERE profile_id=? AND album_id=?').get(pid, localAlbum.id);
     const trackRows = db.prepare(`
       SELECT * FROM music_tracks
       WHERE album_id=?
@@ -480,7 +550,7 @@ export async function getAlbum(id: string): Promise<{ album: MusicAlbum; tracks:
     }));
 
     return {
-      album: rowToMusicAlbum(localAlbum),
+      album: rowToMusicAlbum(localAlbum, Boolean(inProfile), true),
       tracks,
     };
   }
@@ -652,17 +722,64 @@ export function getTrackStreamInfo(trackId: string): { filePath: string; content
 /**
  * Submit an album request and dispatch download via slskd.
  */
-export async function requestMusicAlbum(musicbrainzId: string): Promise<{ success: boolean; message: string; status: string }> {
+export async function requestMusicAlbum(
+  musicbrainzId: string,
+  profileId?: string
+): Promise<{ success: boolean; message: string; status: string; inLibrary?: boolean; isDownloaded?: boolean }> {
   ensureMusicTables();
   const db = stateDatabase();
+  const pid = profileId || resolveDefaultProfileId();
 
+  // 1. Check if album is ALREADY downloaded locally on the server in music_albums
+  let localAlbum = db.prepare(`
+    SELECT * FROM music_albums
+    WHERE (musicbrainz_id = ? OR id = ?) AND in_library = 1
+  `).get(musicbrainzId, musicbrainzId) as any;
+
+  if (!localAlbum) {
+    // Also check by artist & title if not directly matched by ID
+    const albumData = await getAlbum(musicbrainzId, pid).catch(() => null);
+    if (albumData?.album) {
+      const art = albumData.album.artist.toLowerCase().trim();
+      const tit = albumData.album.title.toLowerCase().trim();
+      localAlbum = db.prepare(`
+        SELECT * FROM music_albums
+        WHERE LOWER(artist) = ? AND LOWER(title) = ? AND in_library = 1
+      `).get(art, tit) as any;
+    }
+  }
+
+  if (localAlbum) {
+    // Instant add to this profile! No slskd re-download needed!
+    const now = new Date().toISOString();
+    db.prepare(`
+      INSERT OR IGNORE INTO profile_music_albums (profile_id, album_id, added_at)
+      VALUES (?, ?, ?)
+    `).run(pid, localAlbum.id, now);
+
+    return {
+      success: true,
+      message: `Added "${localAlbum.title}" to your music library! (Already downloaded on server)`,
+      status: 'available',
+      inLibrary: true,
+      isDownloaded: true,
+    };
+  }
+
+  // 2. Not downloaded locally: check if already requested
   const existing = db.prepare('SELECT status FROM music_requests WHERE musicbrainz_id=?').get(musicbrainzId) as { status: string } | undefined;
   if (existing) {
-    return { success: true, message: 'Album is already requested', status: existing.status };
+    return {
+      success: true,
+      message: 'Album is currently being downloaded or processed',
+      status: existing.status,
+      inLibrary: false,
+      isDownloaded: false,
+    };
   }
 
   // Look up album details from MusicBrainz
-  const albumData = await getAlbum(musicbrainzId).catch(() => null);
+  const albumData = await getAlbum(musicbrainzId, pid).catch(() => null);
   const title = albumData?.album.title || 'Unknown Album';
   const artist = albumData?.album.artist || 'Unknown Artist';
   const year = albumData?.album.year;
@@ -670,8 +787,8 @@ export async function requestMusicAlbum(musicbrainzId: string): Promise<{ succes
   const requestId = createHash('sha256').update(musicbrainzId).digest('hex').slice(0, 16);
 
   db.prepare(`
-    INSERT INTO music_requests (id, musicbrainz_id, album_title, artist_name, year, cover_url, status, progress, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, 'requested', 0, ?, ?)
+    INSERT INTO music_requests (id, musicbrainz_id, album_title, artist_name, year, cover_url, status, progress, username, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, 'requested', 0, ?, ?, ?)
   `).run(
     requestId,
     musicbrainzId,
@@ -679,6 +796,7 @@ export async function requestMusicAlbum(musicbrainzId: string): Promise<{ succes
     artist,
     year ?? null,
     `/api/v1/music/artwork?albumId=${encodeURIComponent(musicbrainzId)}`,
+    pid,
     now,
     now
   );
@@ -694,7 +812,49 @@ export async function requestMusicAlbum(musicbrainzId: string): Promise<{ succes
     success: true,
     message: `Requested ${artist} - ${title}. Follow it in Requested.`,
     status: 'requested',
+    inLibrary: false,
+    isDownloaded: false,
   };
+}
+
+/**
+ * Directly add an already-downloaded album to a profile's collection.
+ */
+export function addMusicAlbumToProfile(albumId: string, profileId?: string): { success: boolean; message: string; inLibrary: boolean } {
+  ensureMusicTables();
+  const db = stateDatabase();
+  const pid = profileId || resolveDefaultProfileId();
+
+  const localAlbum = db.prepare('SELECT * FROM music_albums WHERE (id=? OR musicbrainz_id=?) AND in_library=1').get(albumId, albumId) as any;
+  if (!localAlbum) {
+    return { success: false, message: 'Album is not downloaded on server', inLibrary: false };
+  }
+
+  db.prepare(`
+    INSERT OR IGNORE INTO profile_music_albums (profile_id, album_id, added_at)
+    VALUES (?, ?, ?)
+  `).run(pid, localAlbum.id, new Date().toISOString());
+
+  return {
+    success: true,
+    message: `Added "${localAlbum.title}" to your music library!`,
+    inLibrary: true,
+  };
+}
+
+/**
+ * Remove an album from a profile's collection.
+ */
+export function removeMusicAlbumFromProfile(albumId: string, profileId?: string): { success: boolean; message: string } {
+  ensureMusicTables();
+  const db = stateDatabase();
+  const pid = profileId || resolveDefaultProfileId();
+
+  const localAlbum = db.prepare('SELECT id, title FROM music_albums WHERE id=? OR musicbrainz_id=?').get(albumId, albumId) as any;
+  const targetId = localAlbum?.id || albumId;
+
+  db.prepare('DELETE FROM profile_music_albums WHERE profile_id=? AND album_id=?').run(pid, targetId);
+  return { success: true, message: 'Removed from your music library' };
 }
 
 /**
@@ -970,6 +1130,17 @@ async function importDownloadedAlbum(req: any, files: Array<{ filename: string; 
 
     // Rescan local library to pick up the new album
     await scanLocalMusicLibrary();
+
+    if (req.username) {
+      try {
+        const importedAlbum = db.prepare('SELECT id FROM music_albums WHERE LOWER(artist)=? AND LOWER(title)=?').get(artist.toLowerCase(), album.toLowerCase()) as any;
+        if (importedAlbum?.id) {
+          db.prepare('INSERT OR IGNORE INTO profile_music_albums (profile_id, album_id, added_at) VALUES (?, ?, ?)').run(req.username, importedAlbum.id, new Date().toISOString());
+        }
+      } catch (profileErr) {
+        console.warn('[music] Could not link imported album to profile:', profileErr);
+      }
+    }
 
     db.prepare(`
       UPDATE music_requests SET

@@ -196,6 +196,7 @@ export interface MusicAlbum {
   releaseDate?: string;
   coverUrl?: string;
   inLibrary: boolean;
+  isDownloaded?: boolean;
   requested: boolean;
   trackCount?: number;
 }
