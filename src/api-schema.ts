@@ -50,7 +50,7 @@ add('webhook/arr','POST',success,{},object({eventType:text,downloadId:text,torre
 add('catalog-links','GET',object({items:list(media)}));
 add('music','GET',object(),{q:{type:'string',maxLength:200},offset:natural},undefined,{responseModel:'MusicResponse'});
 add('music/album','GET',object(),{albumId:id},undefined,{requiredQuery:['albumId'],responseModel:'MusicAlbumResponse'});
-add('music/artwork','GET',object(),{albumId:id},undefined,{requiredQuery:['albumId'],binary:true});
+add('music/artwork','GET',object(),{albumId:id},undefined,{requiredQuery:['albumId'],binary:true,public:true});
 add('music/stream','GET',object(),{trackId:id},undefined,{requiredQuery:['trackId'],binary:true});
 add('music/request','POST',success,{},object({musicbrainzId:id},['musicbrainzId']));
 add('requested','GET',object(),{},undefined,{responseModel:'RequestedResponse'});
@@ -76,7 +76,7 @@ add('youtube/queue','GET',object(),{},undefined,{responseModel:'YouTubeQueueResp
 add('youtube/queue','DELETE',success,{videoId:id},undefined,{requiredQuery:['videoId']});
 add('youtube/archive','GET',object(),{},undefined,{responseModel:'YouTubeArchiveResponse'});
 add('youtube/stream-local','GET',object(),{path:text},undefined,{requiredQuery:['path'],binary:true});
-add('youtube/thumbnail','GET',object(),{path:text},undefined,{requiredQuery:['path'],binary:true});
+add('youtube/thumbnail','GET',object(),{path:text},undefined,{requiredQuery:['path'],binary:true,public:true});
 export const webOperations = operations;
 const shared = ['integrations','requested','music','music/album','music/artwork','music/stream','music/request','youtube/search','youtube/stream','youtube/stream-video','youtube/progress','youtube/continue-watching','youtube/auth','youtube/recommendations','youtube/download','youtube/subscriptions','youtube/subscriptions/check','youtube/queue','youtube/archive','youtube/stream-local','youtube/thumbnail','home','library/{type}','categories/{type}','media/{id}','media/{id}/recommendations','search','downloads','playback','request','subtitles','trailer','stream/download','stream/torrent'];
 export const mobileOperations: Operation[] = operations.filter(operation => shared.includes(operation.path)).map(operation => ({...operation}));

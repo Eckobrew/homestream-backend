@@ -78,6 +78,8 @@ async function dispatch(request: HttpRequest, context: Context) {
   }
   if ((get || request.method === 'HEAD') && route === 'parental-resource') return parentalResource(request);
   if ((get || request.method === 'HEAD') && route === 'image') return handleImage(request);
+  if ((get || request.method === 'HEAD') && route === 'youtube/thumbnail') return youtubeService.GET(request);
+  if ((get || request.method === 'HEAD') && route === 'music/artwork') return musicService.GET(request);
   if (get && route === 'auth/users') return HttpResponse.json({ users: [] });
   if (!get && route === 'auth/login') {
     if (!await allowLogin(request)) return HttpResponse.json({ error: 'Too many login attempts. Try again in a minute.' }, { status: 429 });
