@@ -133,7 +133,37 @@ async function handleGET(
                 item.status = 'available';
                 item.source = 'jellyfin';
                 if (jfDetails.seasons && jfDetails.seasons.length > 0) {
-                  item.seasons = jfDetails.seasons;
+                  const jfSeasons = jfDetails.seasons;
+                  if (item.seasons && item.seasons.length > 0) {
+                    item.seasons = item.seasons.map((s: any) => {
+                      const jfSeason = jfSeasons.find((js: any) => js.seasonNumber === s.seasonNumber);
+                      if (!jfSeason) return s;
+                      return {
+                        ...s,
+                        overview: s.overview || jfSeason.overview,
+                        posterUrl: s.posterUrl || jfSeason.posterUrl,
+                        episodes: (s.episodes || []).map((ep: any) => {
+                          const jfEp = (jfSeason.episodes || []).find((je: any) => je.episodeNumber === ep.episodeNumber);
+                          if (jfEp) {
+                            return {
+                              ...ep,
+                              jellyfinId: jfEp.id || jfEp.jellyfinId,
+                              videoStreamUrl: jfEp.videoStreamUrl,
+                              downloadStreamUrl: jfEp.downloadStreamUrl,
+                              played: jfEp.played,
+                              playbackPositionTicks: jfEp.playbackPositionTicks,
+                              totalDurationTicks: jfEp.totalDurationTicks,
+                              progressPercent: jfEp.progressPercent,
+                              status: 'available',
+                            };
+                          }
+                          return ep;
+                        }),
+                      };
+                    });
+                  } else {
+                    item.seasons = jfDetails.seasons;
+                  }
                 }
               }
             }

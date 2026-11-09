@@ -50,6 +50,7 @@ export interface TmdbRawItem {
     poster_path?: string | null;
     episode_count?: number;
     air_date?: string;
+    vote_average?: number;
   }>;
   release_dates?: {
     results?: Array<{
@@ -316,6 +317,70 @@ export class TmdbClient {
     return this.mapItem(raw, 'Movie');
   }
 
+  async getTvSeason(tmdbId: number, seasonNumber: number, fallbackBackdrop?: string, fallbackPoster?: string): Promise<Season | null> {
+    const seasonData = await this.fetch<{
+      id: number;
+      name: string;
+      overview: string;
+      poster_path?: string;
+      air_date?: string;
+      vote_average?: number;
+      season_number: number;
+      episodes?: Array<{
+        id: number;
+        episode_number: number;
+        season_number: number;
+        name: string;
+        overview: string;
+        still_path?: string;
+        runtime?: number;
+        air_date?: string;
+        vote_average?: number;
+      }>;
+    }>(
+      `/tv/${tmdbId}/season/${seasonNumber}`,
+      {},
+      24 * 60 * 60 * 1000
+    );
+
+    if (!seasonData) return null;
+
+    const episodes: Episode[] = (seasonData.episodes || []).map(ep => {
+      const stillUrl = ep.still_path
+        ? `https://image.tmdb.org/t/p/w500${ep.still_path}`
+        : fallbackBackdrop || fallbackPoster || '';
+
+      return {
+        id: `seerr-ep-${tmdbId}-${seasonNumber}-${ep.episode_number}`,
+        name: ep.name || `Episode ${ep.episode_number}`,
+        episodeNumber: ep.episode_number,
+        seasonNumber,
+        overview: ep.overview || 'No description available.',
+        thumbnailUrl: stillUrl,
+        durationMinutes: ep.runtime || 45,
+        airDate: ep.air_date,
+        voteAverage: ep.vote_average,
+        tmdbId,
+      };
+    });
+
+    const posterUrl = seasonData.poster_path
+      ? `https://image.tmdb.org/t/p/w500${seasonData.poster_path}`
+      : fallbackPoster;
+
+    return {
+      id: `seerr-season-${tmdbId}-${seasonNumber}`,
+      seasonNumber,
+      name: seasonData.name || `Season ${seasonNumber}`,
+      episodeCount: episodes.length,
+      overview: seasonData.overview || '',
+      posterUrl,
+      airDate: seasonData.air_date,
+      voteAverage: seasonData.vote_average,
+      episodes,
+    };
+  }
+
   async getTvDetails(tmdbId: number): Promise<MediaItem | null> {
     const raw = await this.fetch<TmdbRawItem>(
       `/tv/${tmdbId}`,
@@ -326,16 +391,41 @@ export class TmdbClient {
     const item = this.mapItem(raw, 'Series');
 
     if (raw.seasons && Array.isArray(raw.seasons)) {
-      item.seasons = raw.seasons
-        .filter(s => s.season_number > 0)
-        .map(s => ({
-          id: String(s.id || s.season_number),
-          seasonNumber: s.season_number,
-          name: s.name || `Season ${s.season_number}`,
-          episodeCount: s.episode_count || 0,
-          overview: s.overview,
-          episodes: [],
-        }));
+      const regularSeasons = raw.seasons.filter(s => s.season_number > 0);
+
+      const seasonsWithEpisodes: Season[] = await Promise.all(
+        regularSeasons.map(async s => {
+          try {
+            const season = await this.getTvSeason(tmdbId, s.season_number, item.backdropUrl, item.posterUrl);
+            if (season) {
+              if (s.overview && !season.overview) season.overview = s.overview;
+              if (s.poster_path && !season.posterUrl) {
+                season.posterUrl = `https://image.tmdb.org/t/p/w500${s.poster_path}`;
+              }
+              if (s.air_date && !season.airDate) season.airDate = s.air_date;
+              if (s.vote_average && !season.voteAverage) season.voteAverage = s.vote_average;
+              return season;
+            }
+          } catch (e) {
+            console.warn(`[tmdb] Failed to fetch season ${s.season_number} for tv ${tmdbId}:`, e);
+          }
+
+          return {
+            id: `seerr-season-${tmdbId}-${s.season_number}`,
+            seasonNumber: s.season_number,
+            name: s.name || `Season ${s.season_number}`,
+            episodeCount: s.episode_count || 0,
+            overview: s.overview || '',
+            posterUrl: s.poster_path ? `https://image.tmdb.org/t/p/w500${s.poster_path}` : item.posterUrl,
+            airDate: s.air_date,
+            voteAverage: s.vote_average,
+            episodes: [],
+          };
+        })
+      );
+
+      item.seasons = seasonsWithEpisodes;
+      item.seasonsCount = seasonsWithEpisodes.length;
     }
 
     return item;
@@ -374,5 +464,21 @@ export class TmdbClient {
 
     const res = await this.fetch<{ results: TmdbRawItem[] }>(`/discover/${mediaType}`, params, 60 * 60 * 1000);
     return (res?.results || []).map(i => this.mapItem(i, mediaType === 'movie' ? 'Movie' : 'Series'));
+  }
+
+  async getMovieCollection(tmdbId: number): Promise<{ name?: string; overview?: string; parts: MediaItem[] } | null> {
+    const movie = await this.fetch<{ belongs_to_collection?: { id: number; name: string } }>(`/movie/${tmdbId}`, {}, 24 * 60 * 60 * 1000);
+    const colId = movie?.belongs_to_collection?.id;
+    if (!colId) return null;
+
+    const colData = await this.fetch<{ name: string; overview?: string; parts?: TmdbRawItem[] }>(`/collection/${colId}`, {}, 24 * 60 * 60 * 1000);
+    if (!colData) return null;
+
+    const parts = (colData.parts || []).map(p => this.mapItem(p, 'Movie'));
+    return {
+      name: colData.name,
+      overview: colData.overview,
+      parts,
+    };
   }
 }

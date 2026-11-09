@@ -1189,6 +1189,9 @@ export interface components {
             name: string;
             episodeCount: number;
             overview?: string;
+            posterUrl?: string;
+            airDate?: string;
+            voteAverage?: number;
             episodes?: components["schemas"]["Episode"][];
         };
         Episode: {
@@ -1207,6 +1210,11 @@ export interface components {
             jellyfinId?: string;
             videoStreamUrl?: string;
             downloadStreamUrl?: string;
+            airDate?: string;
+            voteAverage?: number;
+            tmdbId?: number;
+            seriesId?: string;
+            seriesName?: string;
         };
         DownloadingTorrentFile: {
             index: number;

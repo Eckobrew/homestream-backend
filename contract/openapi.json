@@ -36707,6 +36707,15 @@
           "overview": {
             "type": "string"
           },
+          "posterUrl": {
+            "type": "string"
+          },
+          "airDate": {
+            "type": "string"
+          },
+          "voteAverage": {
+            "type": "number"
+          },
           "episodes": {
             "type": "array",
             "items": {
@@ -36767,6 +36776,21 @@
             "type": "string"
           },
           "downloadStreamUrl": {
+            "type": "string"
+          },
+          "airDate": {
+            "type": "string"
+          },
+          "voteAverage": {
+            "type": "number"
+          },
+          "tmdbId": {
+            "type": "number"
+          },
+          "seriesId": {
+            "type": "string"
+          },
+          "seriesName": {
             "type": "string"
           }
         },

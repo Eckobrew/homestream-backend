@@ -29,6 +29,11 @@ export interface Episode {
   jellyfinId?: string;
   videoStreamUrl?: string;
   downloadStreamUrl?: string;
+  airDate?: string;
+  voteAverage?: number;
+  tmdbId?: number;
+  seriesId?: string;
+  seriesName?: string;
 }
 
 export interface Season {
@@ -37,6 +42,9 @@ export interface Season {
   name: string;
   episodeCount: number;
   overview?: string;
+  posterUrl?: string;
+  airDate?: string;
+  voteAverage?: number;
   episodes?: Episode[];
 }
 

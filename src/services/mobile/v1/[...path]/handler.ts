@@ -14,6 +14,7 @@ import { manageProfile, ProfileError, STOCK_AVATARS } from '@/lib/profile-manage
 import { withJellyfinSession } from '@/lib/jellyfin-session';
 import { timingSafeEqual } from 'crypto';
 import { HttpRequest, HttpResponse } from '@/http';
+import { MediaItem } from '@/types';
 import { GET as home } from '@/services/home/handler';
 import { GET as library } from '@/services/library/[type]/handler';
 import { GET as details } from '@/services/media/[id]/handler';
@@ -37,6 +38,7 @@ import { isValidDeviceToken, isLocallyPairedDeviceToken, registerDevice } from '
 import { handleImage } from '@/lib/image-proxy';
 import { isLocalOrTailscaleIp } from '@/lib/network';
 import { SeerrClient } from '@/lib/seerr';
+import { TmdbClient } from '@/lib/tmdb';
 import { GET as trailer } from '@/services/trailer/handler';
 
 
@@ -218,8 +220,44 @@ async function dispatchContent(request: HttpRequest, context: Context) {
     if (!itemId) return HttpResponse.json({ error: 'itemId required' }, { status: 400 });
     const uid = await resolveJellyfinUserId(request.nextUrl.searchParams.get('userId') || undefined);
     const jellyfin = new JellyfinClient(undefined, undefined, uid);
-    if (!jellyfin.isConfigured()) return HttpResponse.json({ error: 'Jellyfin not configured' }, { status: 503 });
-    return HttpResponse.json({ items: await jellyfin.getEpisodeQueue(itemId) });
+    if (!itemId.startsWith('seerr-') && !itemId.startsWith('tmdb-') && jellyfin.isConfigured()) {
+      try {
+        const queue = await jellyfin.getEpisodeQueue(itemId);
+        if (queue && queue.length > 0) return HttpResponse.json({ items: queue });
+      } catch {}
+    }
+
+    const tmdb = new TmdbClient();
+    const seerr = new SeerrClient();
+    let tmdbId = 0;
+    const match = /^(?:seerr|tmdb)-(?:tv-|ep-)?(\d+)/.exec(itemId) || (/^\d+$/.test(itemId) ? [null, itemId] : null);
+    if (match) tmdbId = Number(match[1]);
+
+    if (tmdbId > 0) {
+      const show = tmdb.isConfigured() ? await tmdb.getTvDetails(tmdbId) : await seerr.getTvDetails(tmdbId);
+      if (show && show.seasons) {
+        const allEpisodes: MediaItem[] = show.seasons.flatMap(s => (s.episodes || []).map(ep => ({
+          id: ep.id,
+          title: ep.name,
+          type: 'Episode' as const,
+          posterUrl: ep.thumbnailUrl,
+          backdropUrl: show.backdropUrl,
+          overview: ep.overview,
+          durationMinutes: ep.durationMinutes,
+          seasonNumber: ep.seasonNumber,
+          episodeNumber: ep.episodeNumber,
+          seriesId: show.id,
+          seriesName: show.title,
+          tmdbId,
+          source: show.source,
+          status: 'processing' as const,
+          genres: show.genres,
+        })));
+        return HttpResponse.json({ items: allEpisodes });
+      }
+    }
+
+    return HttpResponse.json({ items: [] });
   }
   if (get && route === 'search') return search(request);
   if (get && route === 'downloads') return downloads(request);
@@ -228,12 +266,16 @@ async function dispatchContent(request: HttpRequest, context: Context) {
     const id = params.path[1];
     const uid = await resolveJellyfinUserId(session?.id || request.nextUrl.searchParams.get('userId') || undefined);
     const jellyfin = new JellyfinClient(undefined, undefined, uid);
-    let tmdbId = /^seerr-(?:movie-)?(\d+)$/.exec(id)?.[1] || (/^\d+$/.test(id) ? id : '');
+    let tmdbId = /^(?:seerr|tmdb)-(?:movie-)?(\d+)$/.exec(id)?.[1] || (/^\d+$/.test(id) ? id : '');
     if (!tmdbId && jellyfin.isConfigured()) {
       const parts = await jellyfin.getMovieCollection(id);
       if (parts.length) return HttpResponse.json({ collection: { name: 'Movie Collection', parts } });
       const item = await jellyfin.getItemDetails(id);
       tmdbId = item?.tmdbId ? String(item.tmdbId) : '';
+    }
+    const tmdbClient = new TmdbClient();
+    if (tmdbId && tmdbClient.isConfigured()) {
+      return HttpResponse.json({ collection: await tmdbClient.getMovieCollection(Number(tmdbId)) });
     }
     const seerr = new SeerrClient();
     return HttpResponse.json({ collection: tmdbId && seerr.isConfigured() ? await seerr.getMovieCollection(Number(tmdbId)) : null });

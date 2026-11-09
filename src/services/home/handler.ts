@@ -105,7 +105,8 @@ async function handleGET(request: HttpRequest) {
       requestSections: demoRequestSections,
       isDemoMode: true,
       jellyfinConnected: false,
-      seerrConnected: seerr.isConfigured(),
+      seerrConnected: seerr.isConfigured() || tmdb.isConfigured(),
+      tmdbConnected: tmdb.isConfigured(),
     });
   }
 
