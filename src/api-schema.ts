@@ -52,7 +52,10 @@ add('music','GET',object(),{q:{type:'string',maxLength:200},offset:natural},unde
 add('music/album','GET',object(),{albumId:id},undefined,{requiredQuery:['albumId'],responseModel:'MusicAlbumResponse'});
 add('music/artwork','GET',object(),{albumId:id},undefined,{requiredQuery:['albumId'],binary:true,public:true});
 add('music/stream','GET',object(),{trackId:id},undefined,{requiredQuery:['trackId'],binary:true});
-add('music/request','POST',success,{},object({musicbrainzId:id},['musicbrainzId']));
+add('music/request','POST',success,{},object({musicbrainzId:id,albumId:id}));
+add('music/profile-album','POST',success,{},object({albumId:id}));
+add('music/profile-album','DELETE',success,{albumId:id});
+add('music/album','DELETE',success,{albumId:id});
 add('requested','GET',object(),{},undefined,{responseModel:'RequestedResponse'});
 add('integrations','GET',object(),{},undefined,{responseModel:'IntegrationsResponse'});
 add('integrations','POST',object(),{},object({integration:{type:'string',enum:['jellyfin','seerr','qbittorrent','slskd','droppedneedle','radarr','sonarr','tmdb']},action:{type:'string',enum:['save','test']},url:text,secret:text,username:text,downloadsPath:text,parentPin:text},['integration','action']));

@@ -24,10 +24,11 @@ import * as service17 from './services/trailer/handler';
 import * as service18 from './services/webhook/arr/handler';
 export const routes = [
   {path:'/api/music',methods:['GET'],service:music},
-  {path:'/api/music/album',methods:['GET'],service:music},
+  {path:'/api/music/album',methods:['GET','DELETE'],service:music},
   {path:'/api/music/artwork',methods:['GET'],service:music},
   {path:'/api/music/stream',methods:['GET'],service:music},
   {path:'/api/music/request',methods:['POST'],service:music},
+  {path:'/api/music/profile-album',methods:['POST','DELETE'],service:music},
   {path:'/api/requested',methods:['GET'],service:requested},
   {path:'/api/integrations',methods:['GET','POST'],service:integrations},
   {path:'/api/youtube/search',methods:['GET'],service:youtube},
