@@ -59,6 +59,29 @@ export function ensureYouTubeTables(): void {
         created_at TEXT NOT NULL,
         completed_at TEXT
       );
+
+      CREATE TABLE IF NOT EXISTS youtube_watch_progress (
+        id TEXT PRIMARY KEY,
+        profile_id TEXT NOT NULL,
+        video_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        channel_name TEXT,
+        thumbnail_url TEXT,
+        position_seconds REAL NOT NULL,
+        duration_seconds REAL NOT NULL,
+        stream_url TEXT,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS youtube_profile_auth (
+        profile_id TEXT PRIMARY KEY,
+        account_name TEXT,
+        avatar_url TEXT,
+        cookies_text TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_youtube_progress_profile ON youtube_watch_progress(profile_id);
     `);
     tablesInitialized = true;
   } catch (err) {
@@ -123,6 +146,63 @@ export function formatDuration(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+async function searchYouTubeViaYtDlp(query: string, maxResults = 25): Promise<YouTubeSearchResult[]> {
+  return new Promise((resolve) => {
+    const child = spawn(
+      'yt-dlp',
+      [
+        '--flat-playlist',
+        '--dump-single-json',
+        '--no-warnings',
+        `ytsearch${maxResults}:${query}`,
+      ],
+      { timeout: 10000 }
+    );
+
+    let stdout = '';
+    child.stdout.on('data', (d) => { stdout += d.toString(); });
+    child.on('error', () => resolve([]));
+    child.on('close', (code) => {
+      if (code !== 0 || !stdout.trim()) {
+        resolve([]);
+        return;
+      }
+      try {
+        const data = JSON.parse(stdout);
+        const entries = data.entries || [];
+        const downloadedIds = getDownloadedVideoIds();
+        const results: YouTubeSearchResult[] = [];
+
+        for (const e of entries) {
+          if (!e || !e.id) continue;
+          const durationSec = Number(e.duration) || 0;
+          const thumbs = e.thumbnails || [];
+          const thumbUrl = thumbs[thumbs.length - 1]?.url || `https://i.ytimg.com/vi/${e.id}/hqdefault.jpg`;
+          const isShort = durationSec > 0 && durationSec <= 60;
+
+          results.push({
+            id: String(e.id),
+            title: String(e.title || ''),
+            channelId: String(e.channel_id || ''),
+            channelTitle: String(e.channel || e.uploader || ''),
+            durationSeconds: durationSec,
+            durationFormatted: formatDuration(durationSec),
+            thumbnailUrl: thumbUrl.startsWith('//') ? `https:${thumbUrl}` : thumbUrl,
+            uploadDate: e.upload_date,
+            viewCount: e.view_count ? String(e.view_count) : undefined,
+            description: String(e.description || ''),
+            isShort,
+            isDownloaded: downloadedIds.has(e.id),
+          });
+        }
+        resolve(results);
+      } catch {
+        resolve([]);
+      }
+    });
+  });
+}
+
 /**
  * Searches YouTube for videos and channels via public web extraction
  */
@@ -137,6 +217,12 @@ export async function searchYouTube(query: string): Promise<YouTubeSearchResult[
     const videoId = videoUrlMatch[1];
     const single = await getVideoDetails(videoId);
     return single ? [single] : [];
+  }
+
+  // Try robust yt-dlp search first
+  const ytdlpResults = await searchYouTubeViaYtDlp(trimmed, 25);
+  if (ytdlpResults.length > 0) {
+    return ytdlpResults;
   }
 
   const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(trimmed)}`;
@@ -963,4 +1049,252 @@ export function getLocalYouTubeArchive(): YouTubeArchiveItem[] {
   }
 
   return items.sort((a, b) => (a.modifiedAt < b.modifiedAt ? 1 : -1));
+}
+
+
+/**
+ * Save user playback progress for continue watching row
+ */
+export function saveYouTubeProgress(
+  profileId: string,
+  item: {
+    videoId: string;
+    title: string;
+    channelName?: string;
+    thumbnailUrl?: string;
+    positionSeconds: number;
+    durationSeconds: number;
+    streamUrl?: string;
+  }
+) {
+  ensureYouTubeTables();
+  try {
+    const db = stateDatabase();
+    const id = `${profileId}:${item.videoId}`;
+    const now = new Date().toISOString();
+
+    // If watched more than 95%, remove from continue watching
+    if (item.durationSeconds > 0 && item.positionSeconds / item.durationSeconds > 0.95) {
+      db.prepare('DELETE FROM youtube_watch_progress WHERE id = ?').run(id);
+      return;
+    }
+
+    db.prepare(`
+      INSERT INTO youtube_watch_progress (id, profile_id, video_id, title, channel_name, thumbnail_url, position_seconds, duration_seconds, stream_url, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        title = excluded.title,
+        channel_name = excluded.channel_name,
+        thumbnail_url = excluded.thumbnail_url,
+        position_seconds = excluded.position_seconds,
+        duration_seconds = excluded.duration_seconds,
+        stream_url = excluded.stream_url,
+        updated_at = excluded.updated_at
+    `).run(
+      id,
+      profileId,
+      item.videoId,
+      item.title,
+      item.channelName || null,
+      item.thumbnailUrl || null,
+      item.positionSeconds,
+      item.durationSeconds,
+      item.streamUrl || null,
+      now
+    );
+  } catch (err) {
+    log.warn('[youtube] Failed saving watch progress:', err);
+  }
+}
+
+/**
+ * Get active continue watching items for a profile
+ */
+export function getYouTubeContinueWatching(profileId: string) {
+  ensureYouTubeTables();
+  try {
+    const db = stateDatabase();
+    const rows = db.prepare(`
+      SELECT * FROM youtube_watch_progress
+      WHERE profile_id = ? AND position_seconds > 10 AND (duration_seconds - position_seconds) > 15
+      ORDER BY updated_at DESC
+      LIMIT 20
+    `).all(profileId) as any[];
+
+    return rows.map((r) => ({
+      videoId: r.video_id,
+      title: r.title,
+      channelName: r.channel_name,
+      thumbnailUrl: r.thumbnail_url || `https://i.ytimg.com/vi/${r.video_id}/hqdefault.jpg`,
+      positionSeconds: r.position_seconds,
+      durationSeconds: r.duration_seconds,
+      progressPercent: r.duration_seconds > 0 ? Math.min(100, Math.round((r.position_seconds / r.duration_seconds) * 100)) : 0,
+      streamUrl: r.stream_url || `/api/youtube/stream-video?videoId=${encodeURIComponent(r.video_id)}`,
+      updatedAt: r.updated_at,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Delete watch progress for a video
+ */
+export function deleteYouTubeProgress(profileId: string, videoId: string): boolean {
+  ensureYouTubeTables();
+  try {
+    const db = stateDatabase();
+    db.prepare('DELETE FROM youtube_watch_progress WHERE id = ?').run(`${profileId}:${videoId}`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Store connected YouTube cookies/session for a profile
+ */
+export function saveYouTubeAuth(profileId: string, cookiesText: string, accountName?: string) {
+  ensureYouTubeTables();
+  const db = stateDatabase();
+  const now = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO youtube_profile_auth (profile_id, account_name, avatar_url, cookies_text, updated_at)
+    VALUES (?, ?, null, ?, ?)
+    ON CONFLICT(profile_id) DO UPDATE SET
+      account_name = excluded.account_name,
+      cookies_text = excluded.cookies_text,
+      updated_at = excluded.updated_at
+  `).run(profileId, accountName || 'Connected YouTube User', cookiesText, now);
+}
+
+/**
+ * Get connected status for a profile
+ */
+export function getYouTubeAuth(profileId: string): { connected: boolean; accountName?: string; avatarUrl?: string } {
+  ensureYouTubeTables();
+  try {
+    const db = stateDatabase();
+    const row = db.prepare('SELECT account_name, avatar_url FROM youtube_profile_auth WHERE profile_id = ?').get(profileId) as any;
+    if (row) {
+      return { connected: true, accountName: row.account_name, avatarUrl: row.avatar_url };
+    }
+  } catch {}
+  return { connected: false };
+}
+
+/**
+ * Disconnect YouTube account for a profile
+ */
+export function deleteYouTubeAuth(profileId: string): boolean {
+  ensureYouTubeTables();
+  try {
+    const db = stateDatabase();
+    db.prepare('DELETE FROM youtube_profile_auth WHERE profile_id = ?').run(profileId);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Proxies the video stream from YouTube upstream directly to the client with full HTTP 206 Range support
+ */
+export async function fetchProxyStream(videoId: string, rangeHeader: string | null, signal?: AbortSignal): Promise<Response> {
+  const streamUrl = await resolveStreamUrl(videoId);
+  if (!streamUrl) {
+    throw new Error('Could not resolve stream URL from YouTube');
+  }
+
+  const headers: Record<string, string> = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  };
+  if (rangeHeader) {
+    headers['Range'] = rangeHeader;
+  }
+
+  return fetch(streamUrl, {
+    headers,
+    signal: signal || AbortSignal.timeout(30000),
+  });
+}
+
+/**
+ * Returns Netflix-style media sections and hero for the YouTube Hub
+ */
+export async function getYouTubeRecommendations(profileId?: string): Promise<{
+  hero: YouTubeSearchResult | null;
+  sections: Array<{ id: string; title: string; items: YouTubeSearchResult[] }>;
+}> {
+  ensureYouTubeTables();
+  const sections: Array<{ id: string; title: string; items: YouTubeSearchResult[] }> = [];
+
+  // 1. Check if profile is logged in for personalized subscriptions/feed
+  let personalizedVideos: YouTubeSearchResult[] = [];
+  if (profileId) {
+    const auth = getYouTubeAuth(profileId);
+    if (auth.connected) {
+      // In future can query feed with cookies; for now, search subscribed channels
+    }
+  }
+
+  // 2. Subscribed Channels latest uploads
+  const subs = getSubscriptions();
+  const subVideos: YouTubeSearchResult[] = [];
+  for (const s of subs.slice(0, 5)) {
+    try {
+      const channelFeed = await checkChannelNewUploads(s.id);
+    } catch {}
+  }
+
+  // 3. Local NAS archive items formatted as results
+  const archive = getLocalYouTubeArchive();
+  const localArchiveResults: YouTubeSearchResult[] = archive.slice(0, 15).map((a) => ({
+    id: a.id,
+    title: a.title,
+    channelId: '',
+    channelTitle: a.channelName,
+    durationSeconds: 0,
+    durationFormatted: 'Downloaded',
+    thumbnailUrl: a.thumbnailUrl || `https://i.ytimg.com/vi/${a.id}/hqdefault.jpg`,
+    isShort: false,
+    isDownloaded: true,
+  }));
+
+  // 4. Curated topics / search queries
+  const [podcastResults, deepDiveResults] = await Promise.all([
+    searchYouTube('Lex Fridman OR Joe Rogan podcast').catch(() => []),
+    searchYouTube('science documentary full interview').catch(() => []),
+  ]);
+
+  if (localArchiveResults.length > 0) {
+    sections.push({
+      id: 'downloaded',
+      title: 'Downloaded to NAS (Instant Playback)',
+      items: localArchiveResults,
+    });
+  }
+
+  if (podcastResults.length > 0) {
+    sections.push({
+      id: 'podcasts',
+      title: 'Popular Podcasts & Interviews',
+      items: podcastResults.slice(0, 12),
+    });
+  }
+
+  if (deepDiveResults.length > 0) {
+    sections.push({
+      id: 'deep-dives',
+      title: 'Documentaries & Deep Dives',
+      items: deepDiveResults.slice(0, 12),
+    });
+  }
+
+  const heroCandidate = localArchiveResults[0] || podcastResults[0] || null;
+
+  return {
+    hero: heroCandidate,
+    sections,
+  };
 }

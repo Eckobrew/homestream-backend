@@ -14,6 +14,14 @@ import {
   cancelDownload,
   getLocalYouTubeArchive,
   getYouTubeStoragePath,
+  fetchProxyStream,
+  saveYouTubeProgress,
+  getYouTubeContinueWatching,
+  deleteYouTubeProgress,
+  saveYouTubeAuth,
+  getYouTubeAuth,
+  deleteYouTubeAuth,
+  getYouTubeRecommendations,
 } from '@/lib/youtube';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -49,6 +57,28 @@ async function handleGET(request: HttpRequest) {
     }
   }
 
+  if (route === 'youtube/recommendations') {
+    const profileId = request.nextUrl.searchParams.get('profileId') || 'default';
+    try {
+      const data = await getYouTubeRecommendations(profileId);
+      return HttpResponse.json(data);
+    } catch {
+      return HttpResponse.json({ hero: null, sections: [] });
+    }
+  }
+
+  if (route === 'youtube/continue-watching') {
+    const profileId = request.nextUrl.searchParams.get('profileId') || 'default';
+    const items = getYouTubeContinueWatching(profileId);
+    return HttpResponse.json({ items });
+  }
+
+  if (route === 'youtube/auth') {
+    const profileId = request.nextUrl.searchParams.get('profileId') || 'default';
+    const auth = getYouTubeAuth(profileId);
+    return HttpResponse.json(auth);
+  }
+
   if (route === 'youtube/stream') {
     const videoId = request.nextUrl.searchParams.get('videoId');
     if (!videoId || !/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
@@ -59,9 +89,44 @@ async function handleGET(request: HttpRequest) {
       if (!streamUrl) {
         return HttpResponse.json({ error: 'Could not resolve stream URL for video' }, { status: 502 });
       }
-      return HttpResponse.json({ videoId, streamUrl });
+      return HttpResponse.json({
+        videoId,
+        streamUrl,
+        proxyStreamUrl: `/api/youtube/stream-video?videoId=${encodeURIComponent(videoId)}`,
+      });
     } catch {
       return HttpResponse.json({ error: 'Could not resolve stream URL for video' }, { status: 502 });
+    }
+  }
+
+  if (route === 'youtube/stream-video') {
+    const videoId = request.nextUrl.searchParams.get('videoId');
+    if (!videoId || !/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
+      return HttpResponse.json({ error: 'Valid videoId required' }, { status: 400 });
+    }
+
+    try {
+      const rangeHeader = request.headers.get('range');
+      const upstream = await fetchProxyStream(videoId, rangeHeader, request.signal);
+
+      if (!upstream.ok && upstream.status !== 206) {
+        return HttpResponse.json({ error: 'Upstream video unavailable' }, { status: upstream.status });
+      }
+
+      const headers = new Headers();
+      headers.set('Cache-Control', 'private, no-cache');
+      headers.set('Accept-Ranges', 'bytes');
+      for (const h of ['content-type', 'content-length', 'content-range']) {
+        const v = upstream.headers.get(h);
+        if (v) headers.set(h, v);
+      }
+
+      return new HttpResponse(upstream.body, {
+        status: upstream.status,
+        headers,
+      });
+    } catch (err: any) {
+      return HttpResponse.json({ error: err.message || 'Stream proxy failed' }, { status: 502 });
     }
   }
 
@@ -165,6 +230,34 @@ async function handlePOST(request: HttpRequest) {
   const pathname = request.nextUrl.pathname;
   const route = pathname.replace(/^\/api\/(?:mobile\/v1\/|v1\/)?/, '');
 
+  if (route === 'youtube/progress') {
+    const body = await request.json().catch(() => null);
+    if (!body || !body.videoId || typeof body.positionSeconds !== 'number') {
+      return HttpResponse.json({ error: 'videoId and positionSeconds required' }, { status: 400 });
+    }
+    const profileId = body.profileId || request.nextUrl.searchParams.get('profileId') || 'default';
+    saveYouTubeProgress(profileId, {
+      videoId: body.videoId,
+      title: body.title || 'YouTube Video',
+      channelName: body.channelName,
+      thumbnailUrl: body.thumbnailUrl,
+      positionSeconds: body.positionSeconds,
+      durationSeconds: body.durationSeconds || 0,
+      streamUrl: body.streamUrl,
+    });
+    return HttpResponse.json({ success: true });
+  }
+
+  if (route === 'youtube/auth') {
+    const body = await request.json().catch(() => null);
+    if (!body || !body.cookiesText) {
+      return HttpResponse.json({ error: 'cookiesText required' }, { status: 400 });
+    }
+    const profileId = body.profileId || request.nextUrl.searchParams.get('profileId') || 'default';
+    saveYouTubeAuth(profileId, body.cookiesText, body.accountName);
+    return HttpResponse.json({ success: true, message: 'YouTube account connected' });
+  }
+
   if (route === 'youtube/download') {
     const body = await request.json().catch(() => null);
     if (!body || typeof body.videoId !== 'string' || !body.title) {
@@ -246,6 +339,20 @@ async function handlePUT(request: HttpRequest) {
 async function handleDELETE(request: HttpRequest) {
   const pathname = request.nextUrl.pathname;
   const route = pathname.replace(/^\/api\/(?:mobile\/v1\/|v1\/)?/, '');
+
+  if (route === 'youtube/progress') {
+    const videoId = request.nextUrl.searchParams.get('videoId');
+    if (!videoId) return HttpResponse.json({ error: 'videoId required' }, { status: 400 });
+    const profileId = request.nextUrl.searchParams.get('profileId') || 'default';
+    const deleted = deleteYouTubeProgress(profileId, videoId);
+    return HttpResponse.json({ success: deleted });
+  }
+
+  if (route === 'youtube/auth') {
+    const profileId = request.nextUrl.searchParams.get('profileId') || 'default';
+    const deleted = deleteYouTubeAuth(profileId);
+    return HttpResponse.json({ success: deleted });
+  }
 
   if (route === 'youtube/subscriptions') {
     const id = request.nextUrl.searchParams.get('id');
