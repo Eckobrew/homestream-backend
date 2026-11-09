@@ -195,7 +195,7 @@ export interface RequestedItem {
   id: string;
   title: string;
   kind: 'movie' | 'tv' | 'music';
-  source: 'seerr' | 'tmdb' | 'qbittorrent' | 'droppedneedle' | 'radarr' | 'sonarr';
+  source: 'seerr' | 'tmdb' | 'qbittorrent' | 'slskd' | 'radarr' | 'sonarr';
   status: string;
   artist?: string;
   posterUrl?: string;
@@ -208,7 +208,7 @@ export interface RequestedItem {
 }
 export interface RequestedResponse { items: RequestedItem[]; warnings: string[]; updatedAt: string; }
 export interface IntegrationSummary {
-  id: 'jellyfin' | 'seerr' | 'qbittorrent' | 'droppedneedle' | 'radarr' | 'sonarr' | 'tmdb';
+  id: 'jellyfin' | 'seerr' | 'qbittorrent' | 'slskd' | 'radarr' | 'sonarr' | 'tmdb';
   name: string;
   url: string;
   configured: boolean;

@@ -3,20 +3,19 @@ import { getServerConfig, saveServerConfig } from '@/lib/config';
 import { JellyfinClient } from '@/lib/jellyfin';
 import { SeerrClient } from '@/lib/seerr';
 import { QBittorrentClient } from '@/lib/qbittorrent';
-import { DroppedNeedleClient } from '@/lib/droppedneedle';
 import { RadarrClient } from '@/lib/radarr';
 import { SonarrClient } from '@/lib/sonarr';
 import { TmdbClient } from '@/lib/tmdb';
 import { SlskdClient } from '@/lib/slskd';
 import { withParentalControls } from '@/lib/parental-controls';
-const fields={jellyfin:['jellyfinUrl','jellyfinApiKey'],seerr:['seerrUrl','seerrApiKey'],qbittorrent:['qbittorrentUrl','qbittorrentPassword'],slskd:['slskdUrl','slskdApiKey'],droppedneedle:['droppedneedleUrl','droppedneedleToken'],radarr:['radarrUrl','radarrApiKey'],sonarr:['sonarrUrl','sonarrApiKey'],tmdb:['','tmdbApiKey']} as const;
+const fields={jellyfin:['jellyfinUrl','jellyfinApiKey'],seerr:['seerrUrl','seerrApiKey'],qbittorrent:['qbittorrentUrl','qbittorrentPassword'],slskd:['slskdUrl','slskdApiKey'],radarr:['radarrUrl','radarrApiKey'],sonarr:['sonarrUrl','sonarrApiKey'],tmdb:['','tmdbApiKey']} as const;
 async function get(_r:HttpRequest) {
   const c=getServerConfig();return HttpResponse.json({integrations:Object.entries(fields).map(([id,[urlField,keyField]])=>{
     const isTmdb = id === 'tmdb';
     const url = isTmdb ? 'https://api.themoviedb.org/3' : (c as any)[urlField] || '';
     const configured = isTmdb ? Boolean(c.tmdbApiKey) : Boolean((c as any)[urlField] && (id==='qbittorrent' || (c as any)[keyField]));
     const credentialSet = Boolean((c as any)[keyField]);
-    const name = id==='slskd'?'slskd (Soulseek Music)':id==='droppedneedle'?'DroppedNeedle':id==='qbittorrent'?'qBittorrent':id==='seerr'?'Seerr':id==='radarr'?'Radarr':id==='sonarr'?'Sonarr':id==='tmdb'?'TMDB':'Jellyfin';
+    const name = id==='slskd'?'slskd (Soulseek Music)':id==='qbittorrent'?'qBittorrent':id==='seerr'?'Seerr':id==='radarr'?'Radarr':id==='sonarr'?'Sonarr':id==='tmdb'?'TMDB':'Jellyfin';
     return { id, name, url, configured, credentialSet, ...(id==='qbittorrent'?{username:c.qbittorrentUsername||''}:{}) };
   }),downloadsPath:c.downloadsPath||'/downloads'});
 }
@@ -37,13 +36,6 @@ async function post(r:HttpRequest) {
   else if (id === 'radarr') result = await new RadarrClient(url, secret).testConnection();
   else if (id === 'sonarr') result = await new SonarrClient(url, secret).testConnection();
   else if (id === 'slskd') result = await new SlskdClient(url, secret).testConnection();
-  else {
-    try {
-      result = await new DroppedNeedleClient(url, secret).testConnection();
-    } catch {
-      result = await new SlskdClient(url, secret).testConnection();
-    }
-  }
   return HttpResponse.json({success:result.success,...('version' in result && result.version?{version:result.version}:{})});
  }catch{return HttpResponse.json({success:false,error:'Connection failed. Check the URL, credential and upstream service.'},{status:502});}}
  const patch:Record<string,string>={};if(urlField)patch[urlField]=url;if(body.secret)patch[secretField]=body.secret;if(id==='qbittorrent')patch.qbittorrentUsername=username;

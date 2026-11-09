@@ -58,7 +58,7 @@ add('music/profile-album','DELETE',success,{albumId:id});
 add('music/album','DELETE',success,{albumId:id});
 add('requested','GET',object(),{},undefined,{responseModel:'RequestedResponse'});
 add('integrations','GET',object(),{},undefined,{responseModel:'IntegrationsResponse'});
-add('integrations','POST',object(),{},object({integration:{type:'string',enum:['jellyfin','seerr','qbittorrent','slskd','droppedneedle','radarr','sonarr','tmdb']},action:{type:'string',enum:['save','test']},url:text,secret:text,username:text,downloadsPath:text,parentPin:text},['integration','action']));
+add('integrations','POST',object(),{},object({integration:{type:'string',enum:['jellyfin','seerr','qbittorrent','slskd','radarr','sonarr','tmdb']},action:{type:'string',enum:['save','test']},url:text,secret:text,username:text,downloadsPath:text,parentPin:text},['integration','action']));
 add('youtube/search','GET',object(),{q:text},undefined,{responseModel:'YouTubeSearchResponse'});
 add('youtube/stream','GET',object(),{videoId:id},undefined,{requiredQuery:['videoId'],responseModel:'YouTubeStreamResponse'});
 add('youtube/stream-video','GET',object(),{videoId:id},undefined,{requiredQuery:['videoId'],binary:true});

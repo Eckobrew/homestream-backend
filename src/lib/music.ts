@@ -1236,7 +1236,7 @@ export function getRequestedMusicItems(): RequestedItem[] {
     title: r.album_title,
     artist: r.artist_name,
     kind: 'music',
-    source: 'droppedneedle', // keep source identifier so clients render with music badges
+    source: 'slskd',
     status: r.status,
     requestedAt: r.created_at,
     releaseDate: r.year ? String(r.year) : undefined,

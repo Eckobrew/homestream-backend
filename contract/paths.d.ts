@@ -1862,7 +1862,7 @@ export interface components {
             /** @enum {string} */
             kind: "movie" | "music" | "tv";
             /** @enum {string} */
-            source: "droppedneedle" | "qbittorrent" | "radarr" | "seerr" | "sonarr" | "tmdb";
+            source: "qbittorrent" | "radarr" | "seerr" | "slskd" | "sonarr" | "tmdb";
             status: string;
             artist?: string;
             posterUrl?: string;
@@ -1880,7 +1880,7 @@ export interface components {
         };
         IntegrationSummary: {
             /** @enum {string} */
-            id: "droppedneedle" | "jellyfin" | "qbittorrent" | "radarr" | "seerr" | "sonarr" | "tmdb";
+            id: "jellyfin" | "qbittorrent" | "radarr" | "seerr" | "slskd" | "sonarr" | "tmdb";
             name: string;
             url: string;
             configured: boolean;
@@ -8771,7 +8771,7 @@ export interface operations {
             content: {
                 "application/json": {
                     /** @enum {string} */
-                    integration: "jellyfin" | "seerr" | "qbittorrent" | "slskd" | "droppedneedle" | "radarr" | "sonarr" | "tmdb";
+                    integration: "jellyfin" | "seerr" | "qbittorrent" | "slskd" | "radarr" | "sonarr" | "tmdb";
                     /** @enum {string} */
                     action: "save" | "test";
                     url?: string;
@@ -17145,7 +17145,7 @@ export interface operations {
             content: {
                 "application/json": {
                     /** @enum {string} */
-                    integration: "jellyfin" | "seerr" | "qbittorrent" | "slskd" | "droppedneedle" | "radarr" | "sonarr" | "tmdb";
+                    integration: "jellyfin" | "seerr" | "qbittorrent" | "slskd" | "radarr" | "sonarr" | "tmdb";
                     /** @enum {string} */
                     action: "save" | "test";
                     url?: string;

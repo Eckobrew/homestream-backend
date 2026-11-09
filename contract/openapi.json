@@ -16833,7 +16833,6 @@
                       "seerr",
                       "qbittorrent",
                       "slskd",
-                      "droppedneedle",
                       "radarr",
                       "sonarr",
                       "tmdb"
@@ -37318,7 +37317,6 @@
                       "seerr",
                       "qbittorrent",
                       "slskd",
-                      "droppedneedle",
                       "radarr",
                       "sonarr",
                       "tmdb"
@@ -58169,10 +58167,10 @@
           },
           "source": {
             "enum": [
-              "droppedneedle",
               "qbittorrent",
               "radarr",
               "seerr",
+              "slskd",
               "sonarr",
               "tmdb"
             ],
@@ -58244,11 +58242,11 @@
         "properties": {
           "id": {
             "enum": [
-              "droppedneedle",
               "jellyfin",
               "qbittorrent",
               "radarr",
               "seerr",
+              "slskd",
               "sonarr",
               "tmdb"
             ],
