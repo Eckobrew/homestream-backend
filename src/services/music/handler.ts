@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import { HttpRequest, HttpResponse } from '@/http';
 import { invalidateRequested } from '@/lib/request-cache';
+import { DroppedNeedleClient } from '@/lib/droppedneedle';
 import {
   safeMusicId,
   getAlbums,
@@ -40,6 +41,13 @@ async function get(request: HttpRequest) {
     if (route === 'music') {
       const q = request.nextUrl.searchParams.get('q')?.trim() || '';
       const offset = Math.min(100000, Number(request.nextUrl.searchParams.get('offset')) || 0);
+      const dn = new DroppedNeedleClient(undefined, undefined, request.signal);
+      if (dn.isConfigured()) {
+        try {
+          const dnData = await dn.albums(q, offset);
+          if (dnData?.albums?.length > 0) return json(dnData);
+        } catch {}
+      }
       const data = await getAlbums(q, offset, profileId);
       return json(data);
     }
@@ -47,6 +55,13 @@ async function get(request: HttpRequest) {
     if (route === 'music/album') {
       const id = request.nextUrl.searchParams.get('albumId') || '';
       if (!safeMusicId(id)) return HttpResponse.json({ error: 'Invalid album ID' }, { status: 400 });
+      const dn = new DroppedNeedleClient(undefined, undefined, request.signal);
+      if (dn.isConfigured()) {
+        try {
+          const dnAlbum = await dn.album(id);
+          if (dnAlbum) return json(dnAlbum);
+        } catch {}
+      }
       const data = await getAlbum(id, profileId);
       return json(data);
     }
@@ -100,6 +115,29 @@ async function get(request: HttpRequest) {
       try {
         info = getTrackStreamInfo(id);
       } catch {
+        const dn = new DroppedNeedleClient(undefined, undefined, request.signal);
+        if (dn.isConfigured()) {
+          const headers = new Headers();
+          for (const name of ['range', 'if-range']) {
+            const value = request.headers.get(name);
+            if (value) headers.set(name, value);
+          }
+          const response = await dn.response('/stream/local/' + encodeURIComponent(id), {
+            headers,
+            method: request.method === 'HEAD' ? 'HEAD' : 'GET',
+            signal: request.signal,
+          });
+          if (![200, 206, 416].includes(response.status)) {
+            await response.body?.cancel();
+            return HttpResponse.json({ error: 'Music stream unavailable' }, { status: response.status === 404 ? 404 : 502 });
+          }
+          const output = new Headers({ 'Cache-Control': 'private,no-store' });
+          for (const name of ['content-type', 'content-length', 'content-range', 'accept-ranges']) {
+            const v = response.headers.get(name);
+            if (v) output.set(name, v);
+          }
+          return new HttpResponse(response.body, { status: response.status, headers: output });
+        }
         return HttpResponse.json({ error: 'Track not found' }, { status: 404 });
       }
 
@@ -178,6 +216,19 @@ async function post(request: HttpRequest) {
   const musicId = body?.musicbrainzId || body?.albumId || '';
   if (!/^[a-zA-Z0-9_-]{1,128}$/.test(musicId)) {
     return HttpResponse.json({ error: 'A valid album or MusicBrainz ID is required' }, { status: 400 });
+  }
+
+  const dn = new DroppedNeedleClient();
+  if (dn.isConfigured()) {
+    try {
+      const result = await dn.requestAlbum(musicId);
+      invalidateRequested();
+      return HttpResponse.json({
+        success: result.success !== false,
+        message: result.message || 'Album requested',
+        status: result.status || 'pending',
+      });
+    } catch {}
   }
 
   try {
