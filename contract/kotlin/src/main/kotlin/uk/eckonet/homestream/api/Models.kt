@@ -81,6 +81,9 @@ data class Season(
     @SerialName("name") val `name`: String,
     @SerialName("episodeCount") val `episodeCount`: Double,
     @SerialName("overview") val `overview`: String? = null,
+    @SerialName("posterUrl") val `posterUrl`: String? = null,
+    @SerialName("airDate") val `airDate`: String? = null,
+    @SerialName("voteAverage") val `voteAverage`: Double? = null,
     @SerialName("episodes") val `episodes`: List<Episode>? = null
 )
 
@@ -100,7 +103,12 @@ data class Episode(
     @SerialName("played") val `played`: Boolean? = null,
     @SerialName("jellyfinId") val `jellyfinId`: String? = null,
     @SerialName("videoStreamUrl") val `videoStreamUrl`: String? = null,
-    @SerialName("downloadStreamUrl") val `downloadStreamUrl`: String? = null
+    @SerialName("downloadStreamUrl") val `downloadStreamUrl`: String? = null,
+    @SerialName("airDate") val `airDate`: String? = null,
+    @SerialName("voteAverage") val `voteAverage`: Double? = null,
+    @SerialName("tmdbId") val `tmdbId`: Double? = null,
+    @SerialName("seriesId") val `seriesId`: String? = null,
+    @SerialName("seriesName") val `seriesName`: String? = null
 )
 
 @Serializable
