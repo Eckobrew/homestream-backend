@@ -859,11 +859,12 @@ export async function requestMusicAlbum(
   );
 
   // Trigger background search and acquisition
-  setTimeout(() => {
+  const timer = setTimeout(() => {
     dispatchAlbumDownload(requestId, artist, title, year).catch(err => {
       console.warn(`[music] Background download dispatch failed for ${artist} - ${title}:`, err);
     });
   }, 100);
+  timer.unref();
 
   return {
     success: true,
@@ -955,7 +956,10 @@ async function dispatchAlbumDownload(requestId: string, artist: string, album: s
   // Poll for responses over ~10-15 seconds
   let responses: any[] = [];
   for (let i = 0; i < 6; i++) {
-    await new Promise(r => setTimeout(r, 2500));
+    await new Promise(r => {
+      const t = setTimeout(r, process.env.NODE_ENV === 'test' ? 100 : 2500);
+      t.unref();
+    });
     try {
       responses = await slskd.getSearchResponses(searchRes.id);
       if (responses.length >= 5) break;
@@ -1067,6 +1071,14 @@ export function startDownloadMonitor() {
       await monitorActiveDownloads();
     } catch {}
   }, 6000);
+  downloadMonitorInterval.unref();
+}
+
+export function stopDownloadMonitor() {
+  if (downloadMonitorInterval) {
+    clearInterval(downloadMonitorInterval);
+    downloadMonitorInterval = null;
+  }
 }
 
 async function monitorActiveDownloads() {

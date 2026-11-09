@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { createApp } from '../src/app';
 import { createSession } from '../src/lib/session';
 import { writeState, closeStateDatabases, stateDatabase } from '../src/state/database';
-import { ensureMusicTables } from '../src/lib/music';
+import { ensureMusicTables, stopDownloadMonitor } from '../src/lib/music';
 const mbid = '11111111-1111-4111-8111-111111111111';
 test('music requests, authenticated range streaming, all-media queue and admin credential separation', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'homestream-music-'));
@@ -63,6 +63,10 @@ test('music requests, authenticated range streaming, all-media queue and admin c
     if (url.pathname === '/api/v0/searches') {
       assert.equal(req.headers['x-api-key'], 'server-only-music-token');
       res.end(JSON.stringify({ id: 'search-fixture-1' }));
+      return;
+    }
+    if (url.pathname.startsWith('/api/v0/searches/') && url.pathname.endsWith('/responses')) {
+      res.end(JSON.stringify([]));
       return;
     }
     res.statusCode = 404;
@@ -181,9 +185,10 @@ test('music requests, authenticated range streaming, all-media queue and admin c
       403
     );
   } finally {
+    stopDownloadMonitor();
     await app.close();
     upstream.closeAllConnections();
-    upstream.close();
+    await new Promise<void>((resolve) => upstream.close(() => resolve()));
     closeStateDatabases();
     await rm(directory, { recursive: true, force: true });
   }
