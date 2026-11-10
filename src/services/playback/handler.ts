@@ -32,16 +32,23 @@ async function handleGET(request: HttpRequest) {
   }
 
   const nativeTv = searchParams.get('receiver') === 'native-tv';
-  const tvCapabilities = nativeTv ? parseTvCapabilities(searchParams.get('videoCapabilities')) : [];
+  const cast = searchParams.get('receiver') === 'cast';
+  const tvCapabilities = nativeTv || cast ? parseTvCapabilities(searchParams.get('videoCapabilities')) : [];
+  if (cast && !tvCapabilities.some(capability => capability.codec === 'h264')) {
+    tvCapabilities.push({ codec: 'h264', width: 1920, height: 1080, profiles: ['baseline', 'main', 'high'] });
+    if (canPlayHevc && !tvCapabilities.some(capability => capability.codec === 'hevc')) {
+      tvCapabilities.push({ codec: 'hevc', width: 1920, height: 1080, profiles: ['main', 'main 10'] });
+    }
+  }
   if (nativeTv && !tvCapabilities.some(capability => capability.codec === 'h264')) {
     return HttpResponse.json({ error: 'TV decoder capabilities unavailable. Reopen playback to retry.' }, { status: 400 });
   }
   try {
     const result = await jellyfin.getPlaybackStream(itemId, {
       canPlayHevc,
-      receiver: nativeTv ? 'native-tv' : searchParams.get('receiver') === 'cast' ? 'cast' : searchParams.get('receiver') === 'browser' ? 'browser' : undefined,
+      receiver: nativeTv ? 'native-tv' : cast ? 'cast' : searchParams.get('receiver') === 'browser' ? 'browser' : undefined,
       tvCapabilities,
-      videoCodecs: nativeTv ? tvCapabilities.map(capability => capability.codec) : (searchParams.get('videoCodecs') || '').split(',').filter(codec => ['h264', 'hevc', 'vp8', 'vp9', 'av1'].includes(codec)),
+      videoCodecs: nativeTv || cast ? tvCapabilities.map(capability => capability.codec) : (searchParams.get('videoCodecs') || '').split(',').filter(codec => ['h264', 'hevc', 'vp8', 'vp9', 'av1'].includes(codec)),
       maxWidth: searchParams.get('maxWidth') === '3840' ? 3840 : 1920,
       maxHeight: searchParams.get('maxHeight') === '2160' ? 2160 : 1080,
       audioCodecs: (searchParams.get('audioCodecs') || 'aac,mp3').split(',').filter(codec => ['aac', 'mp3', 'opus', 'flac', 'vorbis', 'ac3', 'eac3', 'dts'].includes(codec)),

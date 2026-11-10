@@ -526,7 +526,7 @@ export class JellyfinClient {
         AudioCodec: options?.audioCodecs?.length ? options.audioCodecs.join(',') : 'aac,mp3',
       })) : [];
       const hlsProfile = { Container: 'ts', Type: 'Video', VideoCodec: 'h264', AudioCodec: 'aac', Protocol: 'hls', Context: 'Streaming',
-        MaxAudioChannels: options?.receiver === 'cast' && options?.forceTranscode ? '2' : undefined };
+        MaxAudioChannels: options?.receiver === 'cast' ? '2' : undefined };
       const progressiveProfile = { Container: 'mp4', Type: 'Video', VideoCodec: options?.forceTranscode ? 'h264' : supportedVideoCodecs.filter(codec => ['h264', 'hevc'].includes(codec)).join(',') || 'h264',
         AudioCodec: 'aac', Protocol: 'http', Context: 'Streaming', MaxAudioChannels: options?.receiver === 'cast' && options?.forceTranscode ? '2' : undefined };
       const profilePayload = {
@@ -536,12 +536,7 @@ export class JellyfinClient {
         DeviceProfile: {
           MaxStreamingBitrate: 120000000,
           DirectPlayProfiles: directPlayProfiles,
-          CodecProfiles: options?.receiver === 'cast' ? [{
-            Type: 'Video', Conditions: [
-              { Condition: 'LessThanEqual', Property: 'Width', Value: String(options.maxWidth || 1920), IsRequired: true },
-              { Condition: 'LessThanEqual', Property: 'Height', Value: String(options.maxHeight || 1080), IsRequired: true },
-            ],
-          }] : options?.receiver === 'native-tv' ? (options.tvCapabilities || []).map(capability => ({
+          CodecProfiles: options?.receiver === 'cast' || options?.receiver === 'native-tv' ? (options.tvCapabilities || []).map(capability => ({
             Type: 'Video', Codec: capability.codec, Conditions: [
               { Condition: 'LessThanEqual', Property: 'Width', Value: String(capability.width), IsRequired: true },
               { Condition: 'LessThanEqual', Property: 'Height', Value: String(capability.height), IsRequired: true },
@@ -590,9 +585,15 @@ export class JellyfinClient {
               isTranscoding: false, playMethod: 'DirectPlay', sourceVideoCodec: mediaSource.MediaStreams?.find((s: { Type: string }) => s.Type === 'Video')?.Codec, sourceAudioCodec: mediaSource.MediaStreams?.find((s: { Type: string }) => s.Type === 'Audio')?.Codec, playSessionId: data.PlaySessionId, mediaSourceId: mediaSource.Id, totalDurationTicks, durationSeconds, resumePositionTicks,
             };
           }
-          if (!options?.forceTranscode && mediaSource.SupportsDirectStream && mediaSource.DirectStreamUrl) {
+          const hlsUrl = mediaSource.TranscodingUrl && /\.m3u8(?:\?|$)/i.test(mediaSource.TranscodingUrl)
+            ? mediaSource.TranscodingUrl
+            : undefined;
+          // On a mid-file start, Jellyfin's video-copy muxer can cut segments
+          // at different keyframes than its HLS playlist advertises.
+          const encodeCastHls = options?.receiver === 'cast' && Boolean(hlsUrl);
+          if (!encodeCastHls && !options?.forceTranscode && mediaSource.SupportsDirectStream && mediaSource.DirectStreamUrl) {
             return {
-              streamUrl: `${this.url}${mediaSource.TranscodingUrl && /\.m3u8(?:\?|$)/i.test(mediaSource.TranscodingUrl) ? mediaSource.TranscodingUrl : mediaSource.DirectStreamUrl}`,
+              streamUrl: `${this.url}${hlsUrl || mediaSource.DirectStreamUrl}`,
               isTranscoding: false,
               playMethod: 'DirectStream',
               playSessionId: data.PlaySessionId,
@@ -604,8 +605,17 @@ export class JellyfinClient {
           }
 
           if (mediaSource.TranscodingUrl) {
+            let streamUrl = `${this.url}${mediaSource.TranscodingUrl}`;
+            if (encodeCastHls) {
+              const url = new URL(streamUrl);
+              for (const key of Array.from(url.searchParams.keys())) {
+                if (key.toLowerCase() === 'allowvideostreamcopy') url.searchParams.delete(key);
+              }
+              url.searchParams.set('AllowVideoStreamCopy', 'false');
+              streamUrl = url.href;
+            }
             return {
-              streamUrl: `${this.url}${mediaSource.TranscodingUrl}`,
+              streamUrl,
               isTranscoding: true,
               playMethod: 'Transcode',
               sourceVideoCodec: mediaSource.MediaStreams?.find((s: { Type: string }) => s.Type === 'Video')?.Codec,
