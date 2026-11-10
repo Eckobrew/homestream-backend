@@ -23,6 +23,7 @@ function ensureTable() {
     db.exec(`
       CREATE TABLE IF NOT EXISTS user_requests (
         id TEXT PRIMARY KEY,
+        user_id TEXT DEFAULT 'global',
         media_type TEXT NOT NULL,
         media_id INTEGER NOT NULL,
         title TEXT NOT NULL,
@@ -32,6 +33,9 @@ function ensureTable() {
         overview TEXT
       );
     `);
+    try {
+      db.exec("ALTER TABLE user_requests ADD COLUMN user_id TEXT DEFAULT 'global'");
+    } catch {}
     tableInitialized = true;
   } catch (err) {
     console.warn('[user-requests] Table init failed:', err);
