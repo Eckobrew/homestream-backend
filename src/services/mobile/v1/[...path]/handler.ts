@@ -121,7 +121,7 @@ async function dispatch(request: HttpRequest, context: Context) {
   return withParentalProfile(profile, async () => {
     if (profile) await guardKidsRequest(request, profile);
     const response = await dispatchContent(request, context);
-    const output = profile ? await parentalResponse(request, response, profile) : response;
+    const output = await parentalResponse(request, response, profile);
     if (profile) {
       output.headers.set('X-HomeStream-Profile', profile.id);
       output.headers.set('X-HomeStream-Policy', kidsPolicyRevision(profile));

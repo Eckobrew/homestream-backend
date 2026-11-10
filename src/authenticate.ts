@@ -4,7 +4,7 @@ import { isRequestLocalOrTailscale } from './lib/network';
 import { readSession } from './lib/session';
 export async function authenticate(request: HttpRequest): Promise<HttpRequest | HttpResponse> {
   const path = request.nextUrl.pathname;
-  if (path === '/api/auth' || path.startsWith('/api/mobile/v1/') || (path === '/api/subtitles' && request.nextUrl.searchParams.has('index'))) return request;
+  if (path === '/api/auth' || path.startsWith('/api/mobile/v1/')) return request;
   const webhook = process.env.HOMESTREAM_WEBHOOK_TOKEN || '';
   if (path === '/api/webhook/arr' && webhook.length >= 32 && request.headers.get('authorization') === `Bearer ${webhook}`) return request;
   if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method) && !validRequestOrigin(request)) return HttpResponse.json({ error: 'Invalid origin' }, { status: 403 });

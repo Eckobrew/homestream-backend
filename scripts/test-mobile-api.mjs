@@ -67,7 +67,7 @@ const jellyfin = createServer(async (request, response) => {
     response.end(JSON.stringify({ Items: ['allowed', 'adult', 'unrated'].map(Id => ({ Id, Name: Id, Type: 'Movie', OfficialRating: Id === 'allowed' ? 'U' : Id === 'adult' ? '18' : undefined, UserData: { PlaybackPositionTicks: 100000000 }, RunTimeTicks: 9000000000 })) }));
   } else if (parsedUrl.pathname === '/Items/allowed/PlaybackInfo') {
     response.end(JSON.stringify({ PlaySessionId: 'kid-session', MediaSources: [{ Id: 'allowed-source', Container: 'mp4', SupportsDirectPlay: true, TranscodingUrl: '/videos/allowed/master.m3u8?api_key=fake-stream-key' }] }));
-  } else if (parsedUrl.pathname === '/videos/allowed/master.m3u8') {
+  } else if (['/videos/allowed/master.m3u8', '/Videos/remux/master.m3u8'].includes(parsedUrl.pathname)) {
     response.setHeader('Content-Type', 'application/vnd.apple.mpegurl'); response.end('#EXTM3U\n#EXTINF:6,\nsegment.ts\n');
   } else if (parsedUrl.pathname === '/videos/allowed/segment.ts') {
     response.setHeader('Content-Type', 'video/mp2t'); response.end('safe-segment');
@@ -182,7 +182,7 @@ try {
   const forged = Buffer.from(JSON.stringify({ id: 'admin', name: 'Administrator' })).toString('base64');
   const unauth = await fetch(`${origin}/api/auth`, { headers: { cookie: `homeflix_session=${forged}`, 'x-forwarded-for': '127.0.0.1', 'tailscale-user-login': 'attacker', host: 'fake.ts.net' } });
   assert.equal((await unauth.json()).isAuthenticated, false);
-  for (const route of ['config', 'profiles', 'downloads', 'playback?itemId=example']) {
+  for (const route of ['config', 'profiles', 'downloads', 'playback?itemId=example', 'subtitles?itemId=episode&index=0']) {
     const denied = await fetch(`${origin}/api/${route}`, { headers: { cookie: `homeflix_session=${forged}`, 'x-forwarded-for': '127.0.0.1' } });
     assert.equal(denied.status, 401, `Unauthenticated web API: ${route}`);
   }
@@ -207,15 +207,35 @@ try {
   await api('playback?itemId=direct&receiver=cast&canPlayHevc=true&maxWidth=1920&maxHeight=1080');
   const hdProfile = jellyfinCalls.filter(call => call.path.startsWith('/Items/direct/PlaybackInfo')).at(-1).body.DeviceProfile;
   assert.ok(hdProfile.DirectPlayProfiles[0].VideoCodec.includes('hevc'));
+  assert.equal(hdProfile.TranscodingProfiles[0].MaxAudioChannels, '2');
   assert.equal(hdProfile.CodecProfiles[0].Conditions.find(c => c.Property === 'Height').Value, '1080');
   const remux = await api('playback?itemId=remux');
   assert.equal(remux.playMethod, 'DirectStream');
   assert.equal(remux.isTranscoding, false);
+  assert.equal(new URL(remux.streamUrl).searchParams.has('AllowVideoStreamCopy'), false);
+  const castHls = await api('playback?itemId=remux&receiver=cast');
+  assert.equal(castHls.playMethod, 'Transcode');
+  assert.equal(castHls.isTranscoding, true);
+  assert.equal(new URL(castHls.streamUrl).pathname, '/api/mobile/v1/parental-resource');
+  assert.ok(!castHls.streamUrl.includes('fake-stream-key'));
+  const castManifest = await fetch(castHls.streamUrl);
+  assert.equal(castManifest.status, 200);
+  assert.match(await castManifest.text(), /parental-resource/);
+  const castUpstream = new URL(jellyfinCalls.findLast(call => call.path.startsWith('/Videos/remux/master.m3u8')).path, jellyfinUrl);
+  assert.equal(castUpstream.searchParams.get('AllowVideoStreamCopy'), 'false');
+  const videoCapabilities = JSON.stringify([
+    { codec: 'h264', width: 1920, height: 1080, profiles: ['high'] },
+    { codec: 'hevc', width: 3840, height: 2160, profiles: ['main'] },
+  ]);
+  await api(`playback?itemId=direct&receiver=cast&videoCapabilities=${encodeURIComponent(videoCapabilities)}`);
+  const ultraProfile = jellyfinCalls.findLast(call => call.path.startsWith('/Items/direct/PlaybackInfo')).body.DeviceProfile;
+  assert.deepEqual(ultraProfile.CodecProfiles.map(profile => [profile.Codec, profile.Conditions[0].Value]), [['h264', '1920'], ['hevc', '3840']]);
   await api('playback?itemId=direct&receiver=browser&videoCodecs=h264,av1,vp9&audioCodecs=aac,opus');
   const browserProfile = jellyfinCalls.filter(call => call.path.startsWith('/Items/direct/PlaybackInfo')).at(-1).body.DeviceProfile;
   assert.ok(browserProfile.DirectPlayProfiles[0].VideoCodec.includes('av1'));
   assert.ok(!browserProfile.DirectPlayProfiles[0].VideoCodec.includes('hevc'));
   assert.equal(browserProfile.TranscodingProfiles[0].Protocol, 'hls');
+  assert.equal(browserProfile.TranscodingProfiles[0].MaxAudioChannels, undefined);
   const stream = await api('playback?itemId=episode&userId=household-profile&forceTranscode=true');
   assert.equal(stream.isTranscoding, true);
   assert.equal(stream.streamUrl, `${jellyfinUrl}/Videos/episode/master.m3u8?api_key=fake-stream-key`);

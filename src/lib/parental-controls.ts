@@ -149,7 +149,7 @@ export function withParentalControls<Args extends unknown[]>(handler: (...args: 
           if (isKids(profile) && name === 'profiles') return HttpResponse.json({ profiles: [profile], activeProfileId: profile.id, canSwitchProfile: false, isExternal: true, availableJellyfinUsers: [] });
         }
         const response = await handler(...args);
-        return profile ? parentalResponse(request, response, profile) : response;
+        return parentalResponse(request, response, profile);
       }, request.headers.get('authorization')?.slice(7));
     } catch (error) {
       if (error instanceof ParentalDenied) return HttpResponse.json({ error: error.message }, { status: 403, headers: { 'Cache-Control': 'no-store' } });
@@ -157,9 +157,14 @@ export function withParentalControls<Args extends unknown[]>(handler: (...args: 
     }
   };
 }
-export async function parentalResponse(request: HttpRequest, response: Response, profile: UserProfile): Promise<Response> {
-  if (!isKids(profile) && !(await getHomeflixProfiles()).some(isKids)) return response;
+export async function parentalResponse(request: HttpRequest, response: Response, active: UserProfile | null): Promise<Response> {
   const name = route(request);
+  const receiverResource = name === 'subtitles' || (name === 'playback' && request.nextUrl.searchParams.get('receiver') === 'cast');
+  const protectedProfile = active && (isKids(active) || (await getHomeflixProfiles()).some(isKids));
+  if (!receiverResource && !protectedProfile) return response;
+  const profile = active || { id: 'local-cast', jellyfinUserId: 'local-cast', name: '', avatarColor: '', avatarBg: '', initials: '' };
+  const device = request.headers.get('authorization')?.replace(/^Bearer /i, '') || '';
+  const boundDevice = registeredDevice(device) ? device : '';
   const location = response.headers.get('location');
   if (location && response.status >= 300 && response.status < 400 && name === 'preview-stream') {
     const age = isKids(profile) ? await permit(request.nextUrl.searchParams.get('itemId') || '', profile) : 1000;
@@ -177,13 +182,13 @@ export async function parentalResponse(request: HttpRequest, response: Response,
       const mediaSource = source.get('mediaSourceId') || id;
       const index = source.get('index') || '';
       if (![id, mediaSource].every(value => /^[a-zA-Z0-9_-]{1,128}$/.test(value)) || !/^\d+$/.test(index)) return null;
-      return { ...track, src: new URL(resourceUrl(new JellyfinClient().getSubtitleStreamUrl(id, mediaSource, Number(index)), profile, 'stream', age), request.url).toString() };
+      return { ...track, src: new URL(resourceUrl(new JellyfinClient().getSubtitleStreamUrl(id, mediaSource, Number(index)), profile, 'stream', age, boundDevice), request.url).toString() };
     }).filter(Boolean);
     return HttpResponse.json(data, { headers: { 'Cache-Control': 'no-store' } });
   }
   if (name === 'playback' && data.streamUrl) {
     const age = isKids(profile) ? await permit(request.nextUrl.searchParams.get('itemId') || '', profile) : 1000;
-    data.streamUrl = new URL(resourceUrl(data.streamUrl, profile, 'stream', age), request.url).toString();
+    data.streamUrl = new URL(resourceUrl(data.streamUrl, profile, 'stream', age, boundDevice), request.url).toString();
     return HttpResponse.json(data, { headers: { 'Cache-Control': 'no-store' } });
   }
   if (!isKids(profile)) return HttpResponse.json(await wrapAdultArtwork(data, profile), { headers: { 'Cache-Control': 'no-store' } });
