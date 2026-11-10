@@ -1,13 +1,13 @@
-# HomeStream custom Cast receiver
+# HomeStream Cast receiver
 
-Receiver URL: `http://homeflix.eckonet.uk/cast/receiver.html` for development. Published receivers require HTTPS; use the HTTPS version once your reverse proxy/certificate is configured.
+The Android and web senders use the same receiver registration by default. The public Cast application ID is `75369D0A`. Override it with Android's `-PcastReceiverAppId=…` and the web build's `NEXT_PUBLIC_CAST_RECEIVER_APP_ID`. Both overrides must name the same registration.
 
-Register a **Custom Receiver** named HomeStream in https://cast.google.com/publish/ and register the Chromecast test device before publishing. Google controls account registration and receiver/device activation. The app ID is public configuration, not a password.
+Host the receiver HTML, CSS and JavaScript in a private source directory outside the Git repositories. Mount the assets read-only at `/app/public/cast` in the web container or serve them at `/cast/` through the reverse proxy. The private directory and its backup must be provided separately from the application images. Receiver assets are excluded from the web Docker build and Git tracking.
 
-Build Android with `-PcastReceiverAppId=YOUR_EIGHT_HEX_DIGIT_ID` (also `-PpreviewInstall=true` for the installed preview package). Without this property, Android continues to use the default media receiver. Do not replace it with an invented ID.
+Register the deployment's HTTPS `/cast/receiver.html` URL in the Google Cast Developer Console for a published receiver. For development, register the hardware and configure the test URL in the console.
 
-The receiver uses Google's hosted CAF runtime and standard media requests, so existing queue/autoplay/subtitle/seek messages remain supported by the receiver SDK. Actual hardware behavior still needs manual verification.
+Both senders request video capabilities on `urn:x-cast:uk.eckonet.homestream`. The request has type `capabilities-request` and a request ID. The receiver replies to that sender with type `capabilities`, the same request ID, and a `video` array of codec, width, height and profiles. Use CAF's `canDisplayType` to probe the receiver and connected display. Unavailable or unsupported probes fall back to a conservative sender profile. Network performance and audio output still need hardware verification.
 
-Standby artwork is sent over `urn:x-cast:uk.eckonet.homestream` as `{type:"idle",items:[{title,artwork}]}`. Only five artwork URLs are retained; two image elements crossfade every ten seconds. The Cast icon and Ready to cast text are receiver UI, not photo media. No household bearer token is sent to the receiver page. Kids artwork uses the existing scoped resource URLs and must be cleared on a profile switch.
+The receiver also accepts `{type:"idle",items:[{title,artwork}]}` from Android. Keep standby artwork separate from playable media. Do not log media URLs, resource tickets, sender tokens, or raw receiver payloads. Cast playback and subtitle URLs returned by the API are scoped resource tickets.
 
-Manual checks: register/launch; verify the TV overlay and slideshow while the phone shows no slideshow controls; start/pause/seek a movie; test subtitles, episode queues and autoplay; stop and confirm standby returns; switch to Kids and verify previous-profile artwork disappears. Leave CAF's normal idle/session lifecycle in place rather than disabling the media receiver's idle timeout.
+Verify a fresh load, Continue, reconnect while paused, seek, subtitle selection, episode autoplay, stop, and a Kids profile switch. Run the checks on Chromecast Ultra and Chromecast with Google TV HD. Check that the receiver remains idle after a profile switch and that the previous profile's media ticket is rejected.
