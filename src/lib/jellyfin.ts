@@ -152,7 +152,7 @@ export class JellyfinClient {
     this.url = (url || config.jellyfinUrl).replace(/\/+$/, '');
     const session = !url && !apiKey ? requestJellyfinSession() : null;
     registerDependency('jellyfin', this.url);
-    this.apiKey = apiKey || config.jellyfinApiKey || session?.accessToken || '';
+    this.apiKey = apiKey || session?.accessToken || config.jellyfinApiKey || '';
     this.userId = requestParentalProfile()?.jellyfinUserId || session?.id || userId || config.jellyfinUserId;
   }
 
