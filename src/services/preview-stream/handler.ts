@@ -32,7 +32,7 @@ async function handleGET(request: HttpRequest) {
 
   const config = getServerConfig();
   const jellyfinUrl = (config.jellyfinUrl || '').replace(/\/+$/, '');
-  const apiKey = requestJellyfinSession()?.accessToken || config.jellyfinApiKey;
+  const apiKey = config.jellyfinApiKey || requestJellyfinSession()?.accessToken;
 
   try {
     const uid = targetUserId || (await jellyfin.getFirstUserId());

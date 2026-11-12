@@ -66,7 +66,7 @@ export async function handleImage(request: HttpRequest): Promise<Response> {
       const type = params.get('type') || 'Primary';
       if (id && /^[a-zA-Z0-9_-]{1,128}$/.test(id) && imageTypes.has(type)) {
         const config = getServerConfig();
-        const token = requestJellyfinSession()?.accessToken || config.jellyfinApiKey;
+        const token = config.jellyfinApiKey || requestJellyfinSession()?.accessToken;
         if (config.jellyfinUrl) {
           const width = Math.min(3840, Math.max(1, Number(params.get('maxWidth')) || 600));
           const quality = Math.min(100, Math.max(1, Number(params.get('quality')) || 90));
