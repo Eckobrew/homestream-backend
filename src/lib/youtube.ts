@@ -3,6 +3,7 @@ import { log } from '@/log';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import type {
   YouTubeSearchResult,
   YouTubeSubscription,
@@ -146,18 +147,23 @@ export function formatDuration(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-async function searchYouTubeViaYtDlp(query: string, maxResults = 25): Promise<YouTubeSearchResult[]> {
+async function searchYouTubeViaYtDlp(query: string, maxResults = 25, cookieFile?: string): Promise<YouTubeSearchResult[]> {
   return new Promise((resolve) => {
-    const child = spawn(
-      'yt-dlp',
-      [
-        '--flat-playlist',
-        '--dump-single-json',
-        '--no-warnings',
-        `ytsearch${maxResults}:${query}`,
-      ],
-      { timeout: 10000 }
-    );
+    const args = [
+      '--flat-playlist',
+      '--dump-single-json',
+      '--no-warnings',
+    ];
+    if (cookieFile && fs.existsSync(cookieFile)) {
+      args.push('--cookies', cookieFile);
+    }
+    if (query.startsWith('http://') || query.startsWith('https://')) {
+      args.push(query);
+    } else {
+      args.push(`ytsearch${maxResults}:${query}`);
+    }
+
+    const child = spawn('yt-dlp', args, { timeout: 25000 });
 
     let stdout = '';
     child.stdout.on('data', (d) => { stdout += d.toString(); });
@@ -741,6 +747,47 @@ export async function checkChannelNewUploads(channelId: string): Promise<{
 }
 
 /**
+ * Fetches the latest published videos from a channel RSS feed
+ */
+export async function fetchChannelLatestVideos(channelId: string, limit = 5): Promise<YouTubeSearchResult[]> {
+  try {
+    const feedUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
+    const res = await fetch(feedUrl, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return [];
+    const xml = await res.text();
+    const entryBlocks = xml.split('<entry>').slice(1, limit + 1);
+    const results: YouTubeSearchResult[] = [];
+    const downloadedIds = getDownloadedVideoIds();
+
+    for (const block of entryBlocks) {
+      const videoIdMatch = block.match(/<yt:videoId>([^<]+)<\/yt:videoId>/);
+      const titleMatch = block.match(/<title>([^<]+)<\/title>/);
+      const authorMatch = block.match(/<name>([^<]+)<\/name>/);
+      const publishedMatch = block.match(/<published>([^<]+)<\/published>/);
+
+      if (videoIdMatch && titleMatch) {
+        const vidId = videoIdMatch[1];
+        results.push({
+          id: vidId,
+          title: titleMatch[1].replace(/&amp;/g, '&'),
+          channelId,
+          channelTitle: authorMatch ? authorMatch[1] : 'YouTube Channel',
+          durationSeconds: 0,
+          durationFormatted: 'Video',
+          thumbnailUrl: `https://i.ytimg.com/vi/${vidId}/hqdefault.jpg`,
+          uploadDate: publishedMatch ? publishedMatch[1].slice(0, 10) : undefined,
+          isShort: false,
+          isDownloaded: downloadedIds.has(vidId),
+        });
+      }
+    }
+    return results;
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Polls all channels with autoDownload enabled
  */
 export async function pollAllSubscribedChannels(): Promise<void> {
@@ -1171,13 +1218,13 @@ export function saveYouTubeAuth(profileId: string, cookiesText: string, accountN
 /**
  * Get connected status for a profile
  */
-export function getYouTubeAuth(profileId: string): { connected: boolean; accountName?: string; avatarUrl?: string } {
+export function getYouTubeAuth(profileId: string): { connected: boolean; accountName?: string; avatarUrl?: string; cookiesText?: string } {
   ensureYouTubeTables();
   try {
     const db = stateDatabase();
-    const row = db.prepare('SELECT account_name, avatar_url FROM youtube_profile_auth WHERE profile_id = ?').get(profileId) as any;
+    const row = db.prepare('SELECT account_name, avatar_url, cookies_text FROM youtube_profile_auth WHERE profile_id = ?').get(profileId) as any;
     if (row) {
-      return { connected: true, accountName: row.account_name, avatarUrl: row.avatar_url };
+      return { connected: true, accountName: row.account_name, avatarUrl: row.avatar_url, cookiesText: row.cookies_text };
     }
   } catch {}
   return { connected: false };
@@ -1242,8 +1289,8 @@ export async function getYouTubeRecommendations(profileId?: string): Promise<{
   const existing = recommendationsCache[cacheKey];
   const now = Date.now();
 
-  // If we have valid cached recommendations, return immediately (<1ms)
-  if (existing && now - existing.timestamp < RECOMMENDATIONS_CACHE_TTL) {
+  // If we have valid cached recommendations with actual sections, return immediately (<1ms)
+  if (existing && existing.data.sections.length > 0 && now - existing.timestamp < RECOMMENDATIONS_CACHE_TTL) {
     // Refresh local archive dynamically so newly downloaded videos appear right away
     const archive = getLocalYouTubeArchive();
     const localArchiveResults: YouTubeSearchResult[] = archive.slice(0, 15).map((a) => ({
@@ -1275,19 +1322,51 @@ export async function getYouTubeRecommendations(profileId?: string): Promise<{
 
   const sections: Array<{ id: string; title: string; items: YouTubeSearchResult[] }> = [];
 
-  // 1. Check if profile is logged in for personalized subscriptions/feed
+  // 1. Check if profile is logged in with YouTube cookies
+  let cookieFile: string | undefined;
   if (profileId) {
     const auth = getYouTubeAuth(profileId);
-    if (auth.connected) {
-      // Background check feed
+    if (auth.connected && auth.cookiesText) {
+      try {
+        cookieFile = path.join(os.tmpdir(), `yt_cookie_${profileId}.txt`);
+        fs.writeFileSync(cookieFile, auth.cookiesText, 'utf-8');
+      } catch (e) {
+        log.warn('Failed writing YouTube cookie file:', e);
+      }
     }
   }
 
-  // 2. Subscribed Channels latest uploads (run in background, do not block)
-  const subs = getSubscriptions();
-  Promise.all(subs.slice(0, 3).map((s) => checkChannelNewUploads(s.id).catch(() => []))).catch(() => {});
+  // 2. Fetch logged-in personalized feeds if cookies are present
+  let personalizedFeed: YouTubeSearchResult[] = [];
+  let subscriptionFeed: YouTubeSearchResult[] = [];
+  if (cookieFile) {
+    try {
+      const [pFeed, sFeed] = await Promise.all([
+        searchYouTubeViaYtDlp('https://www.youtube.com', 15, cookieFile).catch(() => []),
+        searchYouTubeViaYtDlp('https://www.youtube.com/feed/subscriptions', 15, cookieFile).catch(() => []),
+      ]);
+      personalizedFeed = pFeed;
+      subscriptionFeed = sFeed;
+    } catch {}
+  }
 
-  // 3. Local NAS archive items formatted as results
+  // 3. Subscribed Channels latest uploads from HomeStream local subscriptions
+  const subs = getSubscriptions();
+  const subUploads: YouTubeSearchResult[] = [];
+  if (subs.length > 0) {
+    try {
+      const channelResults = await Promise.all(
+        subs.slice(0, 4).map((s) => fetchChannelLatestVideos(s.id).catch(() => []))
+      );
+      for (const res of channelResults) {
+        for (const item of (res || [])) {
+          if (item && item.id) subUploads.push(item);
+        }
+      }
+    } catch {}
+  }
+
+  // 4. Local NAS archive items formatted as results
   const archive = getLocalYouTubeArchive();
   const localArchiveResults: YouTubeSearchResult[] = archive.slice(0, 15).map((a) => ({
     id: a.id,
@@ -1301,12 +1380,15 @@ export async function getYouTubeRecommendations(profileId?: string): Promise<{
     isDownloaded: true,
   }));
 
-  // 4. Curated topics / search queries
-  const [podcastResults, deepDiveResults] = await Promise.all([
-    searchYouTube('Lex Fridman OR Joe Rogan podcast').catch(() => []),
-    searchYouTube('science documentary full interview').catch(() => []),
+  // 5. Curated topics / search queries across diverse categories (always available whether logged in or not)
+  const [trendingResults, podcastResults, deepDiveResults, musicResults] = await Promise.all([
+    searchYouTubeViaYtDlp('trending videos 2026', 15).catch(() => []),
+    searchYouTubeViaYtDlp('popular podcast interview', 12).catch(() => []),
+    searchYouTubeViaYtDlp('science documentary full interview', 12).catch(() => []),
+    searchYouTubeViaYtDlp('trending music video official', 12).catch(() => []),
   ]);
 
+  // Section: Local NAS archive
   if (localArchiveResults.length > 0) {
     sections.push({
       id: 'downloaded',
@@ -1315,6 +1397,43 @@ export async function getYouTubeRecommendations(profileId?: string): Promise<{
     });
   }
 
+  // Section: Logged in personalized recommendations
+  if (personalizedFeed.length > 0) {
+    sections.push({
+      id: 'personalized',
+      title: 'Recommended For You',
+      items: personalizedFeed.slice(0, 15),
+    });
+  }
+
+  // Section: Logged in YouTube subscriptions
+  if (subscriptionFeed.length > 0) {
+    sections.push({
+      id: 'yt-subscriptions',
+      title: 'New From Your YouTube Subscriptions',
+      items: subscriptionFeed.slice(0, 15),
+    });
+  }
+
+  // Section: HomeStream subscribed channels
+  if (subUploads.length > 0) {
+    sections.push({
+      id: 'subscriptions',
+      title: 'From Your Subscribed Channels',
+      items: subUploads.slice(0, 15),
+    });
+  }
+
+  // Section: Trending Worldwide
+  if (trendingResults.length > 0) {
+    sections.push({
+      id: 'trending',
+      title: 'Trending Worldwide',
+      items: trendingResults.slice(0, 12),
+    });
+  }
+
+  // Section: Podcasts
   if (podcastResults.length > 0) {
     sections.push({
       id: 'podcasts',
@@ -1323,6 +1442,7 @@ export async function getYouTubeRecommendations(profileId?: string): Promise<{
     });
   }
 
+  // Section: Documentaries & Deep Dives
   if (deepDiveResults.length > 0) {
     sections.push({
       id: 'deep-dives',
@@ -1331,13 +1451,31 @@ export async function getYouTubeRecommendations(profileId?: string): Promise<{
     });
   }
 
-  const heroCandidate = localArchiveResults[0] || podcastResults[0] || null;
+  // Section: Music Hits
+  if (musicResults.length > 0) {
+    sections.push({
+      id: 'music',
+      title: 'Music Hits & Live Performances',
+      items: musicResults.slice(0, 12),
+    });
+  }
+
+  const heroCandidate =
+    personalizedFeed[0] ||
+    trendingResults[0] ||
+    localArchiveResults[0] ||
+    podcastResults[0] ||
+    null;
 
   const result = {
     hero: heroCandidate,
     sections,
   };
 
-  recommendationsCache[cacheKey] = { data: result, timestamp: now };
+  // Only cache if we actually retrieved populated sections
+  if (sections.length > 0) {
+    recommendationsCache[cacheKey] = { data: result, timestamp: now };
+  }
+
   return result;
 }
