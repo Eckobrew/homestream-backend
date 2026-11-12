@@ -6353,6 +6353,54 @@
               "pattern": "^\\d+$",
               "maxLength": 16
             }
+          },
+          {
+            "name": "tmdbId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d+$",
+              "maxLength": 16
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          {
+            "name": "season",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d+$",
+              "maxLength": 16
+            }
+          },
+          {
+            "name": "episode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d+$",
+              "maxLength": 16
+            }
+          },
+          {
+            "name": "title",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 8192
+            }
           }
         ],
         "responses": {
@@ -10417,6 +10465,63 @@
             "schema": {
               "type": "string",
               "maxLength": 8192
+            }
+          },
+          {
+            "name": "start",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d+(\\.\\d+)?$"
+            }
+          },
+          {
+            "name": "transcode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "0",
+                "1"
+              ]
+            }
+          },
+          {
+            "name": "native",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "0",
+                "1"
+              ]
+            }
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "0",
+                "1"
+              ]
+            }
+          },
+          {
+            "name": "probe",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "0",
+                "1"
+              ]
             }
           },
           {
@@ -34469,6 +34574,54 @@
               "pattern": "^\\d+$",
               "maxLength": 16
             }
+          },
+          {
+            "name": "tmdbId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d+$",
+              "maxLength": 16
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          {
+            "name": "season",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d+$",
+              "maxLength": 16
+            }
+          },
+          {
+            "name": "episode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d+$",
+              "maxLength": 16
+            }
+          },
+          {
+            "name": "title",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 8192
+            }
           }
         ],
         "responses": {
@@ -37539,6 +37692,63 @@
             "schema": {
               "type": "string",
               "maxLength": 8192
+            }
+          },
+          {
+            "name": "start",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d+(\\.\\d+)?$"
+            }
+          },
+          {
+            "name": "transcode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "0",
+                "1"
+              ]
+            }
+          },
+          {
+            "name": "native",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "0",
+                "1"
+              ]
+            }
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "0",
+                "1"
+              ]
+            }
+          },
+          {
+            "name": "probe",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "0",
+                "1"
+              ]
             }
           },
           {
@@ -67590,6 +67800,9 @@
             "type": "number"
           },
           "streamUrl": {
+            "type": "string"
+          },
+          "coverUrl": {
             "type": "string"
           }
         },

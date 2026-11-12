@@ -255,7 +255,8 @@ data class MusicTrack(
     @SerialName("trackNumber") val `trackNumber`: Double,
     @SerialName("discNumber") val `discNumber`: Double,
     @SerialName("durationSeconds") val `durationSeconds`: Double? = null,
-    @SerialName("streamUrl") val `streamUrl`: String
+    @SerialName("streamUrl") val `streamUrl`: String,
+    @SerialName("coverUrl") val `coverUrl`: String? = null
 )
 
 @Serializable
@@ -634,7 +635,12 @@ data class WebGetPlaybackQuery(
     @SerialName("audioCodecs") val `audioCodecs`: String? = null,
     @SerialName("videoCapabilities") val `videoCapabilities`: String? = null,
     @SerialName("maxWidth") val `maxWidth`: String? = null,
-    @SerialName("maxHeight") val `maxHeight`: String? = null
+    @SerialName("maxHeight") val `maxHeight`: String? = null,
+    @SerialName("tmdbId") val `tmdbId`: String? = null,
+    @SerialName("type") val `type`: String? = null,
+    @SerialName("season") val `season`: String? = null,
+    @SerialName("episode") val `episode`: String? = null,
+    @SerialName("title") val `title`: String? = null
 )
 
 @Serializable
@@ -752,7 +758,12 @@ data class WebGetStreamTorrentQuery(
     @SerialName("magnet") val `magnet`: String? = null,
     @SerialName("forceTranscode") val `forceTranscode`: String? = null,
     @SerialName("canPlayHevc") val `canPlayHevc`: String? = null,
-    @SerialName("receiver") val `receiver`: String? = null
+    @SerialName("receiver") val `receiver`: String? = null,
+    @SerialName("start") val `start`: String? = null,
+    @SerialName("transcode") val `transcode`: String? = null,
+    @SerialName("native") val `native`: String? = null,
+    @SerialName("source") val `source`: String? = null,
+    @SerialName("probe") val `probe`: String? = null
 )
 
 @Serializable
@@ -1388,7 +1399,12 @@ data class MobileGetPlaybackQuery(
     @SerialName("audioCodecs") val `audioCodecs`: String? = null,
     @SerialName("videoCapabilities") val `videoCapabilities`: String? = null,
     @SerialName("maxWidth") val `maxWidth`: String? = null,
-    @SerialName("maxHeight") val `maxHeight`: String? = null
+    @SerialName("maxHeight") val `maxHeight`: String? = null,
+    @SerialName("tmdbId") val `tmdbId`: String? = null,
+    @SerialName("type") val `type`: String? = null,
+    @SerialName("season") val `season`: String? = null,
+    @SerialName("episode") val `episode`: String? = null,
+    @SerialName("title") val `title`: String? = null
 )
 
 @Serializable
@@ -1478,7 +1494,12 @@ data class MobileGetStreamTorrentQuery(
     @SerialName("magnet") val `magnet`: String? = null,
     @SerialName("forceTranscode") val `forceTranscode`: String? = null,
     @SerialName("canPlayHevc") val `canPlayHevc`: String? = null,
-    @SerialName("receiver") val `receiver`: String? = null
+    @SerialName("receiver") val `receiver`: String? = null,
+    @SerialName("start") val `start`: String? = null,
+    @SerialName("transcode") val `transcode`: String? = null,
+    @SerialName("native") val `native`: String? = null,
+    @SerialName("source") val `source`: String? = null,
+    @SerialName("probe") val `probe`: String? = null
 )
 
 @Serializable

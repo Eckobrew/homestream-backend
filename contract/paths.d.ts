@@ -2074,6 +2074,7 @@ export interface components {
             discNumber: number;
             durationSeconds?: number;
             streamUrl: string;
+            coverUrl?: string;
         };
         MusicResponse: {
             configured: boolean;
@@ -4742,6 +4743,11 @@ export interface operations {
                 videoCapabilities?: string;
                 maxWidth?: string;
                 maxHeight?: string;
+                tmdbId?: string;
+                type?: string;
+                season?: string;
+                episode?: string;
+                title?: string;
             };
             header?: never;
             path?: never;
@@ -6336,6 +6342,11 @@ export interface operations {
                 forceTranscode?: "true" | "false";
                 canPlayHevc?: "true" | "false";
                 receiver?: string;
+                start?: string;
+                transcode?: "0" | "1";
+                native?: "0" | "1";
+                source?: "0" | "1";
+                probe?: "0" | "1";
             };
             header?: {
                 Range?: string;
@@ -16233,6 +16244,11 @@ export interface operations {
                 videoCapabilities?: string;
                 maxWidth?: string;
                 maxHeight?: string;
+                tmdbId?: string;
+                type?: string;
+                season?: string;
+                episode?: string;
+                title?: string;
             };
             header?: never;
             path?: never;
@@ -17427,6 +17443,11 @@ export interface operations {
                 forceTranscode?: "true" | "false";
                 canPlayHevc?: "true" | "false";
                 receiver?: string;
+                start?: string;
+                transcode?: "0" | "1";
+                native?: "0" | "1";
+                source?: "0" | "1";
+                probe?: "0" | "1";
             };
             header?: {
                 Range?: string;

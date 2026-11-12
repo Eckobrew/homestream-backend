@@ -131,6 +131,11 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         query.`videoCapabilities`?.let { url.addQueryParameter("videoCapabilities", it.toString()) }
         query.`maxWidth`?.let { url.addQueryParameter("maxWidth", it.toString()) }
         query.`maxHeight`?.let { url.addQueryParameter("maxHeight", it.toString()) }
+        query.`tmdbId`?.let { url.addQueryParameter("tmdbId", it.toString()) }
+        query.`type`?.let { url.addQueryParameter("type", it.toString()) }
+        query.`season`?.let { url.addQueryParameter("season", it.toString()) }
+        query.`episode`?.let { url.addQueryParameter("episode", it.toString()) }
+        query.`title`?.let { url.addQueryParameter("title", it.toString()) }
         return execute(url.build().toString(), "GET", null, null)
     }
 
@@ -208,6 +213,11 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         query.`forceTranscode`?.let { url.addQueryParameter("forceTranscode", it.toString()) }
         query.`canPlayHevc`?.let { url.addQueryParameter("canPlayHevc", it.toString()) }
         query.`receiver`?.let { url.addQueryParameter("receiver", it.toString()) }
+        query.`start`?.let { url.addQueryParameter("start", it.toString()) }
+        query.`transcode`?.let { url.addQueryParameter("transcode", it.toString()) }
+        query.`native`?.let { url.addQueryParameter("native", it.toString()) }
+        query.`source`?.let { url.addQueryParameter("source", it.toString()) }
+        query.`probe`?.let { url.addQueryParameter("probe", it.toString()) }
         return executeStream(url.build().toString(), "GET", null, range)
     }
 
@@ -556,6 +566,11 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         query.`videoCapabilities`?.let { url.addQueryParameter("videoCapabilities", it.toString()) }
         query.`maxWidth`?.let { url.addQueryParameter("maxWidth", it.toString()) }
         query.`maxHeight`?.let { url.addQueryParameter("maxHeight", it.toString()) }
+        query.`tmdbId`?.let { url.addQueryParameter("tmdbId", it.toString()) }
+        query.`type`?.let { url.addQueryParameter("type", it.toString()) }
+        query.`season`?.let { url.addQueryParameter("season", it.toString()) }
+        query.`episode`?.let { url.addQueryParameter("episode", it.toString()) }
+        query.`title`?.let { url.addQueryParameter("title", it.toString()) }
         return execute(url.build().toString(), "GET", null, null)
     }
 
@@ -619,6 +634,11 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         query.`forceTranscode`?.let { url.addQueryParameter("forceTranscode", it.toString()) }
         query.`canPlayHevc`?.let { url.addQueryParameter("canPlayHevc", it.toString()) }
         query.`receiver`?.let { url.addQueryParameter("receiver", it.toString()) }
+        query.`start`?.let { url.addQueryParameter("start", it.toString()) }
+        query.`transcode`?.let { url.addQueryParameter("transcode", it.toString()) }
+        query.`native`?.let { url.addQueryParameter("native", it.toString()) }
+        query.`source`?.let { url.addQueryParameter("source", it.toString()) }
+        query.`probe`?.let { url.addQueryParameter("probe", it.toString()) }
         return executeStream(url.build().toString(), "GET", null, range)
     }
 
