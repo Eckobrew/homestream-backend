@@ -74,7 +74,7 @@ export async function getNativeUserRequests(targetUserId?: string): Promise<Medi
   try {
     const db = stateDatabase();
     const rows = targetUserId
-      ? (db.prepare('SELECT * FROM user_requests WHERE user_id = ? OR user_id = "global" ORDER BY requested_at DESC LIMIT 50').all(targetUserId) as any[])
+      ? (db.prepare("SELECT * FROM user_requests WHERE user_id = ? OR user_id = 'global' ORDER BY requested_at DESC LIMIT 50").all(targetUserId) as any[])
       : (db.prepare('SELECT * FROM user_requests ORDER BY requested_at DESC LIMIT 50').all() as any[]);
     if (!rows || rows.length === 0) return [];
 

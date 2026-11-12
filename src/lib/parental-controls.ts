@@ -31,7 +31,7 @@ export async function activeProfile(request: HttpRequest): Promise<UserProfile |
   }
   // Unbound household credentials cannot bypass an enabled kids policy.
   const peer = peerIdentity();
-  if (request.nextUrl.pathname.endsWith('/stream/download') && request.nextUrl.searchParams.get('source') === '1' && peer?.direct && ['127.0.0.1', '::1'].includes(peer.socketIp)) return null;
+  if ((request.nextUrl.pathname.endsWith('/stream/download') || request.nextUrl.pathname.endsWith('/stream/torrent')) && request.nextUrl.searchParams.get('source') === '1' && peer?.direct && ['127.0.0.1', '::1'].includes(peer.socketIp)) return null;
   if (kids.length) throw new ParentalDenied('Use a paired device and select a profile');
   return null;
 }
@@ -47,7 +47,7 @@ export async function guardKidsRequest(request: HttpRequest, profile: UserProfil
   if (!isKids(profile)) return;
   const name = route(request);
   if (name === 'integrations' || name === 'music' || name.startsWith('music/')) throw new ParentalDenied('Music and integration settings are unavailable in Kids mode');
-  if (name === 'downloads' || name.startsWith('stream/download')) throw new ParentalDenied('Downloading torrents are unavailable in Kids mode');
+  if (name === 'downloads' || name.startsWith('stream/download') || name.startsWith('stream/torrent')) throw new ParentalDenied('Downloading torrents are unavailable in Kids mode');
   if (name === 'trailer' || (name === 'request' && request.method === 'GET')) return;
   if (name.startsWith('profiles')) return;
   const sourceId = request.nextUrl.searchParams.get('mediaSourceId');

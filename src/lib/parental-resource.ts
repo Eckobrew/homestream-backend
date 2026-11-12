@@ -67,15 +67,24 @@ export async function parentalResource(request: HttpRequest): Promise<Response> 
         (isKids(profile) && ticket.age > KIDS_LIMITS[profile.kidsRating])) throw new Error('Profile restriction changed');
     if (ticket.device && registeredDevice(ticket.device)?.activeProfileId !== profile.id) throw new Error('Active profile changed');
     const config = getServerConfig();
-    const target = new URL(ticket.url);
-    const jf = new URL(config.jellyfinUrl);
+    const target = new URL(ticket.url, request.url);
+    const jf = new URL(config.jellyfinUrl || 'http://homestream.invalid');
     const local = target.origin === jf.origin;
-    if (!local && !(ticket.kind === 'image' && target.protocol === 'https:' && ['image.tmdb.org', 'images.unsplash.com'].includes(target.hostname))) throw new Error('Invalid source');
-    if (local && ticket.kind === 'stream' && !target.pathname.toLowerCase().startsWith(`${jf.pathname.replace(/\/$/, '')}/Videos/`.toLowerCase())) throw new Error('Invalid media path');
+    const isInternalStream = ticket.kind === 'stream' && (
+      target.pathname === '/api/stream/torrent' ||
+      target.pathname === '/api/stream/download' ||
+      target.pathname === '/api/mobile/v1/stream/torrent' ||
+      target.pathname === '/api/mobile/v1/stream/download'
+    );
+    if (!local && !isInternalStream && !(ticket.kind === 'image' && target.protocol === 'https:' && ['image.tmdb.org', 'images.unsplash.com'].includes(target.hostname))) throw new Error('Invalid source');
+    if (local && ticket.kind === 'stream' && !isInternalStream && !target.pathname.toLowerCase().startsWith(`${jf.pathname.replace(/\/$/, '')}/Videos/`.toLowerCase())) throw new Error('Invalid media path');
     const headers: Record<string, string> = {};
-    if (local) { headers['X-Emby-Token'] = config.jellyfinApiKey; headers.Authorization = `MediaBrowser Token="${config.jellyfinApiKey}"`; }
+    if (local && !isInternalStream) { headers['X-Emby-Token'] = config.jellyfinApiKey; headers.Authorization = `MediaBrowser Token="${config.jellyfinApiKey}"`; }
+    const fetchTarget = isInternalStream
+      ? new URL(`${process.env.HOMESTREAM_INTERNAL_URL || `http://127.0.0.1:${process.env.PORT || '3001'}`}${target.pathname}${target.search}`)
+      : target;
     const range = request.headers.get('range'); if (range && /^bytes=\d*-\d*$/.test(range)) headers.Range = range;
-    const response = await fetch(target, { method: request.method === 'HEAD' ? 'HEAD' : 'GET', headers, redirect: 'error', signal: request.signal, cache: 'no-store' });
+    const response = await fetch(fetchTarget, { method: request.method === 'HEAD' ? 'HEAD' : 'GET', headers, redirect: 'error', signal: request.signal, cache: 'no-store' });
     const output = new Headers({ 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*', 'Access-Control-Expose-Headers': 'Content-Range,Accept-Ranges,Content-Length', 'X-Content-Type-Options': 'nosniff' });
     for (const name of ['content-type', 'content-length', 'content-range', 'accept-ranges']) {
       const value = response.headers.get(name); if (value) output.set(name, value);

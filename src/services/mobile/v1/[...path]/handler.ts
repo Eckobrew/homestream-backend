@@ -293,8 +293,8 @@ async function dispatchContent(request: HttpRequest, context: Context) {
     return HttpResponse.json({ collection: tmdbId && seerr.isConfigured() ? await seerr.getMovieCollection(Number(tmdbId)) : null });
   }
   if (get && params.path.length === 3 && params.path[0] === 'media' && params.path[2] === 'recommendations') return recommendations(request, { params: Promise.resolve({ id: params.path[1] }) });
-  if (get && route === 'stream/download') return downloadStream(request);
-  if (get && route === 'stream/torrent') return torrentStream(request);
+  if ((get || request.method === 'HEAD') && route === 'stream/download') return downloadStream(request);
+  if ((get || request.method === 'HEAD') && route === 'stream/torrent') return torrentStream(request);
   if (get && route === 'home') return home(request);
   if (get && /^library\/(movies|tv|youtube)$/.test(route)) {
     return library(request, { params: Promise.resolve({ type: params.path[1] }) });
