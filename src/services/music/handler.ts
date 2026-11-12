@@ -73,18 +73,26 @@ async function get(request: HttpRequest) {
     }
 
     if (route === 'music/artwork') {
-      const id = request.nextUrl.searchParams.get('albumId') || '';
+      const id = request.nextUrl.searchParams.get('albumId') || request.nextUrl.searchParams.get('trackId') || request.nextUrl.searchParams.get('id') || '';
       if (!safeMusicId(id)) return new HttpResponse(null, { status: 400 });
 
       const art = await getAlbumArtwork(id, request.signal);
       if (!art) return new HttpResponse(null, { status: 404 });
 
+      const commonHeaders: Record<string, string> = {
+        'Content-Type': art.contentType,
+        'Cache-Control': 'public, max-age=86400',
+        'Access-Control-Allow-Origin': '*',
+        'X-Content-Type-Options': 'nosniff',
+      };
+
       if (request.method === 'HEAD') {
+        const size = art.buffer ? art.buffer.length : (art.filePath && fs.existsSync(art.filePath) ? fs.statSync(art.filePath).size : 0);
         return new HttpResponse(null, {
           status: 200,
           headers: {
-            'Content-Type': art.contentType,
-            'Cache-Control': 'private,max-age=86400',
+            ...commonHeaders,
+            ...(size ? { 'Content-Length': String(size) } : {}),
           },
         });
       }
@@ -93,19 +101,19 @@ async function get(request: HttpRequest) {
         return new HttpResponse(new Uint8Array(art.buffer), {
           status: 200,
           headers: {
-            'Content-Type': art.contentType,
-            'Cache-Control': 'private,max-age=86400',
+            ...commonHeaders,
+            'Content-Length': String(art.buffer.length),
           },
         });
       }
 
       if (art.filePath && fs.existsSync(art.filePath)) {
-        const stream = fs.createReadStream(art.filePath);
-        return new HttpResponse(stream as any, {
+        const buf = fs.readFileSync(art.filePath);
+        return new HttpResponse(new Uint8Array(buf), {
           status: 200,
           headers: {
-            'Content-Type': art.contentType,
-            'Cache-Control': 'private,max-age=86400',
+            ...commonHeaders,
+            'Content-Length': String(buf.length),
           },
         });
       }

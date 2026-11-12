@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
+import { execSync } from 'node:child_process';
 import { fetch } from '@/upstream';
 import { readState, stateDatabase, dataDirectory } from '@/state/database';
 import { getServerConfig } from './config';
@@ -385,11 +386,43 @@ export async function scanLocalMusicLibrary(force = false): Promise<{ albumsCoun
 
 // Background auto-scan on startup
 let scanStarted = false;
+let backfillRunning = false;
+
+export async function backfillMissingArtwork(): Promise<{ total: number; resolved: number }> {
+  if (backfillRunning) return { total: 0, resolved: 0 };
+  backfillRunning = true;
+  let resolved = 0;
+  try {
+    ensureMusicTables();
+    const db = stateDatabase();
+    const missing = db.prepare('SELECT id, artist, title FROM music_albums WHERE cover_path IS NULL').all() as { id: string; artist: string; title: string }[];
+    if (missing.length === 0) return { total: 0, resolved: 0 };
+    console.log(`[music] Backfilling artwork for ${missing.length} albums without covers...`);
+    for (const alb of missing) {
+      try {
+        const art = await getAlbumArtwork(alb.id);
+        if (art) resolved++;
+      } catch (err) {
+        console.warn(`[music] Failed artwork backfill for ${alb.artist} - ${alb.title}:`, err);
+      }
+    }
+    console.log(`[music] Finished artwork backfill: resolved ${resolved}/${missing.length} albums`);
+    return { total: missing.length, resolved };
+  } finally {
+    backfillRunning = false;
+  }
+}
+
 export function initMusicLibrary() {
   if (scanStarted) return;
   scanStarted = true;
-  setTimeout(() => {
-    scanLocalMusicLibrary().catch(err => console.warn('[music] Initial scan error:', err));
+  setTimeout(async () => {
+    try {
+      await scanLocalMusicLibrary();
+      await backfillMissingArtwork();
+    } catch (err) {
+      console.warn('[music] Initial scan error:', err);
+    }
   }, 1000);
 }
 
@@ -574,6 +607,7 @@ export async function getAlbum(id: string, profileId?: string): Promise<{ album:
       ORDER BY disc_number ASC, track_number ASC
     `).all(localAlbum.id) as any[];
 
+    const albumCover = `/api/v1/music/artwork?albumId=${encodeURIComponent(localAlbum.musicbrainz_id || localAlbum.id)}`;
     const tracks: MusicTrack[] = trackRows.map(t => ({
       id: t.id,
       title: t.title,
@@ -583,6 +617,7 @@ export async function getAlbum(id: string, profileId?: string): Promise<{ album:
       discNumber: Number(t.disc_number) || 1,
       durationSeconds: t.duration_seconds ? Number(t.duration_seconds) : undefined,
       streamUrl: `/api/v1/music/stream?trackId=${encodeURIComponent(t.id)}`,
+      coverUrl: albumCover,
     }));
 
     return {
@@ -637,6 +672,7 @@ export async function getAlbum(id: string, profileId?: string): Promise<{ album:
                   discNumber: discNum,
                   durationSeconds: trk.length ? Math.round(trk.length / 1000) : undefined,
                   streamUrl: '',
+                  coverUrl: `/api/v1/music/artwork?albumId=${encodeURIComponent(id)}`,
                 });
                 trackIndex++;
               }
@@ -670,96 +706,255 @@ export async function getAlbum(id: string, profileId?: string): Promise<{ album:
 }
 
 /**
- * Resolve artwork for an album (local cover file or Cover Art Archive download).
+ * Resolve artwork for an album (local cover file, embedded track tags, Cover Art Archive, Deezer, or iTunes).
  */
 export async function getAlbumArtwork(albumId: string, signal?: AbortSignal): Promise<{ filePath?: string; buffer?: Buffer; contentType: string } | null> {
   ensureMusicTables();
   const db = stateDatabase();
 
   // 1. Check local album record
-  const local = db.prepare('SELECT id, title, artist, cover_path, musicbrainz_id FROM music_albums WHERE id=? OR musicbrainz_id=?').get(albumId, albumId) as { id?: string; title?: string; artist?: string; cover_path?: string; musicbrainz_id?: string } | undefined;
+  let local = db.prepare('SELECT id, title, artist, cover_path, musicbrainz_id, directory_path FROM music_albums WHERE id=? OR musicbrainz_id=?').get(albumId, albumId) as { id?: string; title?: string; artist?: string; cover_path?: string; musicbrainz_id?: string; directory_path?: string } | undefined;
+  if (!local) {
+    const pt = db.prepare('SELECT id, artist, album, title, cover_url FROM playlist_tracks WHERE id=?').get(albumId) as any;
+    if (pt) {
+      local = {
+        id: pt.id,
+        title: pt.album || pt.title,
+        artist: (pt.artist || '').split(',')[0].trim(),
+      };
+    }
+  }
+  if (!local) {
+    const trk = db.prepare('SELECT id, album_id, artist, album, title, file_path FROM music_tracks WHERE id=?').get(albumId) as any;
+    if (trk) {
+      if (trk.album_id) {
+        const alb = db.prepare('SELECT id, title, artist, cover_path, musicbrainz_id, directory_path FROM music_albums WHERE id=? OR musicbrainz_id=?').get(trk.album_id, trk.album_id) as any;
+        if (alb) {
+          local = alb;
+        }
+      }
+      if (!local) {
+        local = {
+          id: trk.id,
+          title: trk.album || trk.title,
+          artist: (trk.artist || '').split(',')[0].trim(),
+        };
+      }
+    }
+  }
   if (local?.cover_path && fs.existsSync(local.cover_path)) {
     const ext = path.extname(local.cover_path).toLowerCase();
     const contentType = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
     return { filePath: local.cover_path, contentType };
   }
 
-  // 2. Check disk cache for remote artwork
+  // 2. Check disk cache for remote artwork (by local id, requested albumId, or MusicBrainz id)
   const cacheDir = path.join(dataDirectory(), 'music_artwork');
   fs.mkdirSync(cacheDir, { recursive: true });
-  const cachedFile = path.join(cacheDir, `${albumId}.jpg`);
+  const targetId = local?.id || albumId;
+  const cachedFile = path.join(cacheDir, `${targetId}.jpg`);
   if (fs.existsSync(cachedFile)) {
+    if (local?.id && !local.cover_path) {
+      try { db.prepare('UPDATE music_albums SET cover_path=? WHERE id=?').run(cachedFile, local.id); } catch {}
+    }
     return { filePath: cachedFile, contentType: 'image/jpeg' };
   }
-
-  // 3. Check tracks belonging to this album for embedded art or folder art
-  const track = db.prepare('SELECT file_path FROM music_tracks WHERE album_id=? LIMIT 1').get(local?.id || albumId) as { file_path?: string } | undefined;
-  if (track?.file_path && fs.existsSync(track.file_path)) {
-    const albumDir = path.dirname(track.file_path);
-    const folderArtCandidates = ['cover.jpg', 'cover.png', 'folder.jpg', 'front.jpg', 'Folder.jpg', 'Cover.jpg', 'front.png'];
-    for (const cand of folderArtCandidates) {
-      const artPath = path.join(albumDir, cand);
-      if (fs.existsSync(artPath)) {
-        try {
-          fs.copyFileSync(artPath, cachedFile);
-          if (local?.id) db.prepare('UPDATE music_albums SET cover_path=? WHERE id=?').run(cachedFile, local.id);
-          return { filePath: cachedFile, contentType: cand.endsWith('.png') ? 'image/png' : 'image/jpeg' };
-        } catch {}
+  if (local?.musicbrainz_id) {
+    const mbCache = path.join(cacheDir, `${local.musicbrainz_id}.jpg`);
+    if (fs.existsSync(mbCache)) {
+      if (local?.id && !local.cover_path) {
+        try { db.prepare('UPDATE music_albums SET cover_path=? WHERE id=?').run(mbCache, local.id); } catch {}
       }
+      return { filePath: mbCache, contentType: 'image/jpeg' };
     }
+  }
 
-    // Extract embedded ID3/FLAC cover art via ffmpeg
+  // 3. Check directory for image files (folder art)
+  const dirPath = local?.directory_path;
+  if (dirPath && fs.existsSync(dirPath)) {
     try {
-      const exec = require('child_process').execSync;
-      exec(`ffmpeg -i "${track.file_path}" -an -vcodec copy -y "${cachedFile}"`, { stdio: 'ignore', timeout: 5000 });
-      if (fs.existsSync(cachedFile) && fs.statSync(cachedFile).size > 1000) {
-        if (local?.id) db.prepare('UPDATE music_albums SET cover_path=? WHERE id=?').run(cachedFile, local.id);
-        return { filePath: cachedFile, contentType: 'image/jpeg' };
+      const files = fs.readdirSync(dirPath);
+      let bestCover = '';
+      for (const f of files) {
+        if (f.startsWith('.')) continue;
+        const ext = path.extname(f).toLowerCase();
+        if (IMAGE_EXTS.has(ext)) {
+          const lower = f.toLowerCase();
+          if (lower.includes('cover') || lower.includes('folder') || lower.includes('front') || lower.includes('album') || !bestCover) {
+            bestCover = path.join(dirPath, f);
+            if (lower.includes('cover') || lower.includes('folder') || lower.includes('front')) break;
+          }
+        }
+      }
+      if (bestCover && fs.existsSync(bestCover)) {
+        try {
+          fs.copyFileSync(bestCover, cachedFile);
+          if (local?.id) db.prepare('UPDATE music_albums SET cover_path=? WHERE id=?').run(cachedFile, local.id);
+          const ext = path.extname(bestCover).toLowerCase();
+          return { filePath: cachedFile, contentType: ext === '.png' ? 'image/png' : 'image/jpeg' };
+        } catch {}
       }
     } catch {}
   }
 
-  // 4. Fetch from Cover Art Archive (CAA) if musicbrainz_id is present
-  const mbId = local?.musicbrainz_id || (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(albumId) ? albumId : null);
-  if (mbId) {
-    const caaUrls = [
-      `https://coverartarchive.org/release-group/${encodeURIComponent(mbId)}/front-250`,
-      `https://coverartarchive.org/release-group/${encodeURIComponent(mbId)}/front`,
-    ];
+  // 4. Check tracks belonging to this album for embedded art or metadata tags
+  const tracks = db.prepare('SELECT file_path FROM music_tracks WHERE album_id=? LIMIT 5').all(local?.id || albumId) as { file_path: string }[];
 
-    for (const u of caaUrls) {
+  // 4a. Try extracting embedded ID3/FLAC cover art via ffmpeg
+  for (const tr of tracks) {
+    if (tr.file_path && fs.existsSync(tr.file_path)) {
       try {
-        const res = await fetch(u, {
-          headers: { 'User-Agent': 'HomeStream/1.2.0 (contact@homestream.local)' },
-          redirect: 'follow',
-          signal: signal || AbortSignal.timeout(6000),
-        });
-
-        if (res.ok) {
-          const contentType = res.headers.get('content-type') || 'image/jpeg';
-          const arrayBuf = await res.arrayBuffer();
-          const buffer = Buffer.from(arrayBuf);
-          try {
-            fs.writeFileSync(cachedFile, buffer);
-            if (local?.id) db.prepare('UPDATE music_albums SET cover_path=? WHERE id=?').run(cachedFile, local.id);
-          } catch {}
-          return { buffer, contentType };
+        execSync(`ffmpeg -hide_banner -loglevel error -i "${tr.file_path}" -an -vcodec copy -y "${cachedFile}"`, { stdio: 'ignore', timeout: 5000 });
+        if (fs.existsSync(cachedFile) && fs.statSync(cachedFile).size > 1000) {
+          const buf = fs.readFileSync(cachedFile);
+          const isPng = buf.length > 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47;
+          const contentType = isPng ? 'image/png' : 'image/jpeg';
+          if (local?.id) db.prepare('UPDATE music_albums SET cover_path=? WHERE id=?').run(cachedFile, local.id);
+          return { filePath: cachedFile, contentType };
         }
       } catch {}
     }
   }
 
-  // 5. Fallback: Search iTunes Store API for album cover
-  if (local?.artist && local?.title) {
+  // 4b. Probe audio metadata for MusicBrainz release-group or album tags via ffprobe
+  let foundMbId = local?.musicbrainz_id;
+  let foundMbReleaseId: string | null = null;
+  if (!foundMbId && tracks.length > 0) {
+    for (const tr of tracks) {
+      if (tr.file_path && fs.existsSync(tr.file_path)) {
+        try {
+          const probeOut = execSync(`ffprobe -v quiet -print_format json -show_format "${tr.file_path}"`, { timeout: 4000, encoding: 'utf-8' });
+          const probeJson = JSON.parse(probeOut);
+          const tags = probeJson?.format?.tags || {};
+          for (const [k, v] of Object.entries(tags)) {
+            const kl = k.toLowerCase().replace(/[\s_-]/g, '');
+            if (typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)) {
+              if (kl.includes('releasegroup')) {
+                foundMbId = v;
+              } else if (kl.includes('albumid')) {
+                foundMbReleaseId = v;
+              }
+            }
+          }
+          if (foundMbId || foundMbReleaseId) break;
+        } catch {}
+      }
+    }
+    if (foundMbId && local?.id) {
+      try { db.prepare('UPDATE music_albums SET musicbrainz_id=? WHERE id=?').run(foundMbId, local.id); } catch {}
+    }
+  }
+
+  // 5. Fetch from Cover Art Archive (CAA)
+  const mbCandidate = foundMbId || (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(albumId) ? albumId : null);
+  const caaUrls: string[] = [];
+  if (mbCandidate) {
+    caaUrls.push(
+      `https://coverartarchive.org/release-group/${encodeURIComponent(mbCandidate)}/front-500`,
+      `https://coverartarchive.org/release-group/${encodeURIComponent(mbCandidate)}/front`
+    );
+  }
+  if (foundMbReleaseId) {
+    caaUrls.push(
+      `https://coverartarchive.org/release/${encodeURIComponent(foundMbReleaseId)}/front-500`,
+      `https://coverartarchive.org/release/${encodeURIComponent(foundMbReleaseId)}/front`
+    );
+  }
+
+  for (const u of caaUrls) {
     try {
-      const query = encodeURIComponent(`${local.artist} ${local.title}`);
-      const itunesUrl = `https://itunes.apple.com/search?term=${query}&entity=album&limit=1`;
+      const res = await fetch(u, {
+        headers: { 'User-Agent': 'HomeStream/1.2.0 (contact@homestream.local)' },
+        redirect: 'follow',
+        signal: signal || AbortSignal.timeout(6000),
+      });
+
+      if (res.ok) {
+        const contentType = res.headers.get('content-type') || 'image/jpeg';
+        const arrayBuf = await res.arrayBuffer();
+        const buffer = Buffer.from(arrayBuf);
+        try {
+          fs.writeFileSync(cachedFile, buffer);
+          if (local?.id) db.prepare('UPDATE music_albums SET cover_path=? WHERE id=?').run(cachedFile, local.id);
+        } catch {}
+        return { buffer, contentType };
+      }
+    } catch {}
+  }
+
+  // 5b. If CAA front returned 404, check release JSON index for any image (e.g. back/spine/packaging)
+  const releaseToCheck = foundMbReleaseId || (mbCandidate && /release\//.test(mbCandidate) ? mbCandidate : null);
+  if (releaseToCheck) {
+    try {
+      const idxRes = await fetch(`https://coverartarchive.org/release/${encodeURIComponent(releaseToCheck)}`, {
+        headers: { 'User-Agent': 'HomeStream/1.2.0 (contact@homestream.local)', Accept: 'application/json' },
+        redirect: 'follow',
+        signal: signal || AbortSignal.timeout(5000),
+      });
+      if (idxRes.ok) {
+        const idxData = (await idxRes.json()) as any;
+        const firstImg = idxData?.images?.[0];
+        const imgUrl = firstImg?.thumbnails?.[ '500' ] || firstImg?.thumbnails?.large || firstImg?.image;
+        if (imgUrl) {
+          const imgRes = await fetch(imgUrl, { redirect: 'follow', signal: signal || AbortSignal.timeout(6000) });
+          if (imgRes.ok) {
+            const buffer = Buffer.from(await imgRes.arrayBuffer());
+            try {
+              fs.writeFileSync(cachedFile, buffer);
+              if (local?.id) db.prepare('UPDATE music_albums SET cover_path=? WHERE id=?').run(cachedFile, local.id);
+            } catch {}
+            return { buffer, contentType: 'image/jpeg' };
+          }
+        }
+      }
+    } catch {}
+  }
+
+  // Clean artist & title for external searches
+  const rawArtist = local?.artist || '';
+  const rawTitle = local?.title || '';
+  if (rawArtist && rawTitle) {
+    const cleanTitle = rawTitle
+      .replace(/\s*[\[(][^\])]*?(?:edition|deluxe|bonus|epilogue|\d{4})[^\])]*?[\])]/gi, '')
+      .replace(/_/g, ' ')
+      .trim();
+    const cleanArtist = rawArtist.replace(/_/g, ' ').trim();
+    const searchQuery = `${cleanArtist} ${cleanTitle}`.trim();
+
+    // 6. Deezer Search API (high-res 1000x1000 cover_xl, free, fast)
+    try {
+      const dzUrl = `https://api.deezer.com/search/album?q=${encodeURIComponent(searchQuery)}`;
+      const dzRes = await fetch(dzUrl, {
+        headers: { 'User-Agent': 'HomeStream/1.2.0' },
+        signal: signal || AbortSignal.timeout(5000),
+      });
+      if (dzRes.ok) {
+        const dzData = (await dzRes.json()) as any;
+        const match = dzData?.data?.[0];
+        const dzImgUrl = match?.cover_xl || match?.cover_big || match?.cover_medium;
+        if (dzImgUrl && typeof dzImgUrl === 'string') {
+          const imgRes = await fetch(dzImgUrl, { signal: signal || AbortSignal.timeout(6000) });
+          if (imgRes.ok) {
+            const buffer = Buffer.from(await imgRes.arrayBuffer());
+            try {
+              fs.writeFileSync(cachedFile, buffer);
+              if (local?.id) db.prepare('UPDATE music_albums SET cover_path=? WHERE id=?').run(cachedFile, local.id);
+            } catch {}
+            return { buffer, contentType: 'image/jpeg' };
+          }
+        }
+      }
+    } catch {}
+
+    // 7. Fallback: Search iTunes Store API for album cover
+    try {
+      const itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(searchQuery)}&entity=album&limit=1`;
       const res = await fetch(itunesUrl, {
         headers: { 'User-Agent': 'Mozilla/5.0 HomeStream/1.2.0' },
         signal: signal || AbortSignal.timeout(5000),
       });
       if (res.ok) {
-        const data = await res.json() as any;
+        const data = (await res.json()) as any;
         const rawArt = data?.results?.[0]?.artworkUrl100;
         if (rawArt && typeof rawArt === 'string') {
           const highResArt = rawArt.replace('100x100bb', '600x600bb');
@@ -768,9 +963,34 @@ export async function getAlbumArtwork(albumId: string, signal?: AbortSignal): Pr
             const buf = Buffer.from(await imgRes.arrayBuffer());
             try {
               fs.writeFileSync(cachedFile, buf);
-              if (local.id) db.prepare('UPDATE music_albums SET cover_path=? WHERE id=?').run(cachedFile, local.id);
+              if (local?.id) db.prepare('UPDATE music_albums SET cover_path=? WHERE id=?').run(cachedFile, local.id);
             } catch {}
             return { buffer: buf, contentType: 'image/jpeg' };
+          }
+        }
+      }
+    } catch {}
+
+    // 8. Fallback: MusicBrainz release-group search
+    try {
+      const mbSearchUrl = `https://musicbrainz.org/ws/2/release-group/?query=artist:"${encodeURIComponent(cleanArtist)}" AND releasegroup:"${encodeURIComponent(cleanTitle)}"&fmt=json`;
+      const mbRes = await fetch(mbSearchUrl, {
+        headers: { 'User-Agent': 'HomeStream/1.2.0 (contact@homestream.local)' },
+        signal: signal || AbortSignal.timeout(5000),
+      });
+      if (mbRes.ok) {
+        const mbData = (await mbRes.json()) as any;
+        const rg = mbData?.['release-groups']?.[0];
+        if (rg?.id) {
+          const caaUrl = `https://coverartarchive.org/release-group/${encodeURIComponent(rg.id)}/front`;
+          const caaRes = await fetch(caaUrl, { redirect: 'follow', signal: signal || AbortSignal.timeout(6000) });
+          if (caaRes.ok) {
+            const buffer = Buffer.from(await caaRes.arrayBuffer());
+            try {
+              fs.writeFileSync(cachedFile, buffer);
+              if (local?.id) db.prepare('UPDATE music_albums SET cover_path=?, musicbrainz_id=? WHERE id=?').run(cachedFile, rg.id, local.id);
+            } catch {}
+            return { buffer, contentType: 'image/jpeg' };
           }
         }
       }
@@ -1368,18 +1588,52 @@ export async function getPlaylists(profileId?: string): Promise<{ playlists: Pla
     ORDER BY updated_at DESC
   `).all(pid) as any[];
 
-  const playlists: Playlist[] = rows.map((r) => ({
-    id: r.id,
-    profileId: r.profile_id,
-    name: r.name,
-    description: r.description || undefined,
-    coverUrl: r.cover_url || undefined,
-    spotifyId: r.spotify_id || undefined,
-    totalTracks: r.total_tracks || 0,
-    downloadedTracks: r.downloaded_tracks || 0,
-    createdAt: r.created_at,
-    updatedAt: r.updated_at,
-  }));
+  const playlists: Playlist[] = rows.map((r) => {
+    let coverUrl = r.cover_url || undefined;
+    if (!coverUrl) {
+      const sample = db.prepare(`
+        SELECT pt.cover_url, mt.album_id
+        FROM playlist_tracks pt
+        LEFT JOIN music_tracks mt ON pt.track_id = mt.id
+        WHERE pt.playlist_id = ? AND (pt.cover_url IS NOT NULL OR mt.album_id IS NOT NULL)
+        LIMIT 1
+      `).get(r.id) as any;
+      if (sample?.cover_url) {
+        coverUrl = sample.cover_url;
+      } else if (sample?.album_id) {
+        coverUrl = `/api/v1/music/artwork?albumId=${encodeURIComponent(sample.album_id)}`;
+      } else {
+        const sample2 = db.prepare(`
+          SELECT ma.id as album_id
+          FROM playlist_tracks pt
+          JOIN music_albums ma ON LOWER(ma.artist) = LOWER(pt.artist) AND LOWER(ma.title) = LOWER(pt.album)
+          WHERE pt.playlist_id = ?
+          LIMIT 1
+        `).get(r.id) as any;
+        if (sample2?.album_id) {
+          coverUrl = `/api/v1/music/artwork?albumId=${encodeURIComponent(sample2.album_id)}`;
+        } else {
+          const sample3 = db.prepare('SELECT id FROM playlist_tracks WHERE playlist_id = ? LIMIT 1').get(r.id) as any;
+          if (sample3?.id) {
+            coverUrl = `/api/v1/music/artwork?albumId=${encodeURIComponent(sample3.id)}`;
+          }
+        }
+      }
+    }
+
+    return {
+      id: r.id,
+      profileId: r.profile_id,
+      name: r.name,
+      description: r.description || undefined,
+      coverUrl,
+      spotifyId: r.spotify_id || undefined,
+      totalTracks: r.total_tracks || 0,
+      downloadedTracks: r.downloaded_tracks || 0,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+    };
+  });
 
   return { playlists, total: playlists.length };
 }
@@ -1397,34 +1651,55 @@ export async function getPlaylist(playlistId: string, profileId?: string): Promi
   if (!r) return null;
 
   const trackRows = db.prepare(`
-    SELECT * FROM playlist_tracks
-    WHERE playlist_id = ?
-    ORDER BY position ASC, created_at ASC
+    SELECT pt.*, mt.album_id
+    FROM playlist_tracks pt
+    LEFT JOIN music_tracks mt ON pt.track_id = mt.id
+    WHERE pt.playlist_id = ?
+    ORDER BY pt.position ASC, pt.created_at ASC
   `).all(playlistId) as any[];
 
-  const tracks: PlaylistTrack[] = trackRows.map((t) => ({
-    id: t.id,
-    playlistId: t.playlist_id,
-    trackId: t.track_id || undefined,
-    title: t.title,
-    artist: t.artist,
-    album: t.album,
-    durationSeconds: t.duration_seconds || 0,
-    coverUrl: t.cover_url || undefined,
-    spotifyTrackId: t.spotify_track_id || undefined,
-    position: t.position || 0,
-    status: t.status,
-    errorMessage: t.error_message || undefined,
-    streamUrl: t.track_id ? `/api/v1/music/stream?trackId=${encodeURIComponent(t.track_id)}` : undefined,
-    createdAt: t.created_at,
-  }));
+  const findAlbumStmt = db.prepare('SELECT id FROM music_albums WHERE LOWER(artist) = ? AND LOWER(title) = ? LIMIT 1');
 
+  const tracks: PlaylistTrack[] = trackRows.map((t) => {
+    let trackCover = t.cover_url || undefined;
+    if (!trackCover && t.album_id) {
+      trackCover = `/api/v1/music/artwork?albumId=${encodeURIComponent(t.album_id)}`;
+    } else if (!trackCover && t.artist && t.album) {
+      const match = findAlbumStmt.get(t.artist.toLowerCase().trim(), t.album.toLowerCase().trim()) as any;
+      if (match?.id) {
+        trackCover = `/api/v1/music/artwork?albumId=${encodeURIComponent(match.id)}`;
+      } else {
+        trackCover = `/api/v1/music/artwork?albumId=${encodeURIComponent(t.id)}`;
+      }
+    } else if (!trackCover) {
+      trackCover = `/api/v1/music/artwork?albumId=${encodeURIComponent(t.id)}`;
+    }
+
+    return {
+      id: t.id,
+      playlistId: t.playlist_id,
+      trackId: t.track_id || undefined,
+      title: t.title,
+      artist: t.artist,
+      album: t.album,
+      durationSeconds: t.duration_seconds || 0,
+      coverUrl: trackCover,
+      spotifyTrackId: t.spotify_track_id || undefined,
+      position: t.position || 0,
+      status: t.status,
+      errorMessage: t.error_message || undefined,
+      streamUrl: t.track_id ? `/api/v1/music/stream?trackId=${encodeURIComponent(t.track_id)}` : undefined,
+      createdAt: t.created_at,
+    };
+  });
+
+  const firstCover = tracks.find(tr => tr.coverUrl)?.coverUrl;
   const playlist: Playlist = {
     id: r.id,
     profileId: r.profile_id,
     name: r.name,
     description: r.description || undefined,
-    coverUrl: r.cover_url || undefined,
+    coverUrl: r.cover_url || firstCover || undefined,
     spotifyId: r.spotify_id || undefined,
     totalTracks: r.total_tracks || 0,
     downloadedTracks: r.downloaded_tracks || 0,

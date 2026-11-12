@@ -209,6 +209,7 @@ export interface MusicTrack {
   discNumber: number;
   durationSeconds?: number;
   streamUrl: string;
+  coverUrl?: string;
 }
 export interface MusicResponse { configured: boolean; albums: MusicAlbum[]; total: number; }
 export interface MusicAlbumResponse { album: MusicAlbum; tracks: MusicTrack[]; }

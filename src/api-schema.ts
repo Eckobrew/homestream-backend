@@ -36,7 +36,7 @@ add('profiles','GET',object({profiles:list(profile),activeProfileId:text,needsSe
 add('profiles','POST',object({success:boolean,profiles:list(profile),profile}),{},profilesBody);
 add('search','GET',object({results:list(media),isDemoMode:boolean}),{q:text});
 add('downloads','GET',object({items:list()}));
-const playbackQuery = { itemId:id, startTimeTicks:natural, forceTranscode:flag, canPlayHevc:flag, receiver:{type:'string',enum:['browser','cast','native-tv']}, videoCodecs:text,audioCodecs:text,videoCapabilities:text,maxWidth:natural,maxHeight:natural };
+const playbackQuery = { itemId:id, startTimeTicks:natural, forceTranscode:flag, canPlayHevc:flag, receiver:{type:'string',enum:['browser','cast','native-tv']}, videoCodecs:text,audioCodecs:text,videoCapabilities:text,maxWidth:natural,maxHeight:natural, tmdbId:natural, type:text, season:natural, episode:natural, title:text };
 add('playback','GET',object(),playbackQuery,undefined,{requiredQuery:['itemId'],responseModel:'PlaybackResponse'});
 add('playback/progress','POST',success,{},progress);
 add('request','GET',object({profiles:list(),defaultProfileId:{type:'integer'}}),{type:{type:'string',enum:['movie','tv']}});
@@ -45,7 +45,7 @@ add('preview-stream','GET',object(),{itemId:id,ticks:natural},undefined,{require
 add('subtitles','GET',object({subtitles:list()}),{itemId:id,mediaSourceId:id,index:natural},undefined,{requiredQuery:['itemId']});
 add('trailer','GET',object({success:boolean,trailer:{anyOf:[object(),{type:'null'}]}}),{itemId:id,tmdbId:natural,type:{type:'string',enum:['movie','tv']}});
 add('stream/download','GET',object(),{hash:id,path:text,fileIndex:natural,season:natural,episode:natural,start:{type:'string',pattern:'^\\d+(\\.\\d+)?$'},transcode:{type:'string',enum:['0','1']},native:{type:'string',enum:['0','1']},source:{type:'string',enum:['0','1']},probe:{type:'string',enum:['0','1']},growing:{type:'string',enum:['0','1']}},undefined,{binary:true});
-add('stream/torrent','GET',object(),{tmdbId:natural,type:text,season:natural,episode:natural,title:text,magnet:text,forceTranscode:flag,canPlayHevc:flag,receiver:text},undefined,{binary:true});
+add('stream/torrent','GET',object(),{tmdbId:natural,type:text,season:natural,episode:natural,title:text,magnet:text,forceTranscode:flag,canPlayHevc:flag,receiver:text,start:{type:'string',pattern:'^\\d+(\\.\\d+)?$'},transcode:{type:'string',enum:['0','1']},native:{type:'string',enum:['0','1']},source:{type:'string',enum:['0','1']},probe:{type:'string',enum:['0','1']}},undefined,{binary:true});
 add('webhook/arr','GET',object({status:text}));
 add('webhook/arr','POST',success,{},object({eventType:text,downloadId:text,torrentHash:text,event_type:text}));
 add('catalog-links','GET',object({items:list(media)}));
