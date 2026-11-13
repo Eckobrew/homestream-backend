@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { stateDatabase } from '@/state/database';
 import { getServerConfig } from './config';
+import { resolveDefaultProfileId } from './music';
 import { BookshelfClient, type BookshelfBook, type BookshelfBookFile } from './bookshelf';
 import type { BookItem, BookRequestItem, BookProgress } from '@/types';
 
@@ -97,14 +98,43 @@ function toItem(book: BookshelfBook, files: BookshelfBookFile[], shelf: Set<numb
   };
 }
 
+const pidOf = (profileId?: string) => profileId || resolveDefaultProfileId();
+
+let seededInitialBooks = false;
+function seedNathanProfileBooks(booksWithFiles: BookshelfBook[]) {
+  if (seededInitialBooks || booksWithFiles.length === 0) return;
+  try {
+    ensureBookTables();
+    const db = stateDatabase();
+    const row = db.prepare('SELECT COUNT(*) as c FROM profile_books').get() as { c: number } | undefined;
+    if (row && row.c > 0) {
+      seededInitialBooks = true;
+      return;
+    }
+    const nathanId = resolveDefaultProfileId();
+    const now = new Date().toISOString();
+    const stmt = db.prepare('INSERT OR IGNORE INTO profile_books (profile_id, book_id, added_at) VALUES (?, ?, ?)');
+    for (const b of booksWithFiles) {
+      if (b.id) stmt.run(nathanId, b.id, now);
+    }
+    seededInitialBooks = true;
+  } catch {
+    // ignore seed errors
+  }
+}
+
 const shelfOf = (profileId?: string) => {
   ensureBookTables();
-  const rows = stateDatabase().prepare('SELECT book_id FROM profile_books WHERE profile_id = ?').all(profileId || '') as { book_id: number }[];
+  const pid = pidOf(profileId);
+  const rows = stateDatabase().prepare('SELECT book_id FROM profile_books WHERE profile_id = ?').all(pid) as { book_id: number }[];
   return new Set(rows.map(r => r.book_id));
 };
-function requestRows(): BookRequestItem[] {
+function requestRows(profileId?: string): BookRequestItem[] {
   ensureBookTables();
-  return (stateDatabase().prepare('SELECT * FROM book_requests ORDER BY created_at DESC').all() as any[]).map(r => ({
+  const rows = profileId
+    ? (stateDatabase().prepare('SELECT * FROM book_requests WHERE profile_id = ? OR profile_id IS NULL ORDER BY created_at DESC').all(pidOf(profileId)) as any[])
+    : (stateDatabase().prepare('SELECT * FROM book_requests ORDER BY created_at DESC').all() as any[]);
+  return rows.map(r => ({
     foreignBookId: r.foreign_book_id,
     bookId: r.book_id ? String(r.book_id) : undefined,
     title: r.title,
@@ -116,32 +146,41 @@ function requestRows(): BookRequestItem[] {
   }));
 }
 
-/** Books that have files in Bookshelf, with the profile's shelf marked. */
+/** Per-profile books collection: only returns books added to or requested by the active profile. */
 export async function getBooks(q: string, offset: number, profileId?: string) {
   if (!booksConfigured()) return { configured: false, books: [], total: 0, requests: [] };
   const lib = await library();
-  const shelf = shelfOf(profileId);
+  const downloadedBooks = lib.books.filter(b => (lib.files.get(b.id)?.length || 0) > 0);
+  seedNathanProfileBooks(downloadedBooks);
+  const pid = pidOf(profileId);
+  const shelf = shelfOf(pid);
   const term = q.toLowerCase();
-  const all = lib.books
-    .filter(b => (lib.files.get(b.id)?.length || 0) > 0)
+  const all = downloadedBooks
+    .filter(b => shelf.has(b.id))
     .map(b => toItem(b, lib.files.get(b.id) || [], shelf))
     .filter(b => !term || `${b.title} ${b.author} ${b.series}`.toLowerCase().includes(term))
-    .sort((a, b) => Number(b.onShelf) - Number(a.onShelf) || a.title.localeCompare(b.title));
-  return { configured: true, books: all.slice(offset, offset + 60), total: all.length, requests: requestRows().filter(r => r.status !== 'available') };
+    .sort((a, b) => a.title.localeCompare(b.title));
+  return {
+    configured: true,
+    books: all.slice(offset, offset + 60),
+    total: all.length,
+    requests: requestRows(pid).filter(r => r.status !== 'available'),
+  };
 }
 
 export async function getBook(id: string, profileId?: string): Promise<BookItem | null> {
   const lib = await library();
   const book = lib.books.find(b => String(b.id) === id);
-  return book ? toItem(book, lib.files.get(book.id) || [], shelfOf(profileId)) : null;
+  return book ? toItem(book, lib.files.get(book.id) || [], shelfOf(pidOf(profileId))) : null;
 }
 
 export async function searchBooks(q: string, profileId?: string): Promise<{ books: BookItem[] }> {
   if (!q.trim()) return { books: [] };
+  const pid = pidOf(profileId);
   const [results, lib] = await Promise.all([client().lookupBooks(q.trim()), library()]);
-  const shelf = shelfOf(profileId);
+  const shelf = shelfOf(pid);
   const known = new Map(lib.books.map(b => [b.foreignBookId, b]));
-  const requests = new Map(requestRows().map(r => [r.foreignBookId, r]));
+  const requests = new Map(requestRows(pid).map(r => [r.foreignBookId, r]));
   return {
     books: results.slice(0, 30).map(r => {
       const local = known.get(r.foreignBookId);
@@ -154,46 +193,50 @@ export async function requestBook(foreignBookId: string, title: string, author: 
   if (!booksConfigured()) throw new Error('Bookshelf is not configured');
   if (!/^[\w-]{1,64}$/.test(foreignBookId)) throw new Error('Invalid book ID');
   ensureBookTables();
+  const pid = pidOf(profileId);
   const lib = await library(true);
   const existing = lib.books.find(b => b.foreignBookId === foreignBookId);
   if (existing && (lib.files.get(existing.id)?.length || 0) > 0) {
-    addBookToProfile(existing.id, profileId);
-    return { success: true, status: 'available', message: 'Already in the library — added to your shelf', bookId: String(existing.id) };
+    addBookToProfile(existing.id, pid);
+    return { success: true, status: 'available', message: 'Added to your bookshelf', bookId: String(existing.id) };
   }
   const now = new Date().toISOString();
   stateDatabase().prepare(`
     INSERT INTO book_requests (foreign_book_id, title, author, cover_url, status, profile_id, created_at, updated_at)
     VALUES (?, ?, ?, ?, 'requested', ?, ?, ?)
-    ON CONFLICT(foreign_book_id) DO UPDATE SET status = CASE WHEN status = 'failed' THEN 'requested' ELSE status END, error_message = NULL, updated_at = excluded.updated_at
-  `).run(foreignBookId, title.slice(0, 300), author.slice(0, 200), existing ? '' : '', profileId || null, now, now);
+    ON CONFLICT(foreign_book_id) DO UPDATE SET status = CASE WHEN status = 'failed' THEN 'requested' ELSE status END, profile_id = excluded.profile_id, error_message = NULL, updated_at = excluded.updated_at
+  `).run(foreignBookId, title.slice(0, 300), author.slice(0, 200), '', pid, now, now);
   void advanceBookRequests().catch(() => undefined);
   return { success: true, status: 'requested', message: 'Book requested' };
 }
 
 export function addBookToProfile(bookId: number, profileId?: string) {
   ensureBookTables();
-  if (!profileId) return { success: false };
-  stateDatabase().prepare('INSERT OR IGNORE INTO profile_books (profile_id, book_id, added_at) VALUES (?, ?, ?)').run(profileId, bookId, new Date().toISOString());
+  const pid = pidOf(profileId);
+  stateDatabase().prepare('INSERT OR IGNORE INTO profile_books (profile_id, book_id, added_at) VALUES (?, ?, ?)').run(pid, bookId, new Date().toISOString());
   return { success: true };
 }
 export function removeBookFromProfile(bookId: number, profileId?: string) {
   ensureBookTables();
-  stateDatabase().prepare('DELETE FROM profile_books WHERE profile_id = ? AND book_id = ?').run(profileId || '', bookId);
+  const pid = pidOf(profileId);
+  stateDatabase().prepare('DELETE FROM profile_books WHERE profile_id = ? AND book_id = ?').run(pid, bookId);
   return { success: true };
 }
 
 export function getProgress(bookId: number, profileId?: string): BookProgress | null {
   ensureBookTables();
-  const row = stateDatabase().prepare('SELECT location, percent, updated_at FROM book_progress WHERE profile_id = ? AND book_id = ?').get(profileId || '', bookId) as any;
+  const pid = pidOf(profileId);
+  const row = stateDatabase().prepare('SELECT location, percent, updated_at FROM book_progress WHERE profile_id = ? AND book_id = ?').get(pid, bookId) as any;
   return row ? { location: row.location, percent: row.percent, updatedAt: row.updated_at } : null;
 }
 export function saveProgress(bookId: number, profileId: string | undefined, location: string, percent: number) {
   ensureBookTables();
-  if (!profileId || !location || location.length > 2000) return { success: false };
+  const pid = pidOf(profileId);
+  if (!location || location.length > 2000) return { success: false };
   stateDatabase().prepare(`
     INSERT INTO book_progress (profile_id, book_id, location, percent, updated_at) VALUES (?, ?, ?, ?, ?)
     ON CONFLICT(profile_id, book_id) DO UPDATE SET location = excluded.location, percent = excluded.percent, updated_at = excluded.updated_at
-  `).run(profileId, bookId, location, Math.max(0, Math.min(100, Number(percent) || 0)), new Date().toISOString());
+  `).run(pid, bookId, location, Math.max(0, Math.min(100, Number(percent) || 0)), new Date().toISOString());
   return { success: true };
 }
 
