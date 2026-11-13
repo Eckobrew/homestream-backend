@@ -27,11 +27,12 @@ import (
 
 type account struct{ ProfileID, Username string }
 type pilot struct {
-	config string
-	db     *sql.DB
-	root   *os.Root
-	mu     sync.Mutex
-	cached map[string]snapshot
+	config  string
+	db      *sql.DB
+	root    *os.Root
+	mu      sync.Mutex
+	cached  map[string]snapshot
+	loadFn  func(*pilot, context.Context, string, string) (snapshot, error)
 }
 
 type snapshot struct {
@@ -105,7 +106,11 @@ func (p *pilot) view(ctx context.Context) (snapshot, error) {
 		}
 		view := p.cached[key]
 		if !time.Now().Before(view.expires) {
-			view, err = p.profileView(ctx, a.ProfileID, a.Username)
+			fn := p.loadFn
+			if fn == nil {
+				fn = (*pilot).musicProfileView
+			}
+			view, err = fn(p, ctx, a.ProfileID, a.Username)
 			if err != nil {
 				return snapshot{}, err
 			}
@@ -129,7 +134,7 @@ func (p *pilot) view(ctx context.Context) (snapshot, error) {
 	return result, nil
 }
 
-func (p *pilot) profileView(ctx context.Context, id, name string) (snapshot, error) {
+func (p *pilot) musicProfileView(ctx context.Context, id, name string) (snapshot, error) {
 	rows, err := p.db.QueryContext(ctx, `SELECT t.file_path,a.artist,a.title,t.id FROM music_tracks t JOIN music_albums a ON a.id=t.album_id
  WHERE a.in_library=1 AND (EXISTS (SELECT 1 FROM profile_music_albums p WHERE p.profile_id=? AND p.album_id=a.id)
  OR EXISTS (SELECT 1 FROM playlist_tracks pt JOIN playlists p ON p.id=pt.playlist_id
@@ -169,6 +174,61 @@ func (p *pilot) profileView(ctx context.Context, id, name string) (snapshot, err
 		}
 		result.files[key] = entry{relative, vfs.FileInfo{Name: filename, Attributes: 1}}
 		result.dirs[albumFolder] = append(result.dirs[albumFolder], result.files[key].info)
+	}
+	if err = rows.Err(); err != nil {
+		return snapshot{}, err
+	}
+	for _, entries := range result.dirs {
+		slices.SortFunc(entries, func(a, b vfs.FileInfo) int { return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)) })
+	}
+	p.cached[id] = result
+	return result, nil
+}
+
+func (p *pilot) booksProfileView(ctx context.Context, id, name string) (snapshot, error) {
+	result := snapshot{time.Now().Add(15 * time.Second), map[string][]vfs.FileInfo{"": {}}, map[string]entry{}}
+	addDir := func(parent, name string) string {
+		key := strings.ToLower(path.Join(parent, name))
+		if _, exists := result.dirs[key]; !exists {
+			result.dirs[key] = nil
+			result.dirs[parent] = append(result.dirs[parent], vfs.FileInfo{Name: name, IsDir: true, Attributes: 0x11})
+		}
+		return key
+	}
+	folder := addDir("", cleanName(name))
+	var hasCatalog int
+	if err := p.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='books_catalog'`).Scan(&hasCatalog); err != nil || hasCatalog == 0 {
+		p.cached[id] = result
+		return result, nil
+	}
+	rows, err := p.db.QueryContext(ctx, `SELECT c.file_path, c.author, c.title, CAST(c.book_id AS TEXT)
+ FROM books_catalog c
+ JOIN profile_books p ON p.book_id = c.book_id
+ WHERE p.profile_id = ?
+ ORDER BY c.author, c.title, c.book_id`, id)
+	if err != nil {
+		return snapshot{}, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var source, author, title, bookID string
+		if err = rows.Scan(&source, &author, &title, &bookID); err != nil {
+			return snapshot{}, err
+		}
+		relative, valid := strings.CutPrefix(source, "/books/")
+		if !valid || !fs.ValidPath(relative) || relative == "." {
+			continue
+		}
+		authorFolder := addDir(folder, cleanName(author))
+		filename := cleanName(filepath.Base(relative))
+		key := strings.ToLower(path.Join(authorFolder, filename))
+		if _, exists := result.files[key]; exists {
+			ext := path.Ext(filename)
+			filename = strings.TrimSuffix(filename, ext) + "-" + cleanName(bookID) + ext
+			key = strings.ToLower(path.Join(authorFolder, filename))
+		}
+		result.files[key] = entry{relative, vfs.FileInfo{Name: filename, Attributes: 1}}
+		result.dirs[authorFolder] = append(result.dirs[authorFolder], result.files[key].info)
 	}
 	if err = rows.Err(); err != nil {
 		return snapshot{}, err
@@ -269,6 +329,7 @@ func main() {
 	config := flag.String("accounts", "", "JSON opt-in accounts file")
 	database := flag.String("database", "/state/homestream.sqlite", "HomeStream database")
 	music := flag.String("music", "/music", "read-only music mount")
+	books := flag.String("books", "/books", "read-only books mount")
 	flag.Parse()
 	if *config == "" {
 		log.Fatal("SMB disabled: supply an opt-in accounts file")
@@ -284,11 +345,17 @@ func main() {
 	}
 	defer db.Close()
 	db.SetMaxOpenConns(1)
-	p := &pilot{config: *config, db: db, root: root, cached: map[string]snapshot{}}
+	p := &pilot{config: *config, db: db, root: root, cached: map[string]snapshot{}, loadFn: (*pilot).musicProfileView}
 	if _, err = p.accounts(); err != nil {
 		log.Fatal("Cannot load SMB accounts: ", err)
 	}
-	srv, err := server.New(server.WithAddr(*addr), server.WithShares(vfs.NewDiskShare("Music", p)), server.WithMaxCredits(64),
+	shares := []vfs.Share{vfs.NewDiskShare("Music", p)}
+	if booksRoot, err := os.OpenRoot(*books); err == nil {
+		defer booksRoot.Close()
+		bp := &pilot{config: *config, db: db, root: booksRoot, cached: map[string]snapshot{}, loadFn: (*pilot).booksProfileView}
+		shares = append(shares, vfs.NewDiskShare("Books", bp))
+	}
+	srv, err := server.New(server.WithAddr(*addr), server.WithShares(shares...), server.WithMaxCredits(64),
 		server.WithAuth(ntlmssp.NewGuestServer("HOMESTREAM")))
 	if err != nil {
 		log.Fatal(err)

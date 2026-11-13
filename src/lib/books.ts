@@ -29,6 +29,14 @@ export function ensureBookTables() {
       added_at TEXT NOT NULL,
       PRIMARY KEY (profile_id, book_id)
     );
+    CREATE TABLE IF NOT EXISTS books_catalog (
+      book_id INTEGER PRIMARY KEY,
+      foreign_book_id TEXT,
+      title TEXT NOT NULL,
+      author TEXT NOT NULL,
+      file_path TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS book_progress (
       profile_id TEXT NOT NULL,
       book_id INTEGER NOT NULL,
@@ -71,9 +79,38 @@ async function library(force = false) {
   const byBook = new Map<number, BookshelfBookFile[]>();
   for (const file of files || []) byBook.set(file.bookId, [...(byBook.get(file.bookId) || []), file]);
   booksCache = { at: Date.now(), books: books || [], files: byBook };
+  syncBooksCatalog(booksCache.books, booksCache.files);
   return booksCache;
 }
 export const invalidateBooks = () => { booksCache = undefined; };
+
+function syncBooksCatalog(books: BookshelfBook[], files: Map<number, BookshelfBookFile[]>) {
+  try {
+    ensureBookTables();
+    const db = stateDatabase();
+    const now = new Date().toISOString();
+    const upsert = db.prepare(`
+      INSERT INTO books_catalog (book_id, foreign_book_id, title, author, file_path, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(book_id) DO UPDATE SET
+        foreign_book_id = excluded.foreign_book_id,
+        title = excluded.title,
+        author = excluded.author,
+        file_path = excluded.file_path,
+        updated_at = excluded.updated_at
+    `);
+    for (const b of books) {
+      if (!b.id) continue;
+      const bFiles = files.get(b.id) || [];
+      if (!bFiles.length) continue;
+      const ranked = [...bFiles].sort((x, y) => (FORMAT_ORDER.indexOf(extOf(x.path)) + 99) % 99 - (FORMAT_ORDER.indexOf(extOf(y.path)) + 99) % 99);
+      const author = b.author?.authorName || b.authorTitle?.replace(/^(.*?), (.*?) .*$/, '$2 $1') || 'Unknown Author';
+      upsert.run(b.id, b.foreignBookId || '', b.title || 'Book', author, ranked[0].path, now);
+    }
+  } catch {
+    // ignore catalog sync errors
+  }
+}
 
 const extOf = (file: string) => path.extname(file).slice(1).toLowerCase();
 const formatsOf = (files: BookshelfBookFile[] = []) =>
@@ -372,6 +409,13 @@ export async function advanceBookRequests() {
 let timer: NodeJS.Timeout | undefined;
 export function startBooksMonitor() {
   if (timer) return;
+  setTimeout(() => {
+    if (booksConfigured()) {
+      void library(true).then(lib => {
+        reconcileRequestedBooks(lib.books.filter(b => (lib.files.get(b.id)?.length || 0) > 0));
+      }).catch(() => undefined);
+    }
+  }, 3000);
   timer = setInterval(() => { void advanceBookRequests().catch(() => undefined); }, 20000);
   timer.unref?.();
 }

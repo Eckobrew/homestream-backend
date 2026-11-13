@@ -15,5 +15,6 @@ services:
       - "${HOMESTREAM_SMB_BIND_IP:?Set the HomeStream LAN IP}:445:1445"
     volumes:
       - "${HOMESTREAM_MUSIC_PATH:?Set the existing music mount}:/music:ro"
+      - "${HOMESTREAM_BOOKS_PATH:-/mnt/books}:/books:ro"
       - "${HOMESTREAM_STATE_PATH:?Set the backend state directory}:/state:ro"
       - "${HOMESTREAM_SMB_CONFIG_PATH:?Set the SMB config directory}:/config:ro"

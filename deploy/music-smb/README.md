@@ -1,8 +1,8 @@
-# HomeStream Music over SMB
+# HomeStream Music & Books over SMB
 
-This optional service presents `Music/<profile>/<artist>/<album>/<track>` on the HomeStream host.
-It reads the existing music mount and SQLite database, and keeps only a short-lived directory index in memory.
-Guests can browse all opted-in profile folders. The share is read-only.
+This optional service presents `Music/<profile>/<artist>/<album>/<track>` and `Books/<profile>/<author>/<book>` on the HomeStream host.
+It reads the existing music and books mounts and SQLite database, and keeps only a short-lived directory index in memory.
+Guests can browse all opted-in profile folders. The shares are read-only.
 
 Set the four environment variables in the Compose file. The SMB config directory must contain `accounts.json`,
 readable by UID 1001 and protected from other users. Add an entry to opt a profile in. Username is the folder name:
