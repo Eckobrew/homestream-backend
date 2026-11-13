@@ -1,11 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
-import { execSync } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
+import { promisify } from 'node:util';
 import { fetch } from '@/upstream';
 import { readState, stateDatabase, dataDirectory } from '@/state/database';
 import { getServerConfig } from './config';
-import { SlskdClient } from './slskd';
+import { SlskdClient, type SlskdTransfer } from './slskd';
 import { extractSpotifyTargets, getSpotifyPlaylist, getSpotifyUserPlaylists, SpotifyPlaylistMeta } from './spotify';
 import { isExportifyCsv, parseExportifyCsv, parseExportifyZip } from './exportify';
 import type { MusicAlbum, MusicTrack, RequestedItem, Playlist, PlaylistTrack } from '@/types';
@@ -125,6 +126,7 @@ export function ensureMusicTables() {
         cover_url TEXT,
         status TEXT NOT NULL, -- 'requested', 'searching', 'downloading', 'importing', 'available', 'failed'
         username TEXT,
+        requested_by TEXT,
         search_id TEXT,
         files_json TEXT,
         progress REAL DEFAULT 0,
@@ -133,6 +135,20 @@ export function ensureMusicTables() {
         error_message TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS music_download_jobs (
+        id TEXT PRIMARY KEY,
+        next_attempt INTEGER NOT NULL DEFAULT 0,
+        progress_signature TEXT NOT NULL DEFAULT '',
+        progress_at INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE TABLE IF NOT EXISTS music_download_sources (
+        job_id TEXT NOT NULL,
+        username TEXT NOT NULL,
+        failures INTEGER NOT NULL,
+        failed_at INTEGER NOT NULL,
+        PRIMARY KEY (job_id, username)
       );
 
       CREATE INDEX IF NOT EXISTS idx_music_albums_artist ON music_albums(artist);
@@ -144,6 +160,12 @@ export function ensureMusicTables() {
       CREATE INDEX IF NOT EXISTS idx_playlist_tracks_playlist ON playlist_tracks(playlist_id);
       CREATE INDEX IF NOT EXISTS idx_playlist_tracks_status ON playlist_tracks(status);
     `);
+    if (!db.prepare("SELECT 1 FROM pragma_table_info('music_requests') WHERE name='requested_by'").get()) {
+      db.exec('ALTER TABLE music_requests ADD COLUMN requested_by TEXT');
+    }
+    if (!db.prepare("SELECT 1 FROM pragma_table_info('playlist_tracks') WHERE name='transfer_size'").get()) {
+      db.exec('ALTER TABLE playlist_tracks ADD COLUMN transfer_size INTEGER');
+    }
     seedNathanProfileMusic(db);
     dbInitialized = true;
   } catch (err) {
@@ -458,10 +480,14 @@ export function normalizeMusicString(str: string): string {
     .trim();
 }
 
-export function findLocalAlbumMatch(db: any, artist?: string, title?: string, idOrMbId?: string): any {
+export function findLocalAlbumMatch(db: any, artist?: string, title?: string, idOrMbId?: string, year?: number): any {
   if (idOrMbId) {
     const direct = db.prepare('SELECT * FROM music_albums WHERE (id=? OR musicbrainz_id=?) AND in_library=1').get(idOrMbId, idOrMbId) as any;
-    if (direct) return direct;
+    if (direct) {
+      if (!year || !direct.year || Math.abs(direct.year - year) <= 2) {
+        return direct;
+      }
+    }
   }
 
   if (!artist || !title) return null;
@@ -470,11 +496,17 @@ export function findLocalAlbumMatch(db: any, artist?: string, title?: string, id
     SELECT * FROM music_albums
     WHERE LOWER(artist)=? AND LOWER(title)=? AND in_library=1
   `).get(artist.toLowerCase().trim(), title.toLowerCase().trim()) as any;
-  if (exact) return exact;
+  if (exact) {
+    if (!year || !exact.year || Math.abs(exact.year - year) <= 2) {
+      return exact;
+    }
+  }
 
   const normArt = normalizeMusicString(artist);
   const normTit = normalizeMusicString(title);
   if (!normArt || !normTit) return null;
+
+  const isEp = /\bep\b/i.test(title);
 
   const candidates = db.prepare(`
     SELECT * FROM music_albums
@@ -482,6 +514,9 @@ export function findLocalAlbumMatch(db: any, artist?: string, title?: string, id
   `).all(artist.toLowerCase().trim(), `%${normArt}%`) as any[];
 
   for (const c of candidates) {
+    if (year && c.year && Math.abs(c.year - year) > 2) continue;
+    const cIsEp = /\bep\b/i.test(c.title);
+    if (isEp !== cIsEp && year && c.year && c.year !== year) continue;
     const cNormArt = normalizeMusicString(c.artist);
     const cNormTit = normalizeMusicString(c.title);
     if (cNormArt === normArt && (cNormTit === normTit || cNormTit.startsWith(normTit) || normTit.startsWith(cNormTit))) {
@@ -887,7 +922,7 @@ export async function getAlbumArtwork(albumId: string, signal?: AbortSignal): Pr
   for (const tr of tracks) {
     if (tr.file_path && fs.existsSync(tr.file_path)) {
       try {
-        execSync(`ffmpeg -hide_banner -loglevel error -i "${tr.file_path}" -an -vcodec copy -y "${cachedFile}"`, { stdio: 'ignore', timeout: 5000 });
+        execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-i', tr.file_path, '-an', '-vcodec', 'copy', '-y', cachedFile], { stdio: 'ignore', timeout: 5000 });
         if (fs.existsSync(cachedFile) && fs.statSync(cachedFile).size > 1000) {
           const buf = fs.readFileSync(cachedFile);
           const isPng = buf.length > 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47;
@@ -906,7 +941,7 @@ export async function getAlbumArtwork(albumId: string, signal?: AbortSignal): Pr
     for (const tr of tracks) {
       if (tr.file_path && fs.existsSync(tr.file_path)) {
         try {
-          const probeOut = execSync(`ffprobe -v quiet -print_format json -show_format "${tr.file_path}"`, { timeout: 4000, encoding: 'utf-8' });
+          const probeOut = execFileSync('ffprobe', ['-v', 'quiet', '-print_format', 'json', '-show_format', tr.file_path], { timeout: 4000, encoding: 'utf-8' });
           const probeJson = JSON.parse(probeOut);
           const tags = probeJson?.format?.tags || {};
           for (const [k, v] of Object.entries(tags)) {
@@ -1127,15 +1162,9 @@ export async function requestMusicAlbum(
   const pid = profileId || resolveDefaultProfileId();
 
   // 1. Check if album is ALREADY downloaded locally on the server in music_albums
-  let localAlbum = findLocalAlbumMatch(db, undefined, undefined, musicbrainzId);
-
-  if (!localAlbum) {
-    // Also check by artist & title if not directly matched by ID
-    const albumData = await getAlbum(musicbrainzId, pid).catch(() => null);
-    if (albumData?.album) {
-      localAlbum = findLocalAlbumMatch(db, albumData.album.artist, albumData.album.title, musicbrainzId);
-    }
-  }
+  const albumData = await getAlbum(musicbrainzId, pid).catch(() => null);
+  const reqYear = albumData?.album?.year;
+  let localAlbum = findLocalAlbumMatch(db, albumData?.album?.artist, albumData?.album?.title, musicbrainzId, reqYear);
 
   if (localAlbum) {
     // Instant add to this profile! No slskd re-download needed!
@@ -1172,15 +1201,15 @@ export async function requestMusicAlbum(
   }
 
   // Look up album details from MusicBrainz
-  const albumData = await getAlbum(musicbrainzId, pid).catch(() => null);
-  const title = albumData?.album.title || 'Unknown Album';
-  const artist = albumData?.album.artist || 'Unknown Artist';
-  const year = albumData?.album.year;
+  const albumInfo = albumData || await getAlbum(musicbrainzId, pid).catch(() => null);
+  const title = albumInfo?.album.title || 'Unknown Album';
+  const artist = albumInfo?.album.artist || 'Unknown Artist';
+  const year = albumInfo?.album.year;
   const now = new Date().toISOString();
   const requestId = createHash('sha256').update(musicbrainzId).digest('hex').slice(0, 16);
 
   db.prepare(`
-    INSERT INTO music_requests (id, musicbrainz_id, album_title, artist_name, year, cover_url, status, progress, username, created_at, updated_at)
+    INSERT INTO music_requests (id, musicbrainz_id, album_title, artist_name, year, cover_url, status, progress, requested_by, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, 'requested', 0, ?, ?, ?)
   `).run(
     requestId,
@@ -1194,13 +1223,8 @@ export async function requestMusicAlbum(
     now
   );
 
-  // Trigger background search and acquisition
-  const timer = setTimeout(() => {
-    dispatchAlbumDownload(requestId, artist, title, year).catch(err => {
-      console.warn(`[music] Background download dispatch failed for ${artist} - ${title}:`, err);
-    });
-  }, 100);
-  timer.unref();
+  startDownloadMonitor();
+  processNextPlaylistTrack();
 
   return {
     success: true,
@@ -1259,81 +1283,15 @@ export function removeMusicAlbumFromProfile(albumId: string, profileId?: string)
 /**
  * Worker: search slskd, find the best matching folder/files, and enqueue download.
  */
-async function dispatchAlbumDownload(requestId: string, artist: string, album: string, year?: number) {
+async function dispatchAlbumDownload(requestId: string, artist: string, album: string) {
   const db = stateDatabase();
   const slskd = new SlskdClient();
 
-  if (!slskd.isConfigured()) {
-    db.prepare('UPDATE music_requests SET status=?, error_message=? WHERE id=?').run(
-      'failed',
-      'slskd downloader is not configured',
-      requestId
-    );
-    return;
-  }
-
   const query = `${artist} ${album}`.trim();
-  const cleanAlbum = normalizeMusicString(album);
-  const cleanQuery = cleanAlbum && cleanAlbum !== album.toLowerCase() ? `${artist} ${cleanAlbum}`.trim() : '';
-  console.log(`[music] Initiating slskd search for: "${query}"`);
-
-  db.prepare('UPDATE music_requests SET status=?, updated_at=? WHERE id=?').run(
-    'searching',
-    new Date().toISOString(),
-    requestId
-  );
-
-  let searchRes: { id: string };
-  try {
-    searchRes = await slskd.startSearch(query, 20);
-  } catch (err: any) {
-    db.prepare('UPDATE music_requests SET status=?, error_message=?, updated_at=? WHERE id=?').run(
-      'failed',
-      `Search failed: ${err.message}`,
-      new Date().toISOString(),
-      requestId
-    );
-    return;
-  }
-
-  // Poll for responses over ~10-15 seconds
-  let responses: any[] = [];
-  for (let i = 0; i < 6; i++) {
-    await new Promise(r => {
-      const t = setTimeout(r, process.env.NODE_ENV === 'test' ? 100 : 2500);
-      t.unref();
-    });
-    try {
-      responses = await slskd.getSearchResponses(searchRes.id);
-      if (responses.length >= 5) break;
-    } catch {}
-  }
-
-  if (!responses.length && cleanQuery) {
-    console.log(`[music] No sources for "${query}", retrying slskd search with normalized query: "${cleanQuery}"`);
-    try {
-      searchRes = await slskd.startSearch(cleanQuery, 20);
-      for (let i = 0; i < 5; i++) {
-        await new Promise(r => {
-          const t = setTimeout(r, process.env.NODE_ENV === 'test' ? 100 : 2000);
-          t.unref();
-        });
-        try {
-          responses = await slskd.getSearchResponses(searchRes.id);
-          if (responses.length >= 5) break;
-        } catch {}
-      }
-    } catch {}
-  }
-
-  if (!responses.length) {
-    db.prepare('UPDATE music_requests SET status=?, error_message=?, updated_at=? WHERE id=?').run(
-      'failed',
-      'No sources found on Soulseek network',
-      new Date().toISOString(),
-      requestId
-    );
-    return;
+  let responses = await searchSoulseek(slskd, query);
+  const cleanQuery = `${artist} ${normalizeMusicString(album)}`.trim();
+  if (!responses.length && cleanQuery.toLowerCase() !== query.toLowerCase()) {
+    responses = await searchSoulseek(slskd, cleanQuery);
   }
 
   // Score candidate user directories
@@ -1344,7 +1302,7 @@ async function dispatchAlbumDownload(requestId: string, artist: string, album: s
   for (const resp of responses) {
     const user = resp.username;
     const files = resp.files || [];
-    if (!files.length) continue;
+    if (!files.length || !sourceEligible(requestId, user)) continue;
 
     // Group files by directory
     const dirMap = new Map<string, Array<{ filename: string; size: number; bitRate?: number }>>();
@@ -1352,8 +1310,8 @@ async function dispatchAlbumDownload(requestId: string, artist: string, album: s
       if (f.isLocked) continue;
       const fn = f.filename || '';
       const ext = path.extname(fn).toLowerCase();
-      if (!AUDIO_EXTS.has(ext)) continue;
-      const dir = path.dirname(fn);
+      if (!AUDIO_EXTS.has(ext) || !Number.isSafeInteger(f.size) || f.size <= 0) continue;
+      const dir = path.posix.dirname(fn.replace(/\\/g, '/'));
       if (!dirMap.has(dir)) dirMap.set(dir, []);
       dirMap.get(dir)!.push(f);
     }
@@ -1381,71 +1339,179 @@ async function dispatchAlbumDownload(requestId: string, artist: string, album: s
   }
 
   if (!bestUser || !bestFiles.length) {
-    db.prepare('UPDATE music_requests SET status=?, error_message=?, updated_at=? WHERE id=?').run(
-      'failed',
-      'No complete unlocked album folder found',
-      new Date().toISOString(),
-      requestId
-    );
+    scheduleSearch('music_requests', requestId, 'No eligible album sources found on Soulseek', SEARCH_RETRY_MS);
     return;
   }
 
-  console.log(`[music] Enqueueing ${bestFiles.length} files from ${bestUser} for ${artist} - ${album}`);
+  // Record the intent before contacting slskd. The monitor can reconcile an interrupted POST.
+  db.prepare(`
+    UPDATE music_requests SET status='downloading', username=?, files_json=?, progress=0,
+      download_speed=0, eta_seconds=0, error_message=NULL, updated_at=? WHERE id=?
+  `).run(bestUser, JSON.stringify(bestFiles), new Date().toISOString(), requestId);
+  noteProgress(requestId, 'enqueue');
+  await slskd.enqueue(bestUser, bestFiles).catch(() => {});
+}
 
-  try {
-    await slskd.enqueue(bestUser, bestFiles);
-    db.prepare(`
-      UPDATE music_requests SET
-        status = 'downloading',
-        username = ?,
-        search_id = ?,
-        files_json = ?,
-        updated_at = ?
-      WHERE id = ?
-    `).run(
-      bestUser,
-      searchRes.id,
-      JSON.stringify(bestFiles),
-      new Date().toISOString(),
-      requestId
-    );
-  } catch (err: any) {
-    db.prepare('UPDATE music_requests SET status=?, error_message=?, updated_at=? WHERE id=?').run(
-      'failed',
-      `Enqueue failed: ${err.message}`,
-      new Date().toISOString(),
-      requestId
-    );
+export function isTransferSucceeded(status?: string): boolean {
+  const states = status?.toLowerCase().split(',').map(state => state.trim());
+  return Boolean(states?.includes('succeeded') || (states?.length === 1 && states[0] === 'completed'));
+}
+
+function isTransferFailed(status?: string): boolean {
+  return /\b(errored|cancelled|timedout|rejected|aborted|failed|completed)\b/i.test(status || '') && !isTransferSucceeded(status);
+}
+
+export function sanitizePathSegment(name: string): string {
+  const cleaned = name.replace(/[\x00-\x1f\x7f/\\?%*:|"<>]/g, '').trim();
+  return !cleaned || cleaned === '.' || cleaned === '..' ? 'Unknown' : cleaned;
+}
+
+/** Match slskd's local folder (usually the last remote folder) and exact transfer size. */
+function findDownloadedFile(root: string, filename: string, size: number): string | undefined {
+  const parts = filename.split(/[/\\]+/).filter(Boolean);
+  if (size <= 0 || !parts.length || parts.some(part => part === '.' || part === '..')) return;
+  const base = parts.at(-1)!;
+  if (!AUDIO_EXTS.has(path.extname(base).toLowerCase())) return;
+  if (!fs.existsSync(root)) return;
+  const rootPath = fs.realpathSync(root);
+  for (let i = 0; i < parts.length; i++) {
+    const candidate = path.join(rootPath, ...parts.slice(i));
+    try {
+      if (fs.realpathSync(candidate) !== candidate) continue;
+      const stat = fs.statSync(candidate);
+      if (stat.isFile() && stat.size === size) return candidate;
+    } catch { /* slskd may have used a shorter relative path */ }
   }
 }
 
-/**
- * Background loop to track downloads and auto-import completed albums and tracks.
- */
+/** Keep the original until the destination is verified and indexed. */
+function copyDownloadedFile(source: string, dest: string) {
+  try {
+    fs.copyFileSync(source, dest, fs.constants.COPYFILE_EXCL);
+  } catch (error: any) {
+    if (error.code !== 'EEXIST' || !fs.lstatSync(dest).isFile()
+      || !fs.readFileSync(source).equals(fs.readFileSync(dest))) throw error;
+  }
+}
+
+function removeImportedSource(source: string) {
+  try { fs.unlinkSync(source); } catch (error) { console.warn('[music] Could not remove imported source:', error); }
+}
+
+const SEARCH_RETRY_MS = 15 * 60_000;
+const SOURCE_COOLDOWN_MS = 24 * 60 * 60_000;
+const MISSING_TRANSFER_MS = 60_000;
+const STALLED_TRANSFER_MS = 30 * 60_000;
+const REMOTE_QUEUE_MS = 6 * 60 * 60_000;
+const MAX_ACTIVE_PLAYLIST_DOWNLOADS = 12;
+const runMediaCheck = promisify(execFile);
+type DownloadTable = 'music_requests' | 'playlist_tracks';
+
+async function validateDownloadedAudio(file: string) {
+  await runMediaCheck('ffmpeg', ['-nostdin', '-v', 'error', '-xerror', '-i', file, '-map', '0:a:0', '-f', 'null', '-'], { timeout: 120_000 });
+}
+
+async function searchSoulseek(slskd: SlskdClient, query: string) {
+  const search = await slskd.startSearch(query, 20);
+  for (let i = 0; i < 12; i++) {
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    if ((await slskd.getSearchState(search.id)).isComplete) {
+      try {
+        return await slskd.getSearchResponses(search.id);
+      } finally {
+        await slskd.deleteSearch(search.id);
+      }
+    }
+  }
+  return slskd.getSearchResponses(search.id);
+}
+
+function scheduleSearch(table: DownloadTable, id: string, reason: string, delay: number) {
+  const db = stateDatabase();
+  db.prepare(`INSERT INTO music_download_jobs(id,next_attempt) VALUES (?,?)
+    ON CONFLICT(id) DO UPDATE SET next_attempt=excluded.next_attempt, progress_signature='', progress_at=0`).run(id, Date.now() + delay);
+  if (table === 'music_requests') {
+    db.prepare(`UPDATE music_requests SET status='requested', progress=0, download_speed=0, eta_seconds=0,
+      error_message=?, updated_at=? WHERE id=?`).run(reason, new Date().toISOString(), id);
+  } else {
+    db.prepare("UPDATE playlist_tracks SET status='pending', error_message=? WHERE id=?").run(reason, id);
+  }
+}
+
+function sourceEligible(id: string, username: string) {
+  return !stateDatabase().prepare(`SELECT 1 FROM music_download_sources
+    WHERE job_id=? AND username=? AND failures>=2 AND failed_at>?`).get(id, username, Date.now() - SOURCE_COOLDOWN_MS);
+}
+
+function noteProgress(id: string, signature: string): number {
+  const db = stateDatabase();
+  const now = Date.now();
+  db.prepare(`INSERT INTO music_download_jobs(id,progress_signature,progress_at) VALUES (?,?,?)
+    ON CONFLICT(id) DO UPDATE SET progress_signature=excluded.progress_signature, progress_at=excluded.progress_at
+    WHERE progress_signature<>excluded.progress_signature OR progress_at=0`).run(id, signature, now);
+  return now - Number(db.prepare('SELECT progress_at FROM music_download_jobs WHERE id=?').get(id)?.progress_at);
+}
+
+async function retryTransfer(slskd: SlskdClient, table: DownloadTable, job: any, files: { filename: string; size: number }[], transfers: SlskdTransfer[], reason: string, broken = false) {
+  const db = stateDatabase();
+  const username = job.username;
+  for (const transfer of transfers) {
+    if (transfer.status.includes('Completed') || isTransferSucceeded(transfer.status) || isTransferFailed(transfer.status)) continue;
+    // The same transfer can serve more than one request. Cancel only if its state is stale.
+    if (reason !== 'Transfer stopped making progress') continue;
+    try {
+      if (!await slskd.cancelDownload(username, transfer.id)) return;
+    } catch { return; }
+  }
+  const now = Date.now();
+  db.prepare(`INSERT INTO music_download_sources(job_id,username,failures,failed_at) VALUES (?,?,?,?)
+    ON CONFLICT(job_id,username) DO UPDATE SET
+      failures=CASE WHEN failed_at<=? THEN excluded.failures ELSE failures+excluded.failures END,
+      failed_at=excluded.failed_at`).run(job.id, username, broken ? 2 : 1, now, now - SOURCE_COOLDOWN_MS);
+
+  if (!broken && sourceEligible(job.id, username) && files.every(file => file.size > 0)) {
+    db.prepare('UPDATE music_download_jobs SET progress_at=? WHERE id=?').run(now, job.id);
+    await slskd.enqueue(username, files).catch(() => {});
+    return;
+  }
+  scheduleSearch(table, job.id, reason, 0);
+}
+
+/** Poll slskd and run one search at a time across both queues. */
 let downloadMonitorInterval: NodeJS.Timeout | null = null;
-let activePlaylistSearches = 0;
-const MAX_CONCURRENT_PLAYLIST_SEARCHES = 1;
-const SEARCH_PACING_MS = 2000;
+let searchRunning = false;
 
 export function startDownloadMonitor() {
   if (downloadMonitorInterval) return;
   ensureMusicTables();
   const db = stateDatabase();
+  db.exec(`
+    UPDATE playlist_tracks SET status='pending' WHERE status='searching';
+    UPDATE music_requests SET status='requested' WHERE status='searching';
+    UPDATE playlist_tracks SET status='pending' WHERE status='failed' AND
+      (error_message LIKE 'slskd transfer %' OR error_message LIKE 'Search failed:%'
+        OR error_message LIKE 'Enqueue download failed:%' OR error_message LIKE 'No sources found%'
+        OR error_message LIKE 'No matching MP3%' OR error_message LIKE 'Import failed:%');
+    UPDATE music_requests SET status='requested' WHERE status='failed' AND
+      (error_message LIKE 'Search failed:%' OR error_message LIKE 'Enqueue failed:%'
+        OR error_message LIKE 'No sources found%' OR error_message LIKE 'No complete unlocked%'
+        OR error_message LIKE 'Import failed:%');
+  `);
 
-  // Reset any orphaned searches or timeout/rate-limited failed tracks so rate limiter processes them safely
-  try {
-    db.prepare("UPDATE playlist_tracks SET status='pending' WHERE status='searching'").run();
-    db.prepare("UPDATE playlist_tracks SET status='pending', error_message=NULL WHERE status='failed' AND (error_message LIKE '%timeout%' OR error_message LIKE '%429%' OR error_message LIKE '%concurrent%')").run();
-  } catch {}
-
+  let monitoring = false;
   downloadMonitorInterval = setInterval(async () => {
+    if (monitoring) return;
+    monitoring = true;
     try {
       await monitorActiveDownloads();
+    } catch (error) {
+      console.warn('[music] Download monitor failed:', error);
+    } finally {
+      monitoring = false;
       processNextPlaylistTrack();
-    } catch {}
+    }
   }, 6000);
   downloadMonitorInterval.unref();
-
   processNextPlaylistTrack();
 }
 
@@ -1456,114 +1522,95 @@ export function stopDownloadMonitor() {
   }
 }
 
-async function monitorActiveDownloads() {
+export async function monitorActiveDownloads() {
   ensureMusicTables();
   const db = stateDatabase();
-  const activeRequests = db.prepare(`
-    SELECT * FROM music_requests
-    WHERE status IN ('downloading', 'importing')
-  `).all() as any[];
-
-  const activePlaylistTracks = db.prepare(`
-    SELECT pt.*, p.profile_id
-    FROM playlist_tracks pt
-    JOIN playlists p ON pt.playlist_id = p.id
-    WHERE pt.status IN ('downloading', 'searching')
-  `).all() as any[];
-
-  if (!activeRequests.length && !activePlaylistTracks.length) {
-    processNextPlaylistTrack();
-    return;
-  }
+  const albums = db.prepare("SELECT * FROM music_requests WHERE status IN ('downloading', 'importing')").all();
+  const tracks = db.prepare(`SELECT pt.*, p.profile_id FROM playlist_tracks pt JOIN playlists p ON p.id=pt.playlist_id
+    WHERE pt.status IN ('downloading','importing')`).all();
+  if (!albums.length && !tracks.length) return;
 
   const slskd = new SlskdClient();
   if (!slskd.isConfigured()) return;
+  const downloads = await slskd.getAllDownloads().catch(() => null);
+  if (!downloads) return;
 
-  let allDownloads: any[] = [];
-  try {
-    allDownloads = await slskd.getAllDownloads();
-  } catch {
-    return;
-  }
+  for (const [table, jobs] of [['music_requests', albums], ['playlist_tracks', tracks]] as const) {
+    for (const job of jobs) {
+      const album = table === 'music_requests';
+      const files: { filename: string; size: number }[] = album
+        ? JSON.parse(String(job.files_json || '[]'))
+        : job.filename ? [{ filename: String(job.filename), size: Number(job.transfer_size) || 0 }] : [];
+      if (!job.username || !files.length) {
+        scheduleSearch(table, String(job.id), 'Missing saved transfer details', 0);
+        continue;
+      }
+      const transfers = files.map(file => {
+        const matches = downloads.filter(t => t.username === job.username && t.filename === file.filename && (!file.size || t.size === file.size));
+        const current = matches.find(t => !isTransferSucceeded(t.status) && !isTransferFailed(t.status));
+        const complete = matches.find(t => isTransferSucceeded(t.status));
+        return current || complete || matches[0];
+      });
+      if (!album && !files[0].size && transfers[0]?.size) {
+        files[0].size = transfers[0].size;
+        db.prepare('UPDATE playlist_tracks SET transfer_size=? WHERE id=?').run(files[0].size, job.id);
+      }
+      const finished = files.map((file, index) => isTransferSucceeded(transfers[index]?.status)
+        || (!transfers[index] && Boolean(findDownloadedFile(getDownloadsPath(), file.filename, file.size))));
+      const pending = files.filter((_, index) => !finished[index]);
+      const observed = transfers.filter((t): t is SlskdTransfer => Boolean(t));
+      const signature = transfers.map(t => t ? `${t.id}:${t.status}:${t.bytesTransferred}` : 'missing').join('|');
+      const age = noteProgress(String(job.id), signature);
+      if (!pending.length) {
+        try {
+          db.prepare(`UPDATE ${table} SET status='importing' WHERE id=?`).run(job.id);
+          if (album) await importDownloadedAlbum(job, files);
+          else await importDownloadedPlaylistTrack(job, transfers[0]?.size || files[0].size);
+        } catch (error: any) {
+          console.warn('[music] Import could not finish:', error.message);
+          if (error instanceof BrokenDownload || (error instanceof MissingDownload && age >= MISSING_TRANSFER_MS)) {
+            await retryTransfer(slskd, table, job, files, [], error.message, error instanceof BrokenDownload);
+          }
+        }
+        continue;
+      }
 
-  // 1. Process active album requests
-  for (const req of activeRequests) {
-    const queuedFiles: Array<{ filename: string; size: number }> = req.files_json ? JSON.parse(req.files_json) : [];
-    if (!queuedFiles.length) continue;
-
-    const queuedFilenames = new Set(queuedFiles.map(f => f.filename));
-    const matchingTransfers = allDownloads.filter(d =>
-      d.username === req.username && queuedFilenames.has(d.filename)
-    );
-
-    if (!matchingTransfers.length) continue;
-
-    let totalBytes = 0;
-    let transferredBytes = 0;
-    let completedCount = 0;
-    let totalSpeed = 0;
-
-    for (const t of matchingTransfers) {
-      totalBytes += t.size || 0;
-      transferredBytes += t.bytesTransferred || 0;
-      totalSpeed += t.averageSpeed || 0;
-      if (['Completed', 'Succeeded'].includes(t.status)) {
-        completedCount++;
+      const missing = transfers.some(t => !t);
+      const failed = observed.some(t => isTransferFailed(t.status));
+      const active = observed.some(t => !isTransferFailed(t.status) && !isTransferSucceeded(t.status));
+      const activeTransfers = observed.filter(t => !isTransferFailed(t.status) && !isTransferSucceeded(t.status));
+      const stalled = active && age >= (activeTransfers.every(t => /queued/i.test(t.status)) ? REMOTE_QUEUE_MS : STALLED_TRANSFER_MS);
+      if ((!active && (missing || failed) && age >= MISSING_TRANSFER_MS) || stalled) {
+        const retry = pending.map(file => ({
+          ...file, size: file.size || observed.find(t => t.filename === file.filename)?.size || 0,
+        }));
+        await retryTransfer(slskd, table, job, retry, observed, stalled ? 'Transfer stopped making progress' : 'Transfer failed or disappeared');
+        continue;
+      }
+      if (album) {
+        const total = files.reduce((sum, file) => sum + file.size, 0);
+        const transferred = observed.reduce((sum, t) => sum + Math.min(t.size, t.bytesTransferred), 0);
+        const speed = observed.reduce((sum, t) => sum + (isTransferSucceeded(t.status) ? 0 : t.averageSpeed || 0), 0);
+        db.prepare('UPDATE music_requests SET progress=?, download_speed=?, eta_seconds=?, updated_at=? WHERE id=?')
+          .run(total ? Math.min(99, Math.round(100 * transferred / total)) : 0, speed,
+            speed ? Math.ceil(Math.max(0, total - transferred) / speed) : 0, new Date().toISOString(), job.id);
       }
     }
-
-    const progress = totalBytes > 0 ? Math.min(100, Math.round((transferredBytes / totalBytes) * 100)) : 0;
-    const remainingBytes = Math.max(0, totalBytes - transferredBytes);
-    const etaSeconds = totalSpeed > 0 ? Math.round(remainingBytes / totalSpeed) : 0;
-
-    // Check if all files completed
-    if (completedCount >= queuedFiles.length && completedCount > 0) {
-      console.log(`[music] Download finished for ${req.artist_name} - ${req.album_title}. Importing...`);
-      db.prepare('UPDATE music_requests SET status=?, progress=100, updated_at=? WHERE id=?').run(
-        'importing',
-        new Date().toISOString(),
-        req.id
-      );
-
-      // Perform import
-      await importDownloadedAlbum(req, queuedFiles);
-    } else {
-      db.prepare(`
-        UPDATE music_requests SET
-          progress = ?,
-          download_speed = ?,
-          eta_seconds = ?,
-          updated_at = ?
-        WHERE id = ?
-      `).run(
-        progress,
-        totalSpeed,
-        etaSeconds,
-        new Date().toISOString(),
-        req.id
-      );
-    }
   }
+}
 
-  // 2. Process active playlist track downloads
-  for (const track of activePlaylistTracks) {
-    if (!track.username || !track.filename) continue;
-    const match = allDownloads.find(d => d.username === track.username && d.filename === track.filename);
-    if (!match) continue;
+class BrokenDownload extends Error {}
+class MissingDownload extends Error {}
 
-    if (['Completed', 'Succeeded'].includes(match.status)) {
-      console.log(`[music] Download finished for playlist track ${track.artist} - ${track.title}. Importing...`);
-      await importDownloadedPlaylistTrack(track);
-    } else if (['Errored', 'Cancelled'].includes(match.status)) {
-      db.prepare('UPDATE playlist_tracks SET status=?, error_message=? WHERE id=?').run(
-        'failed',
-        `slskd transfer ${match.status.toLowerCase()}`,
-        track.id
-      );
-    }
+async function checkSource(source: string) {
+  try {
+    await validateDownloadedAudio(source);
+  } catch (error: any) {
+    if (typeof error.code !== 'number' || error.killed) throw error;
+    const quarantine = path.join(path.dirname(source), `.homestream-broken-${randomUUID()}`);
+    fs.renameSync(source, quarantine);
+    throw new BrokenDownload(`Audio could not be decoded: ${path.basename(source)}`);
   }
-
-  processNextPlaylistTrack();
 }
 
 /**
@@ -1574,67 +1621,46 @@ async function importDownloadedAlbum(req: any, files: Array<{ filename: string; 
   const downloadsRoot = getDownloadsPath();
   const musicRoot = getMusicPath();
 
-  const artist = req.artist_name.trim();
-  const album = req.album_title.trim();
+  const artist = sanitizePathSegment(req.artist_name || 'Unknown Artist');
+  const album = sanitizePathSegment(req.album_title || 'Unknown Album');
   const yearSuffix = req.year ? ` (${req.year})` : '';
   const targetDir = path.join(musicRoot, artist, `${album}${yearSuffix}`);
 
-  try {
-    fs.mkdirSync(targetDir, { recursive: true });
-
-    for (const f of files) {
-      // slskd places files in downloads root using their remote relative path or base name
-      const candidates = [
-        path.join(downloadsRoot, f.filename),
-        path.join(downloadsRoot, path.basename(f.filename)),
-      ];
-
-      let foundSource = '';
-      for (const c of candidates) {
-        if (fs.existsSync(c)) { foundSource = c; break; }
-      }
-
-      if (foundSource) {
-        const dest = path.join(targetDir, path.basename(foundSource));
-        try {
-          fs.copyFileSync(foundSource, dest);
-          fs.unlinkSync(foundSource);
-        } catch {}
-      }
-    }
-
-    // Rescan local library to pick up the new album
-    await scanLocalMusicLibrary();
-
-    if (req.username) {
-      try {
-        const importedAlbum = db.prepare('SELECT id FROM music_albums WHERE LOWER(artist)=? AND LOWER(title)=?').get(artist.toLowerCase(), album.toLowerCase()) as any;
-        if (importedAlbum?.id) {
-          db.prepare('INSERT OR IGNORE INTO profile_music_albums (profile_id, album_id, added_at) VALUES (?, ?, ?)').run(req.username, importedAlbum.id, new Date().toISOString());
-        }
-      } catch (profileErr) {
-        console.warn('[music] Could not link imported album to profile:', profileErr);
-      }
-    }
-
-    db.prepare(`
-      UPDATE music_requests SET
-        status = 'available',
-        progress = 100,
-        updated_at = ?
-      WHERE id = ?
-    `).run(new Date().toISOString(), req.id);
-
-    console.log(`[music] Successfully imported ${artist} - ${album} into ${targetDir}`);
-  } catch (err: any) {
-    console.error(`[music] Import failed for ${artist} - ${album}:`, err);
-    db.prepare('UPDATE music_requests SET status=?, error_message=?, updated_at=? WHERE id=?').run(
-      'failed',
-      `Import failed: ${err.message}`,
-      new Date().toISOString(),
-      req.id
-    );
+  const imports = files.map(file => {
+    const source = findDownloadedFile(downloadsRoot, file.filename, file.size);
+    if (!source) throw new MissingDownload('Could not locate all completed album files');
+    return { source, dest: path.join(targetDir, path.basename(source)) };
+  });
+  if (new Set(imports.map(file => file.dest)).size !== imports.length) {
+    throw new Error('Album contains duplicate filenames');
   }
+  for (const file of imports) await checkSource(file.source);
+  fs.mkdirSync(targetDir, { recursive: true });
+  for (const file of imports) copyDownloadedFile(file.source, file.dest);
+  await scanLocalMusicLibrary();
+  const indexed = db.prepare('SELECT album_id FROM music_tracks WHERE file_path=?');
+  const importedAlbum = indexed.get(imports[0].dest) as { album_id: string } | undefined;
+  if (!importedAlbum || !imports.every(file => (indexed.get(file.dest) as typeof importedAlbum)?.album_id === importedAlbum.album_id)) {
+    throw new Error('Could not index all completed album files');
+  }
+  if (req.requested_by) {
+    db.prepare('INSERT OR IGNORE INTO profile_music_albums (profile_id, album_id, added_at) VALUES (?, ?, ?)').run(req.requested_by, importedAlbum.album_id, new Date().toISOString());
+  }
+
+  db.prepare(`
+    UPDATE music_requests SET
+      status = 'available',
+      error_message = NULL,
+      download_speed = 0,
+      eta_seconds = 0,
+      progress = 100,
+      updated_at = ?
+    WHERE id = ?
+  `).run(new Date().toISOString(), req.id);
+
+  db.prepare('DELETE FROM music_download_jobs WHERE id=?').run(req.id);
+  for (const file of imports) removeImportedSource(file.source);
+  console.log(`[music] Successfully imported ${artist} - ${album} into ${targetDir}`);
 }
 
 /**
@@ -2110,46 +2136,34 @@ export async function importSpotifyPlaylists(
  * Ensures max 2 concurrent searches with pacing delay to protect slskd and Soulseek network.
  */
 export function processNextPlaylistTrack(): void {
+  if (searchRunning || !new SlskdClient().isConfigured()) return;
   ensureMusicTables();
   const db = stateDatabase();
-  const slskd = new SlskdClient();
-  if (!slskd.isConfigured()) return;
-
-  while (activePlaylistSearches < MAX_CONCURRENT_PLAYLIST_SEARCHES) {
-    const nextTrack = db.prepare(`
-      SELECT pt.*, p.profile_id
-      FROM playlist_tracks pt
-      JOIN playlists p ON pt.playlist_id = p.id
-      WHERE pt.status = 'pending'
-      ORDER BY pt.created_at ASC, pt.position ASC
-      LIMIT 1
-    `).get() as any;
-
-    if (!nextTrack) break;
-
-    // Immediately mark as searching to prevent race conditions
-    db.prepare("UPDATE playlist_tracks SET status='searching', error_message=NULL WHERE id=?").run(nextTrack.id);
-    activePlaylistSearches++;
-
-    (async () => {
-      try {
-        await executeTrackSearchAndDownload(nextTrack);
-      } catch (err: any) {
-        console.error(`[music] Error processing track ${nextTrack.id} (${nextTrack.artist} - ${nextTrack.title}):`, err);
-        try {
-          db.prepare("UPDATE playlist_tracks SET status='failed', error_message=? WHERE id=?").run(
-            `Search failed: ${err.message}`,
-            nextTrack.id
-          );
-        } catch {}
-      } finally {
-        activePlaylistSearches--;
-        setTimeout(() => {
-          processNextPlaylistTrack();
-        }, SEARCH_PACING_MS);
-      }
-    })();
-  }
+  const album = db.prepare(`SELECT r.* FROM music_requests r LEFT JOIN music_download_jobs j ON j.id=r.id
+    WHERE r.status='requested' AND COALESCE(j.next_attempt,0)<=? ORDER BY r.created_at LIMIT 1`).get(Date.now());
+  const activeTracks = Number(db.prepare("SELECT COUNT(*) AS n FROM playlist_tracks WHERE status IN ('downloading','importing')").get()?.n);
+  const track = album || activeTracks >= MAX_ACTIVE_PLAYLIST_DOWNLOADS ? undefined : db.prepare(`SELECT pt.*, p.profile_id FROM playlist_tracks pt
+    JOIN playlists p ON p.id=pt.playlist_id LEFT JOIN music_download_jobs j ON j.id=pt.id
+    WHERE pt.status='pending' AND COALESCE(j.next_attempt,0)<=?
+    ORDER BY pt.created_at, pt.position LIMIT 1`).get(Date.now());
+  const job = album || track;
+  if (!job) return;
+  const id = String(job.id);
+  const table = album ? 'music_requests' : 'playlist_tracks';
+  db.prepare(`UPDATE ${table} SET status='searching' WHERE id=?`).run(id);
+  searchRunning = true;
+  const search = album
+    ? dispatchAlbumDownload(id, String(album.artist_name), String(album.album_title))
+    : executeTrackSearchAndDownload(track);
+  void search.catch(error => {
+    scheduleSearch(table, id, `Search failed: ${error.message}`, SEARCH_RETRY_MS);
+  }).finally(() => {
+    const pacing = setTimeout(() => {
+      searchRunning = false;
+      if (downloadMonitorInterval) processNextPlaylistTrack();
+    }, 2000);
+    pacing.unref();
+  });
 }
 
 /**
@@ -2161,12 +2175,12 @@ async function executeTrackSearchAndDownload(track: any) {
 
   // 1. Double check local library
   const local = db.prepare(`
-    SELECT id, album_id FROM music_tracks
+    SELECT id, album_id, file_path FROM music_tracks
     WHERE LOWER(artist) = ? AND LOWER(title) = ?
     LIMIT 1
-  `).get(track.artist.toLowerCase().trim(), track.title.toLowerCase().trim()) as { id: string; album_id: string } | undefined;
+  `).get(track.artist.toLowerCase().trim(), track.title.toLowerCase().trim()) as { id: string; album_id: string; file_path: string } | undefined;
 
-  if (local) {
+  if (local && fs.existsSync(local.file_path)) {
     db.prepare('UPDATE playlist_tracks SET track_id=?, status=?, error_message=NULL WHERE id=?').run(
       local.id,
       'completed',
@@ -2183,15 +2197,6 @@ async function executeTrackSearchAndDownload(track: any) {
     return;
   }
 
-  if (!slskd.isConfigured()) {
-    db.prepare('UPDATE playlist_tracks SET status=?, error_message=? WHERE id=?').run(
-      'failed',
-      'slskd downloader is not configured',
-      track.id
-    );
-    return;
-  }
-
   const primaryArtist = (track.artist || '')
     .split(/[,&]|\bfeat\.?|\bft\.?/i)[0]
     .replace(/[^\w\s-]/g, '')
@@ -2202,109 +2207,54 @@ async function executeTrackSearchAndDownload(track: any) {
     .trim() || (track.title || '').replace(/[^\w\s-]/g, '').trim();
   const query = `${primaryArtist} ${cleanTitle}`.trim();
 
-  let searchRes: { id: string } | null = null;
-  try {
-    searchRes = await slskd.startSearch(query, 20);
-  } catch (err: any) {
-    if (err.message?.includes('429') || err.message?.includes('concurrent operation')) {
-      // Re-queue track cleanly so it gets processed when slskd is idle
-      db.prepare("UPDATE playlist_tracks SET status='pending', error_message=NULL WHERE id=?").run(track.id);
-      return;
+  const responses = await searchSoulseek(slskd, query);
+  // Find best MP3 file
+  let bestUser = '';
+  let bestFile: { filename: string; size: number } | null = null;
+  let bestScore = -1;
+
+  for (const resp of responses) {
+    const user = resp.username;
+    if (!sourceEligible(track.id, user)) continue;
+    const files = resp.files || [];
+    for (const f of files) {
+      if (f.isLocked) continue;
+      const fn = f.filename || '';
+      const ext = path.extname(fn).toLowerCase();
+      if (!AUDIO_EXTS.has(ext) || !Number.isSafeInteger(f.size) || f.size <= 0) continue;
+
+      let score = 0;
+      if (ext === '.mp3') score += 50;
+      if (f.bitRate && f.bitRate >= 320) score += 40;
+      else if (f.bitRate && f.bitRate >= 256) score += 25;
+      else if (f.bitRate && f.bitRate >= 192) score += 10;
+      if (resp.hasFreeUploadSlot) score += 30;
+      if (resp.uploadSpeed && resp.uploadSpeed > 500000) score += 20;
+
+      const name = path.posix.basename(fn.replace(/\\/g, '/'), ext);
+      const normalizedName = normalizeMusicString(name);
+      const normalizedTitle = normalizeMusicString(cleanTitle);
+      if (!normalizedTitle || !(` ${normalizedName} `).includes(` ${normalizedTitle} `)) continue;
+      const feature = track.title.match(/\bfeat\.?\s+([^)]*)/i)?.[1];
+      if (feature && !normalizedName.includes(normalizeMusicString(feature))) continue;
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestUser = user;
+        bestFile = { filename: fn, size: f.size };
+      }
     }
-    db.prepare('UPDATE playlist_tracks SET status=?, error_message=? WHERE id=?').run(
-      'failed',
-      `Search failed: ${err.message}`,
-      track.id
-    );
+  }
+
+  if (!bestUser || !bestFile) {
+    scheduleSearch('playlist_tracks', track.id, 'No eligible matching audio found on Soulseek', SEARCH_RETRY_MS);
     return;
   }
 
-  try {
-    // Poll for responses (up to 12s)
-    let responses: any[] = [];
-    for (let i = 0; i < 5; i++) {
-      await new Promise((r) => {
-        const t = setTimeout(r, process.env.NODE_ENV === 'test' ? 50 : 2500);
-        t.unref();
-      });
-      try {
-        responses = await slskd.getSearchResponses(searchRes.id);
-        if (responses.length >= 3) break;
-      } catch {}
-    }
-
-    if (!responses.length) {
-      db.prepare('UPDATE playlist_tracks SET status=?, error_message=? WHERE id=?').run(
-        'failed',
-        'No sources found on Soulseek network',
-        track.id
-      );
-      return;
-    }
-
-    // Find best MP3 file
-    let bestUser = '';
-    let bestFile: { filename: string; size: number } | null = null;
-    let bestScore = -1;
-
-    for (const resp of responses) {
-      const user = resp.username;
-      const files = resp.files || [];
-      for (const f of files) {
-        if (f.isLocked) continue;
-        const fn = f.filename || '';
-        const ext = path.extname(fn).toLowerCase();
-        if (!AUDIO_EXTS.has(ext)) continue;
-
-        let score = 0;
-        if (ext === '.mp3') score += 50;
-        if (f.bitRate && f.bitRate >= 320) score += 40;
-        else if (f.bitRate && f.bitRate >= 256) score += 25;
-        else if (f.bitRate && f.bitRate >= 192) score += 10;
-        if (resp.hasFreeUploadSlot) score += 30;
-        if (resp.uploadSpeed && resp.uploadSpeed > 500000) score += 20;
-
-        const lowerFn = path.basename(fn).toLowerCase();
-        if (lowerFn.includes(cleanTitle.toLowerCase())) score += 40;
-
-        if (score > bestScore) {
-          bestScore = score;
-          bestUser = user;
-          bestFile = { filename: fn, size: f.size };
-        }
-      }
-    }
-
-    if (!bestUser || !bestFile) {
-      db.prepare('UPDATE playlist_tracks SET status=?, error_message=? WHERE id=?').run(
-        'failed',
-        'No matching MP3 files found',
-        track.id
-      );
-      return;
-    }
-
-    try {
-      await slskd.enqueue(bestUser, [bestFile]);
-      db.prepare('UPDATE playlist_tracks SET status=?, username=?, filename=?, error_message=NULL WHERE id=?').run(
-        'downloading',
-        bestUser,
-        bestFile.filename,
-        track.id
-      );
-      console.log(`[music] Enqueued slskd MP3 download for "${track.artist} - ${track.title}" from peer "${bestUser}"`);
-    } catch (err: any) {
-      db.prepare('UPDATE playlist_tracks SET status=?, error_message=? WHERE id=?').run(
-        'failed',
-        `Enqueue download failed: ${err.message}`,
-        track.id
-      );
-    }
-  } finally {
-    if (searchRes?.id) {
-      await slskd.deleteSearch(searchRes.id).catch(() => {});
-    }
-  }
+  db.prepare(`UPDATE playlist_tracks SET status='downloading', username=?, filename=?, transfer_size=?, error_message=NULL WHERE id=?`)
+    .run(bestUser, bestFile.filename, bestFile.size, track.id);
+  noteProgress(track.id, 'enqueue');
+  await slskd.enqueue(bestUser, [bestFile]).catch(() => {});
 }
 
 /**
@@ -2324,75 +2274,36 @@ export async function dispatchTrackDownload(
 /**
  * Move downloaded track from slskd into /music/<Artist>/<Album>/ and index it.
  */
-async function importDownloadedPlaylistTrack(track: any) {
+async function importDownloadedPlaylistTrack(track: any, size: number) {
   const db = stateDatabase();
   const downloadsRoot = getDownloadsPath();
   const musicRoot = getMusicPath();
 
-  const safeArtist = (track.artist || 'Unknown Artist').replace(/[^\w\s-]/g, '').trim() || 'Unknown Artist';
-  const safeAlbum = (track.album || 'Singles').replace(/[^\w\s-]/g, '').trim() || 'Singles';
-  const targetDir = path.join(musicRoot, safeArtist, safeAlbum);
-
-  try {
+  const artist = sanitizePathSegment(track.artist || 'Unknown Artist');
+  const album = sanitizePathSegment(track.album || 'Singles');
+  const targetDir = path.join(musicRoot, artist, album);
+  const source = findDownloadedFile(downloadsRoot, track.filename, size);
+  const dest = path.join(targetDir, path.posix.basename(track.filename.replace(/\\/g, '/')));
+  if (source) {
+    await checkSource(source);
     fs.mkdirSync(targetDir, { recursive: true });
-
-    const baseName = path.basename(track.filename);
-    const candidates = [
-      path.join(downloadsRoot, track.filename),
-      path.join(downloadsRoot, baseName),
-      path.join(downloadsRoot, track.username, track.filename),
-      path.join(downloadsRoot, track.username, baseName),
-    ];
-
-    let foundSource = '';
-    for (const c of candidates) {
-      if (fs.existsSync(c)) {
-        foundSource = c;
-        break;
-      }
-    }
-
-    if (foundSource) {
-      const dest = path.join(targetDir, path.basename(foundSource));
-      try {
-        fs.copyFileSync(foundSource, dest);
-        try { fs.unlinkSync(foundSource); } catch {}
-      } catch {}
-
-      // Re-scan local library
-      await scanLocalMusicLibrary();
-
-      // Find the newly indexed track in music_tracks
-      const indexed = db.prepare(`
-        SELECT id, album_id FROM music_tracks
-        WHERE file_path = ? OR (LOWER(artist) = ? AND LOWER(title) = ?)
-        LIMIT 1
-      `).get(dest, track.artist.toLowerCase().trim(), track.title.toLowerCase().trim()) as { id: string; album_id: string } | undefined;
-
-      const trackId = indexed?.id || null;
-      db.prepare('UPDATE playlist_tracks SET track_id=?, status=?, error_message=NULL WHERE id=?').run(
-        trackId,
-        'completed',
-        track.id
-      );
-
-      if (indexed?.album_id && track.profile_id) {
-        db.prepare('INSERT OR IGNORE INTO profile_music_albums (profile_id, album_id, added_at) VALUES (?, ?, ?)').run(
-          track.profile_id,
-          indexed.album_id,
-          new Date().toISOString()
-        );
-      }
-
-      updatePlaylistCounts(track.playlist_id);
-      console.log(`[music] Successfully imported playlist track ${track.artist} - ${track.title}`);
-    }
-  } catch (err: any) {
-    console.error(`[music] Failed importing playlist track ${track.title}:`, err);
-    db.prepare('UPDATE playlist_tracks SET status=?, error_message=? WHERE id=?').run(
-      'failed',
-      `Import failed: ${err.message}`,
-      track.id
-    );
+    copyDownloadedFile(source, dest);
+    await scanLocalMusicLibrary();
+  } else {
+    const existing = db.prepare(`SELECT 1 FROM playlist_tracks p JOIN music_tracks t ON p.track_id=t.id
+      WHERE p.username=? AND p.filename=? AND p.status='completed' AND t.file_path=? AND t.file_size=?`)
+      .get(track.username, track.filename, dest, size);
+    if (!existing || !fs.existsSync(dest)) throw new MissingDownload('Completed file is missing or has the wrong size');
   }
+
+  const indexed = db.prepare('SELECT id, album_id FROM music_tracks WHERE file_path=?').get(dest) as { id: string; album_id: string } | undefined;
+  if (!indexed) throw new Error('Could not index the imported playlist track');
+  db.prepare('INSERT OR IGNORE INTO profile_music_albums (profile_id, album_id, added_at) VALUES (?, ?, ?)').run(
+    track.profile_id, indexed.album_id, new Date().toISOString()
+  );
+  db.prepare("UPDATE playlist_tracks SET track_id=?, status='completed', error_message=NULL WHERE id=?").run(indexed.id, track.id);
+  updatePlaylistCounts(track.playlist_id);
+  db.prepare('DELETE FROM music_download_jobs WHERE id=?').run(track.id);
+  if (source) removeImportedSource(source);
+  console.log(`[music] Successfully imported playlist track ${track.artist} - ${track.title}`);
 }

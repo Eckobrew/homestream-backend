@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApp } from '../src/app';
@@ -78,6 +78,7 @@ test('music requests, authenticated range streaming, all-media queue and admin c
   const url = 'http://127.0.0.1:' + port;
   Object.assign(process.env, {
     DATA_DIR: directory,
+    MUSIC_PATH: join(directory, "library"),
     HOMESTREAM_SESSION_SECRET: 'music-test-session-secret-at-least-32-chars',
     HOMESTREAM_MOBILE_TOKEN: 'mobile-test-token-at-least-32-chars',
     SLSKD_URL: url,
@@ -104,8 +105,10 @@ test('music requests, authenticated range streaming, all-media queue and admin c
     mbid,
     now
   );
-  const audioPath = join(directory, 'track-1.mp3');
+  await mkdir(process.env.MUSIC_PATH!);
+  const audioPath = join(process.env.MUSIC_PATH!, 'track-1.mp3');
   await writeFile(audioPath, 'testaudio');
+  db.prepare('UPDATE music_albums SET cover_path=? WHERE id=?').run(join(directory, 'cover.jpg'), mbid);
   db.prepare(
     `INSERT INTO music_tracks (id, album_id, title, artist, album, track_number, disc_number, duration_seconds, file_path, file_size, format, created_at) VALUES (?, ?, ?, ?, ?, 1, 1, 90, ?, 9, 'mp3', ?)`
   ).run('track-1', mbid, 'Example Track', 'Example Artist', 'Example Album', audioPath, now);
@@ -131,6 +134,30 @@ test('music requests, authenticated range streaming, all-media queue and admin c
     assert.equal(stream.statusCode, 206);
     assert.equal(stream.headers['content-range'], 'bytes 0-3/9');
     assert.equal(stream.body, 'test');
+
+    const download = await app.inject('/api/v1/music/download?trackId=track-1');
+    assert.equal(download.statusCode, 200);
+    assert.equal(download.body, 'testaudio');
+    assert.match(String(download.headers['content-disposition']), /attachment.*track-1.mp3/);
+    assert.equal((await app.inject('/api/v1/music/download?trackId=track-1&userId=other-profile')).statusCode, 404);
+    assert.equal((await app.inject(`/api/v1/music/download?trackId=track-1&albumId=${mbid}`)).statusCode, 400);
+    for (const suffix of ['', `?albumId=${mbid}`]) {
+      const zip = await app.inject('/api/v1/music/download' + suffix);
+      assert.equal(zip.statusCode, 200);
+      assert.equal(zip.headers['content-type'], 'application/zip');
+      assert.ok(zip.rawPayload.includes(Buffer.from('testaudio')));
+      assert.ok(zip.rawPayload.includes(Buffer.from(suffix ? 'track-1.mp3' : 'Example Artist/Example Album/track-1.mp3')));
+      assert.ok(zip.rawPayload.includes(Buffer.from([0x50, 0x4b, 0x05, 0x06])));
+    }
+    const nativeDownload = await app.inject({ method: 'HEAD', url: '/api/mobile/v1/music/download?trackId=track-1', headers: pairedHeaders });
+    assert.equal(nativeDownload.statusCode, 200);
+    assert.match(String(nativeDownload.headers['content-disposition']), /track-1.mp3/);
+    const ownerStatus = await app.inject('/api/v1/music/import-status');
+    assert.equal(ownerStatus.statusCode, 200);
+    assert.equal(ownerStatus.json().downloading, 0);
+    db.prepare('UPDATE music_requests SET requested_by=? WHERE id=?').run(profileId, 'req-1');
+    assert.equal((await app.inject('/api/v1/music/import-status')).json().downloading, 1);
+    assert.equal((await app.inject('/api/v1/music/import-status?userId=other-profile')).json().downloading, 0);
 
     const requested = await app.inject('/api/v1/requested');
     assert.equal(requested.statusCode, 200);

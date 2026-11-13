@@ -53,6 +53,8 @@ add('music','GET',object(),{q:{type:'string',maxLength:200},offset:natural},unde
 add('music/album','GET',object(),{albumId:id},undefined,{requiredQuery:['albumId'],responseModel:'MusicAlbumResponse'});
 add('music/artwork','GET',object(),{albumId:id},undefined,{requiredQuery:['albumId'],binary:true,public:true});
 add('music/stream','GET',object(),{trackId:id},undefined,{requiredQuery:['trackId'],binary:true});
+add('music/download','GET',object(),{trackId:id,albumId:id},undefined,{binary:true});
+add('music/import-status','GET',object({queued:integer,searching:integer,downloading:integer,importing:integer,ready:integer,failed:integer}));
 add('music/request','POST',success,{},object({musicbrainzId:id,albumId:id}));
 add('music/profile-album','POST',success,{},object({albumId:id}));
 add('music/profile-album','DELETE',success,{albumId:id});
@@ -91,7 +93,7 @@ add('youtube/archive','GET',object(),{},undefined,{responseModel:'YouTubeArchive
 add('youtube/stream-local','GET',object(),{path:text},undefined,{requiredQuery:['path'],binary:true});
 add('youtube/thumbnail','GET',object(),{path:text},undefined,{requiredQuery:['path'],binary:true,public:true});
 export const webOperations = operations;
-const shared = ['integrations','requested','music','music/album','music/artwork','music/stream','music/request','music/profile-album','music/playlists','music/playlists/import','music/playlists/import-spotify','music/playlists/import-exportify','music/playlist','music/playlist/track','youtube/search','youtube/stream','youtube/stream-video','youtube/progress','youtube/continue-watching','youtube/auth','youtube/recommendations','youtube/download','youtube/subscriptions','youtube/subscriptions/check','youtube/queue','youtube/archive','youtube/stream-local','youtube/thumbnail','home','library/{type}','categories/{type}','media/{id}','media/{id}/recommendations','search','downloads','playback','request','subtitles','trailer','stream/download','stream/torrent'];
+const shared = ['integrations','requested','music','music/album','music/artwork','music/stream','music/download','music/import-status','music/request','music/profile-album','music/playlists','music/playlists/import','music/playlists/import-spotify','music/playlists/import-exportify','music/playlist','music/playlist/track','youtube/search','youtube/stream','youtube/stream-video','youtube/progress','youtube/continue-watching','youtube/auth','youtube/recommendations','youtube/download','youtube/subscriptions','youtube/subscriptions/check','youtube/queue','youtube/archive','youtube/stream-local','youtube/thumbnail','home','library/{type}','categories/{type}','media/{id}','media/{id}/recommendations','search','downloads','playback','request','subtitles','trailer','stream/download','stream/torrent'];
 export const mobileOperations: Operation[] = operations.filter(operation => shared.includes(operation.path)).map(operation => ({...operation}));
 function native(path:string,method:string,response:Schema,query:Record<string,Schema>={},body?:Schema,extra:Partial<Operation>={}) { mobileOperations.push({path,method,response,query:{userId:id,...query},body,...extra}); }
 native('discovery','GET',object({apiVersion:integer,appName:text,cast:boolean,pairing:text,localPairing:boolean,jellyfinLogin:boolean}),{},undefined,{public:true});

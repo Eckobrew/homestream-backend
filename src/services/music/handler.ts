@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { downloadMusic, musicImportStatus } from './downloads';
 import { HttpRequest, HttpResponse } from '@/http';
 import { invalidateRequested } from '@/lib/request-cache';
 import {
@@ -45,6 +46,9 @@ async function get(request: HttpRequest) {
     request.cookies.get('homeflix_profile_id')?.value;
 
   try {
+    if (route === 'music/download') return downloadMusic(request, profileId);
+    if (route === 'music/import-status') return musicImportStatus(profileId);
+
     if (route === 'music') {
       const q = request.nextUrl.searchParams.get('q')?.trim() || '';
       const offset = Math.min(100000, Number(request.nextUrl.searchParams.get('offset')) || 0);

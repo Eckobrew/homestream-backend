@@ -110,10 +110,13 @@ export class SlskdClient {
   }
 
   async enqueue(username: string, files: SlskdFile[]): Promise<{ enqueued?: SlskdFile[]; failed?: SlskdFile[] }> {
-    return this.json(`/transfers/downloads/${encodeURIComponent(username)}`, {
+    const response = await this.request(`/transfers/downloads/${encodeURIComponent(username)}`, {
       method: 'POST',
       body: JSON.stringify(files),
     });
+    if (!response.ok) throw new Error(`slskd enqueue returned HTTP ${response.status}`);
+    const body = await response.text();
+    return body ? JSON.parse(body) : {};
   }
 
   async getAllDownloads(): Promise<SlskdTransfer[]> {

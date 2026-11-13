@@ -204,7 +204,7 @@ export interface PlaylistTrack {
   coverUrl?: string;
   spotifyTrackId?: string;
   position: number;
-  status: 'pending' | 'searching' | 'downloading' | 'completed' | 'failed';
+  status: 'pending' | 'searching' | 'downloading' | 'importing' | 'completed' | 'failed';
   errorMessage?: string;
   streamUrl?: string;
   createdAt: string;

@@ -156,8 +156,19 @@ export class JellyfinClient {
     this.userId = requestParentalProfile()?.jellyfinUserId || session?.id || userId || config.jellyfinUserId;
   }
 
-  private fetch(input: string, options: RequestInit = {}) {
-    return fetch(input, { ...options, redirect: 'error', signal: options.signal || AbortSignal.timeout(15000) });
+  private async fetch(input: string, options: RequestInit = {}): Promise<Response> {
+    let res = await fetch(input, { ...options, redirect: 'error', signal: options.signal || AbortSignal.timeout(15000) });
+    const config = getServerConfig();
+    if (res.status === 401 && config.jellyfinApiKey && this.apiKey !== config.jellyfinApiKey) {
+      log.warn('[jellyfin] Request returned 401 with session token, retrying with server jellyfinApiKey');
+      const fallbackHeaders: Record<string, string> = {
+        ...((options.headers as Record<string, string>) || {}),
+        'X-Emby-Token': config.jellyfinApiKey,
+        'Authorization': `MediaBrowser Client="HomeFlix", Device="Web", DeviceId="homeflix-web", Version="1.0.0", Token="${config.jellyfinApiKey}"`,
+      };
+      res = await fetch(input, { ...options, headers: fallbackHeaders, redirect: 'error', signal: options.signal || AbortSignal.timeout(15000) });
+    }
+    return res;
   }
 
   isConfigured(): boolean {

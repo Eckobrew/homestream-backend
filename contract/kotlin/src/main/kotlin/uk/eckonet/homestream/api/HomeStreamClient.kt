@@ -275,6 +275,20 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         return executeStream(url.build().toString(), "GET", null, range)
     }
 
+    fun `web_get_music_download`(query: WebGetMusicDownloadQuery, range: String? = null): okhttp3.Response {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("music").addPathSegment("download")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`trackId`?.let { url.addQueryParameter("trackId", it.toString()) }
+        query.`albumId`?.let { url.addQueryParameter("albumId", it.toString()) }
+        return executeStream(url.build().toString(), "GET", null, range)
+    }
+
+    fun `web_get_music_import_status`(query: WebGetMusicImportStatusQuery): ApiResponse<WebGetMusicImportStatusResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("music").addPathSegment("import-status")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
     fun `web_post_music_request`(query: WebPostMusicRequestQuery, body: WebPostMusicRequestBody): ApiResponse<WebPostMusicRequestResponse> {
         val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("music").addPathSegment("request")
         query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
@@ -676,6 +690,20 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
         query.`trackId`.let { url.addQueryParameter("trackId", it.toString()) }
         return executeStream(url.build().toString(), "GET", null, range)
+    }
+
+    fun `mobile_get_music_download`(query: MobileGetMusicDownloadQuery, range: String? = null): okhttp3.Response {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("music").addPathSegment("download")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`trackId`?.let { url.addQueryParameter("trackId", it.toString()) }
+        query.`albumId`?.let { url.addQueryParameter("albumId", it.toString()) }
+        return executeStream(url.build().toString(), "GET", null, range)
+    }
+
+    fun `mobile_get_music_import_status`(query: MobileGetMusicImportStatusQuery): ApiResponse<MobileGetMusicImportStatusResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("music").addPathSegment("import-status")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
     }
 
     fun `mobile_post_music_request`(query: MobilePostMusicRequestQuery, body: MobilePostMusicRequestBody): ApiResponse<MobilePostMusicRequestResponse> {

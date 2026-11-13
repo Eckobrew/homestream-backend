@@ -850,6 +850,28 @@ data class WebGetMusicStreamQuery(
 )
 
 @Serializable
+data class WebGetMusicDownloadQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("trackId") val `trackId`: String? = null,
+    @SerialName("albumId") val `albumId`: String? = null
+)
+
+@Serializable
+data class WebGetMusicImportStatusQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class WebGetMusicImportStatusResponse(
+    @SerialName("queued") val `queued`: Long? = null,
+    @SerialName("searching") val `searching`: Long? = null,
+    @SerialName("downloading") val `downloading`: Long? = null,
+    @SerialName("importing") val `importing`: Long? = null,
+    @SerialName("ready") val `ready`: Long? = null,
+    @SerialName("failed") val `failed`: Long? = null
+)
+
+@Serializable
 data class WebPostMusicRequestQuery(
     @SerialName("userId") val `userId`: String? = null
 )
@@ -1537,6 +1559,28 @@ data class MobileGetMusicArtworkQuery(
 data class MobileGetMusicStreamQuery(
     @SerialName("userId") val `userId`: String? = null,
     @SerialName("trackId") val `trackId`: String
+)
+
+@Serializable
+data class MobileGetMusicDownloadQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("trackId") val `trackId`: String? = null,
+    @SerialName("albumId") val `albumId`: String? = null
+)
+
+@Serializable
+data class MobileGetMusicImportStatusQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class MobileGetMusicImportStatusResponse(
+    @SerialName("queued") val `queued`: Long? = null,
+    @SerialName("searching") val `searching`: Long? = null,
+    @SerialName("downloading") val `downloading`: Long? = null,
+    @SerialName("importing") val `importing`: Long? = null,
+    @SerialName("ready") val `ready`: Long? = null,
+    @SerialName("failed") val `failed`: Long? = null
 )
 
 @Serializable
