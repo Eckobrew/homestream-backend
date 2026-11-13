@@ -8,10 +8,18 @@ export interface QBittorrentRawTorrent {
   name: string;
   progress: number;
   dlspeed: number;
+  upspeed?: number;
   eta: number;
   state: string;
   total_size: number;
   downloaded: number;
+  uploaded?: number;
+  ratio?: number;
+  num_seeds?: number;
+  num_leechs?: number;
+  added_on?: number;
+  completion_on?: number;
+  save_path?: string;
   seq_dl: boolean;
   f_l_piece_prio: boolean;
   category: string;
@@ -220,6 +228,74 @@ export class QBittorrentClient {
   async getAllActiveTorrents(): Promise<QBittorrentRawTorrent[]> {
     const list = await this.request<QBittorrentRawTorrent[]>('/api/v2/torrents/info');
     return Array.isArray(list) ? list : [];
+  }
+
+  private async postForm(path: string, params: Record<string, string>): Promise<boolean> {
+    if (!this.baseUrl) return false;
+    try {
+      const sid = await this.getAuthCookie();
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Referer: this.baseUrl,
+        Origin: this.baseUrl,
+      };
+      if (sid) headers['Cookie'] = sid.includes('=') ? sid : `SID=${sid}`;
+      const res = await fetch(`${this.baseUrl}${path}`, {
+        method: 'POST',
+        headers,
+        body: new URLSearchParams(params).toString(),
+        signal: AbortSignal.timeout(15000),
+      });
+      return res.ok;
+    } catch (err) {
+      log.error(`qBittorrent POST ${path} failed:`, err);
+      return false;
+    }
+  }
+
+  async pauseTorrents(hashes: string): Promise<boolean> {
+    const ok = await this.postForm('/api/v2/torrents/stop', { hashes });
+    if (ok) return true;
+    return this.postForm('/api/v2/torrents/pause', { hashes });
+  }
+
+  async resumeTorrents(hashes: string): Promise<boolean> {
+    const ok = await this.postForm('/api/v2/torrents/start', { hashes });
+    if (ok) return true;
+    return this.postForm('/api/v2/torrents/resume', { hashes });
+  }
+
+  async deleteTorrents(hashes: string, deleteFiles = false): Promise<boolean> {
+    return this.postForm('/api/v2/torrents/delete', {
+      hashes,
+      deleteFiles: deleteFiles ? 'true' : 'false',
+    });
+  }
+
+  async addTorrentUrls(urls: string, category?: string, paused = false): Promise<boolean> {
+    const params: Record<string, string> = { urls };
+    if (category) params.category = category;
+    if (paused) {
+      params.paused = 'true';
+      params.stopped = 'true';
+    }
+    return this.postForm('/api/v2/torrents/add', params);
+  }
+
+  async setFilePriority(hash: string, fileIds: string, priority: number): Promise<boolean> {
+    return this.postForm('/api/v2/torrents/filePrio', {
+      hash,
+      id: fileIds,
+      priority: String(priority),
+    });
+  }
+
+  async setCategory(hashes: string, category: string): Promise<boolean> {
+    return this.postForm('/api/v2/torrents/setCategory', { hashes, category });
+  }
+
+  async recheckTorrents(hashes: string): Promise<boolean> {
+    return this.postForm('/api/v2/torrents/recheck', { hashes });
   }
 
   async getTorrentFiles(hash: string): Promise<QBittorrentRawFile[]> {

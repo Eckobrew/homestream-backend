@@ -96,6 +96,9 @@ export class BookshelfClient {
     const page = await this.request<{ records?: BookshelfQueueItem[] }>('GET', '/queue?pageSize=200&includeBook=false');
     return page?.records || [];
   }
+  async removeQueueItem(id: number, removeFromClient = true, blocklist = false): Promise<void> {
+    await this.request('DELETE', `/queue/${id}?removeFromClient=${removeFromClient ? 'true' : 'false'}&blocklist=${blocklist ? 'true' : 'false'}`);
+  }
   rootFolders() { return this.request<{ path: string; defaultQualityProfileId?: number; defaultMetadataProfileId?: number }[]>('GET', '/rootfolder'); }
 
   async addAuthor(author: BookshelfAuthor): Promise<BookshelfAuthor> {

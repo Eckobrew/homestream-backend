@@ -67,6 +67,7 @@ export const routes = [
   { path: "/api/categories/:type", methods: ["GET"], service: service1 },
   { path: "/api/config", methods: ["GET", "POST"], service: service2 },
   { path: "/api/downloads", methods: ["GET"], service: service3 },
+  { path: "/api/downloads/manager", methods: ["GET", "POST"], service: service3 },
   { path: "/api/home", methods: ["GET"], service: service4 },
   { path: "/api/library/:type", methods: ["GET"], service: service5 },
   { path: "/api/media/:id", methods: ["GET"], service: service6 },

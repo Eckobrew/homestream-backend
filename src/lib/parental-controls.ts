@@ -47,7 +47,7 @@ export async function guardKidsRequest(request: HttpRequest, profile: UserProfil
   if (!isKids(profile)) return;
   const name = route(request);
   if (name === 'integrations' || name === 'music' || name.startsWith('music/') || name === 'books' || name.startsWith('books/')) throw new ParentalDenied('Music, books and integration settings are unavailable in Kids mode');
-  if (name === 'downloads' || name.startsWith('stream/download') || name.startsWith('stream/torrent')) throw new ParentalDenied('Downloading torrents are unavailable in Kids mode');
+  if (name === 'downloads' || name === 'downloads/manager' || name.startsWith('stream/download') || name.startsWith('stream/torrent')) throw new ParentalDenied('Downloading torrents are unavailable in Kids mode');
   if (name === 'trailer' || (name === 'request' && request.method === 'GET')) return;
   if (name.startsWith('profiles')) return;
   const sourceId = request.nextUrl.searchParams.get('mediaSourceId');

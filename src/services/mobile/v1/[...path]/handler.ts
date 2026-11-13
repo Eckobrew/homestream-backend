@@ -26,7 +26,7 @@ import { GET as subtitles } from '@/services/subtitles/handler';
 import { GET as requestOptions, POST as requestMedia } from '@/services/request/handler';
 import { getHomeflixProfiles } from '@/lib/profiles';
 import { GET as search } from '@/services/search/handler';
-import { GET as downloads } from '@/services/downloads/handler';
+import { GET as downloads, POST as downloadsPost } from '@/services/downloads/handler';
 import { GET as categories } from '@/services/categories/[type]/handler';
 import { GET as recommendations } from '@/services/media/[id]/recommendations/handler';
 import { GET as downloadStream } from '@/services/stream/download/handler';
@@ -172,10 +172,17 @@ async function dispatchContent(request: HttpRequest, context: Context) {
     if (request.method === 'DELETE') return youtubeService.DELETE(request);
   }
   if (get && route === 'trailer') return trailer(request);
-  if (get && route === 'capabilities') return HttpResponse.json({ apiVersion: 1, appName: getServerConfig().appName || 'HomeStream', cast: true, jellyfinLogin: true, canManageIntegrations:session?.admin===true });
+  if (get && route === 'capabilities') {
+    const active = await activeProfile(request);
+    const localPaired = isLocallyPairedDeviceToken(request.headers.get('authorization')?.replace(/^Bearer /i, '') || '');
+    const isAdmin = session ? session.admin === true : Boolean(localPaired && active && !isKids(active) && active.isAdministrator !== false);
+    return HttpResponse.json({ apiVersion: 1, appName: getServerConfig().appName || 'HomeStream', cast: true, jellyfinLogin: true, canManageIntegrations: isAdmin });
+  }
   if (get && route === 'session/status') {
     const profile = await activeProfile(request);
-    return HttpResponse.json({ profile, revision: profile ? kidsPolicyRevision(profile) : '' });
+    const localPaired = isLocallyPairedDeviceToken(request.headers.get('authorization')?.replace(/^Bearer /i, '') || '');
+    const isAdmin = session ? session.admin === true : Boolean(localPaired && profile && !isKids(profile) && profile.isAdministrator !== false);
+    return HttpResponse.json({ profile, revision: profile ? kidsPolicyRevision(profile) : '', canManageIntegrations: isAdmin });
   }
   if (get && route === 'continue-watching') {
     const uid = await resolveJellyfinUserId(session?.id || request.nextUrl.searchParams.get('userId') || undefined);
@@ -280,6 +287,7 @@ async function dispatchContent(request: HttpRequest, context: Context) {
   }
   if (get && route === 'search') return search(request);
   if (get && route === 'downloads') return downloads(request);
+  if (route === 'downloads/manager') return get ? downloads(request) : downloadsPost(request);
   if (get && /^categories\/(movies|tv|series|requests)$/.test(route)) return categories(request, { params: Promise.resolve({ type: params.path[1] }) });
   if (get && params.path.length === 3 && params.path[0] === 'media' && params.path[2] === 'collection') {
     const id = params.path[1];
