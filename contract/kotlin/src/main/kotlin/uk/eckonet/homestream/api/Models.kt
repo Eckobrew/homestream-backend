@@ -701,6 +701,40 @@ data class WebGetDownloadsResponse(
 )
 
 @Serializable
+data class WebGetDownloadsManagerQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("hash") val `hash`: String? = null,
+    @SerialName("profileId") val `profileId`: String? = null
+)
+
+@Serializable
+data class WebPostDownloadsManagerQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class WebPostDownloadsManagerBody(
+    @SerialName("action") val `action`: String,
+    @SerialName("hash") val `hash`: String? = null,
+    @SerialName("hashes") val `hashes`: String? = null,
+    @SerialName("deleteFiles") val `deleteFiles`: Boolean? = null,
+    @SerialName("urls") val `urls`: String? = null,
+    @SerialName("category") val `category`: String? = null,
+    @SerialName("paused") val `paused`: Boolean? = null,
+    @SerialName("fileIds") val `fileIds`: JsonElement? = null,
+    @SerialName("fileIndex") val `fileIndex`: Long? = null,
+    @SerialName("priority") val `priority`: Long? = null,
+    @SerialName("id") val `id`: String? = null,
+    @SerialName("queueId") val `queueId`: String? = null
+)
+
+@Serializable
+data class WebPostDownloadsManagerResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null
+)
+
+@Serializable
 data class WebGetPlaybackQuery(
     @SerialName("userId") val `userId`: String? = null,
     @SerialName("itemId") val `itemId`: String,
@@ -1593,6 +1627,40 @@ data class MobileGetDownloadsQuery(
 @Serializable
 data class MobileGetDownloadsResponse(
     @SerialName("items") val `items`: List<JsonElement>? = null
+)
+
+@Serializable
+data class MobileGetDownloadsManagerQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("hash") val `hash`: String? = null,
+    @SerialName("profileId") val `profileId`: String? = null
+)
+
+@Serializable
+data class MobilePostDownloadsManagerQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class MobilePostDownloadsManagerBody(
+    @SerialName("action") val `action`: String,
+    @SerialName("hash") val `hash`: String? = null,
+    @SerialName("hashes") val `hashes`: String? = null,
+    @SerialName("deleteFiles") val `deleteFiles`: Boolean? = null,
+    @SerialName("urls") val `urls`: String? = null,
+    @SerialName("category") val `category`: String? = null,
+    @SerialName("paused") val `paused`: Boolean? = null,
+    @SerialName("fileIds") val `fileIds`: JsonElement? = null,
+    @SerialName("fileIndex") val `fileIndex`: Long? = null,
+    @SerialName("priority") val `priority`: Long? = null,
+    @SerialName("id") val `id`: String? = null,
+    @SerialName("queueId") val `queueId`: String? = null
+)
+
+@Serializable
+data class MobilePostDownloadsManagerResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null
 )
 
 @Serializable

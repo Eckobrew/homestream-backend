@@ -118,6 +118,20 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         return execute(url.build().toString(), "GET", null, null)
     }
 
+    fun `web_get_downloads_manager`(query: WebGetDownloadsManagerQuery): ApiResponse<JsonElement> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("downloads").addPathSegment("manager")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`hash`?.let { url.addQueryParameter("hash", it.toString()) }
+        query.`profileId`?.let { url.addQueryParameter("profileId", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `web_post_downloads_manager`(query: WebPostDownloadsManagerQuery, body: WebPostDownloadsManagerBody): ApiResponse<WebPostDownloadsManagerResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("downloads").addPathSegment("manager")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
     fun `web_get_playback`(query: WebGetPlaybackQuery): ApiResponse<PlaybackResponse> {
         val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("playback")
         query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
@@ -641,6 +655,20 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("downloads")
         query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
         return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `mobile_get_downloads_manager`(query: MobileGetDownloadsManagerQuery): ApiResponse<JsonElement> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("downloads").addPathSegment("manager")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`hash`?.let { url.addQueryParameter("hash", it.toString()) }
+        query.`profileId`?.let { url.addQueryParameter("profileId", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `mobile_post_downloads_manager`(query: MobilePostDownloadsManagerQuery, body: MobilePostDownloadsManagerBody): ApiResponse<MobilePostDownloadsManagerResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("downloads").addPathSegment("manager")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
     }
 
     fun `mobile_get_playback`(query: MobileGetPlaybackQuery): ApiResponse<PlaybackResponse> {

@@ -380,3 +380,60 @@ export interface YouTubeArchiveResponse {
   items: YouTubeArchiveItem[];
 }
 
+export interface AdminTorrentFile {
+  index: number;
+  name: string;
+  size: number;
+  progress: number;
+  priority: number;
+}
+
+export interface AdminTorrentItem {
+  hash: string;
+  name: string;
+  progress: number;
+  progressPercent: number;
+  downloadSpeed: number;
+  uploadSpeed: number;
+  eta: number;
+  state: string;
+  size: number;
+  downloaded: number;
+  uploaded: number;
+  ratio: number;
+  seeds: number;
+  leechers: number;
+  category: string;
+  tags: string;
+  seqDl: boolean;
+  fLPiecePrio: boolean;
+  addedOn?: number;
+  savePath?: string;
+  contentPath?: string;
+}
+
+export interface AdminSystemDownloadItem {
+  id: string;
+  source: 'music' | 'books' | 'youtube' | 'slskd';
+  kind: 'album' | 'playlist_track' | 'book' | 'youtube' | 'slskd_transfer';
+  title: string;
+  subtitle?: string;
+  status: string;
+  progressPercent: number;
+  downloadSpeed?: number;
+  etaSeconds?: number;
+  size?: number;
+  error?: string;
+  requestedBy?: string;
+  createdAt?: string;
+  meta?: Record<string, string | number | undefined>;
+}
+
+export interface AdminDownloadManagerResponse {
+  qbittorrentConfigured: boolean;
+  torrents: AdminTorrentItem[];
+  systemDownloads: AdminSystemDownloadItem[];
+  updatedAt: string;
+}
+
+
