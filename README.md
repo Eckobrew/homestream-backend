@@ -50,7 +50,6 @@ OpenAPI covers all web and native operations. The same request schemas validate 
 
 See [the deployment and migration guide](docs/split-migration.md). The reference Compose stack uses separate images and an Nginx gateway. Use published images or build locally; see Docker image publishing below.
 
-See [the follow-up improvement plan](docs/improvement-plan.md) for prioritized work beyond the split. Existing audit documents are retained as historical context; source and tests describe current behavior.
 
 The independent repositories retain provenance from the original monolith revision above.
 
@@ -70,4 +69,4 @@ Discover and Requested cover movies, TV and music. Native Music integration prov
 
 Music streams, YouTube video streams, and artwork are proxied through HomeStream with authentication and byte-range support. YouTube videos stream via `/api/mobile/v1/youtube/stream-video?videoId=...` with full caching and seeking support. Music is unavailable in Kids mode until explicit-content policy can be verified. Admin integration editing requires the existing local/admin web policy or an actual signed mobile administrator session, not a household pairing token.
 
-See [the Android implementation handoff](HANDOFF.md) for API 1.2.0 models, native routes, Admin authorization, tab behavior and tests. Existing port-3000 LAN pairing remains enabled by the live gateway's explicit policy.
+See the [mobile API guide](docs/mobile-api.md) and [generated API contract](contract/) for client integration. Existing port-3000 LAN pairing remains enabled by the live gateway's explicit policy.
