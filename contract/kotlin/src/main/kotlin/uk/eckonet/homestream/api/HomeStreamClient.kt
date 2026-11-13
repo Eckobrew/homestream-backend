@@ -239,6 +239,82 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         return execute(url.build().toString(), "GET", null, null)
     }
 
+    fun `web_get_books`(query: WebGetBooksQuery): ApiResponse<BooksResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("books")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`q`?.let { url.addQueryParameter("q", it.toString()) }
+        query.`offset`?.let { url.addQueryParameter("offset", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `web_get_books_search`(query: WebGetBooksSearchQuery): ApiResponse<BookSearchResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("books").addPathSegment("search")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`q`?.let { url.addQueryParameter("q", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `web_get_books_book`(query: WebGetBooksBookQuery): ApiResponse<BookDetailResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("books").addPathSegment("book")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`bookId`.let { url.addQueryParameter("bookId", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `web_get_books_cover`(query: WebGetBooksCoverQuery, range: String? = null): okhttp3.Response {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("books").addPathSegment("cover")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`bookId`.let { url.addQueryParameter("bookId", it.toString()) }
+        return executeStream(url.build().toString(), "GET", null, range)
+    }
+
+    fun `web_get_books_file`(query: WebGetBooksFileQuery, range: String? = null): okhttp3.Response {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("books").addPathSegment("file")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`bookId`.let { url.addQueryParameter("bookId", it.toString()) }
+        query.`format`?.let { url.addQueryParameter("format", it.toString()) }
+        query.`download`?.let { url.addQueryParameter("download", it.toString()) }
+        return executeStream(url.build().toString(), "GET", null, range)
+    }
+
+    fun `web_get_books_queue`(query: WebGetBooksQueueQuery): ApiResponse<BookQueueResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("books").addPathSegment("queue")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `web_get_books_progress`(query: WebGetBooksProgressQuery): ApiResponse<JsonElement> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("books").addPathSegment("progress")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`bookId`.let { url.addQueryParameter("bookId", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `web_post_books_progress`(query: WebPostBooksProgressQuery, body: WebPostBooksProgressBody): ApiResponse<WebPostBooksProgressResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("books").addPathSegment("progress")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
+    fun `web_post_books_request`(query: WebPostBooksRequestQuery, body: WebPostBooksRequestBody): ApiResponse<WebPostBooksRequestResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("books").addPathSegment("request")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
+    fun `web_post_books_profile_book`(query: WebPostBooksProfileBookQuery, body: WebPostBooksProfileBookBody): ApiResponse<WebPostBooksProfileBookResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("books").addPathSegment("profile-book")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
+    fun `web_delete_books_profile_book`(query: WebDeleteBooksProfileBookQuery): ApiResponse<WebDeleteBooksProfileBookResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("books").addPathSegment("profile-book")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`bookId`?.let { url.addQueryParameter("bookId", it.toString()) }
+        return execute(url.build().toString(), "DELETE", null, null)
+    }
+
     fun `web_get_music`(query: WebGetMusicQuery): ApiResponse<MusicResponse> {
         val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("music")
         query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }

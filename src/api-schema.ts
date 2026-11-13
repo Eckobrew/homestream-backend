@@ -18,7 +18,7 @@ const profilesBody = object({ action: { type:'string',enum:['create','import','d
 const progress = object({ itemId:id, userId:id, positionTicks:integer, isPaused:boolean, isStopped:boolean, isStarted:boolean },['itemId','positionTicks']);
 const request = object({ mediaType:{type:'string',enum:['movie','tv']},mediaId:{...integer,minimum:1}, seasons:{anyOf:[{type:'string',const:'all'},list(integer)]},is4k:boolean,profileId:integer,serverId:integer },['mediaType','mediaId']);
 const login = object({ username:{type:'string',minLength:1,maxLength:200},password:text,action:{type:'string',enum:['login','logout']} });
-const configFields = Object.fromEntries(['appName','jellyfinUrl','jellyfinApiKey','jellyfinUserId','seerrUrl','seerrApiKey','qbittorrentUrl','qbittorrentUsername','qbittorrentPassword','downloadsPath','radarrUrl','radarrApiKey','sonarrUrl','sonarrApiKey','tmdbApiKey','url','apiKey','userId','username','password','parentPin'].map(key => [key,text]));
+const configFields = Object.fromEntries(['appName','jellyfinUrl','jellyfinApiKey','jellyfinUserId','seerrUrl','seerrApiKey','qbittorrentUrl','qbittorrentUsername','qbittorrentPassword','bookshelfUrl','bookshelfApiKey','booksPath','downloadsPath','radarrUrl','radarrApiKey','sonarrUrl','sonarrApiKey','tmdbApiKey','url','apiKey','userId','username','password','parentPin'].map(key => [key,text]));
 const operations: Operation[] = [];
 function add(path: string, method: string, response: Schema, query: Record<string,Schema> = {}, body?: Schema, extra: Partial<Operation> = {}) {
   operations.push({ path,method,response,query:{userId:id,...query},body,...extra });
@@ -49,6 +49,17 @@ add('stream/torrent','GET',object(),{tmdbId:natural,type:text,season:natural,epi
 add('webhook/arr','GET',object({status:text}));
 add('webhook/arr','POST',success,{},object({eventType:text,downloadId:text,torrentHash:text,event_type:text}));
 add('catalog-links','GET',object({items:list(media)}));
+add('books','GET',object(),{q:{type:'string',maxLength:200},offset:natural},undefined,{responseModel:'BooksResponse'});
+add('books/search','GET',object(),{q:{type:'string',maxLength:200}},undefined,{responseModel:'BookSearchResponse'});
+add('books/book','GET',object(),{bookId:id},undefined,{requiredQuery:['bookId'],responseModel:'BookDetailResponse'});
+add('books/cover','GET',object(),{bookId:id},undefined,{requiredQuery:['bookId'],binary:true,public:true});
+add('books/file','GET',object(),{bookId:id,format:{type:'string',maxLength:8},download:{type:'string',enum:['0','1']}},undefined,{requiredQuery:['bookId'],binary:true});
+add('books/queue','GET',object(),{},undefined,{responseModel:'BookQueueResponse'});
+add('books/progress','GET',object(),{bookId:id},undefined,{requiredQuery:['bookId']});
+add('books/progress','POST',success,{},object({bookId:id,location:text,percent:{type:'number',minimum:0,maximum:100}},['bookId','location']));
+add('books/request','POST',success,{},object({foreignBookId:id,title:text,author:text},['foreignBookId','title','author']));
+add('books/profile-book','POST',success,{},object({bookId:id},['bookId']));
+add('books/profile-book','DELETE',success,{bookId:id});
 add('music','GET',object(),{q:{type:'string',maxLength:200},offset:natural},undefined,{responseModel:'MusicResponse'});
 add('music/album','GET',object(),{albumId:id},undefined,{requiredQuery:['albumId'],responseModel:'MusicAlbumResponse'});
 add('music/artwork','GET',object(),{albumId:id},undefined,{requiredQuery:['albumId'],binary:true,public:true});
@@ -70,7 +81,7 @@ add('music/playlist/track','POST',success,{},object({playlistId:id,trackId:id},[
 add('music/playlist/track','DELETE',success,{playlistId:id,trackId:id},{requiredQuery:['playlistId','trackId']});
 add('requested','GET',object(),{},undefined,{responseModel:'RequestedResponse'});
 add('integrations','GET',object(),{},undefined,{responseModel:'IntegrationsResponse'});
-add('integrations','POST',object(),{},object({integration:{type:'string',enum:['jellyfin','seerr','qbittorrent','slskd','radarr','sonarr','tmdb']},action:{type:'string',enum:['save','test']},url:text,secret:text,username:text,downloadsPath:text,parentPin:text},['integration','action']));
+add('integrations','POST',object(),{},object({integration:{type:'string',enum:['jellyfin','seerr','qbittorrent','slskd','bookshelf','radarr','sonarr','tmdb']},action:{type:'string',enum:['save','test']},url:text,secret:text,username:text,downloadsPath:text,booksPath:text,parentPin:text},['integration','action']));
 add('youtube/search','GET',object(),{q:text},undefined,{responseModel:'YouTubeSearchResponse'});
 add('youtube/stream','GET',object(),{videoId:id},undefined,{requiredQuery:['videoId'],responseModel:'YouTubeStreamResponse'});
 add('youtube/stream-video','GET',object(),{videoId:id},undefined,{requiredQuery:['videoId'],binary:true});

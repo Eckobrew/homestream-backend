@@ -167,6 +167,35 @@ export interface RequestMediaPayload {
   serverId?: number;
 }
 
+export interface BookItem {
+  id: string;
+  foreignBookId: string;
+  title: string;
+  author: string;
+  year?: number;
+  overview: string;
+  series: string;
+  pageCount: number;
+  rating: number;
+  coverUrl: string;
+  inLibrary: boolean;
+  onShelf: boolean;
+  formats: string[];
+  readable: boolean;
+  requestStatus?: string;
+}
+export interface BookRequestItem {
+  foreignBookId: string;
+  bookId?: string;
+  title: string;
+  author: string;
+  coverUrl: string;
+  status: string;
+  error?: string;
+  createdAt: string;
+}
+export interface BookProgress { location: string; percent: number; updatedAt: string }
+
 export interface MusicAlbum {
   id: string;
   title: string;
@@ -190,6 +219,11 @@ export interface MusicTrack {
   streamUrl: string;
   coverUrl?: string;
 }
+export interface BooksResponse { configured: boolean; books: BookItem[]; total: number; requests: BookRequestItem[]; }
+export interface BookSearchResponse { books: BookItem[]; }
+export interface BookDetailResponse { book: BookItem; progress: BookProgress | null; }
+export interface BookQueueItem { id: string; bookId?: string; title: string; status: string; progress: number; timeLeft?: string; error?: string; }
+export interface BookQueueResponse { queue: BookQueueItem[]; }
 export interface MusicResponse { configured: boolean; albums: MusicAlbum[]; total: number; }
 export interface MusicAlbumResponse { album: MusicAlbum; tracks: MusicTrack[]; }
 
@@ -237,7 +271,7 @@ export interface RequestedItem {
   id: string;
   title: string;
   kind: 'movie' | 'tv' | 'music';
-  source: 'seerr' | 'tmdb' | 'qbittorrent' | 'slskd' | 'radarr' | 'sonarr';
+  source: 'seerr' | 'tmdb' | 'qbittorrent' | 'slskd' | 'bookshelf' | 'radarr' | 'sonarr';
   status: string;
   artist?: string;
   posterUrl?: string;
@@ -250,14 +284,14 @@ export interface RequestedItem {
 }
 export interface RequestedResponse { items: RequestedItem[]; warnings: string[]; updatedAt: string; }
 export interface IntegrationSummary {
-  id: 'jellyfin' | 'seerr' | 'qbittorrent' | 'slskd' | 'radarr' | 'sonarr' | 'tmdb';
+  id: 'jellyfin' | 'seerr' | 'qbittorrent' | 'slskd' | 'bookshelf' | 'radarr' | 'sonarr' | 'tmdb';
   name: string;
   url: string;
   configured: boolean;
   credentialSet: boolean;
   username?: string;
 }
-export interface IntegrationsResponse { integrations: IntegrationSummary[]; downloadsPath: string; }
+export interface IntegrationsResponse { integrations: IntegrationSummary[]; downloadsPath: string; booksPath?: string; }
 
 export interface YouTubeSearchResult {
   id: string;

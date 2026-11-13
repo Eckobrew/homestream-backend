@@ -3,6 +3,7 @@ import { shutdownConversions } from './media/conversions';
 import { createApp } from './app';
 import { ensureYouTubeTables, processNextDownload, pollAllSubscribedChannels } from './lib/youtube';
 import { ensureMusicTables, startDownloadMonitor, processNextPlaylistTrack } from './lib/music';
+import { ensureBookTables, startBooksMonitor } from './lib/books';
 const app = createApp();
 for (const signal of ['SIGTERM', 'SIGINT'] as const) process.once(signal, async () => { shutdownConversions(); await app.close(); });
 try {
@@ -12,6 +13,8 @@ try {
   processNextDownload();
   ensureMusicTables();
   startDownloadMonitor();
+  ensureBookTables();
+  startBooksMonitor();
   startPreviewCleanup();
   processNextPlaylistTrack();
   const youtubePoller = setInterval(() => {

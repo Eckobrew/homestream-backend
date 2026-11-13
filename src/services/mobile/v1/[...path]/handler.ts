@@ -1,5 +1,6 @@
 import * as integrationsService from '@/services/integrations/handler';
 import * as musicService from '@/services/music/handler';
+import * as booksService from '@/services/books/handler';
 import * as youtubeService from '@/services/youtube/handler';
 import * as requestedService from '@/services/requested/handler';
 import { validateApiRequest } from '@/api-schema';
@@ -80,6 +81,7 @@ async function dispatch(request: HttpRequest, context: Context) {
   if ((get || request.method === 'HEAD') && route === 'image') return handleImage(request);
   if ((get || request.method === 'HEAD') && route === 'youtube/thumbnail') return youtubeService.GET(request);
   if ((get || request.method === 'HEAD') && route === 'music/artwork') return musicService.GET(request);
+  if ((get || request.method === 'HEAD') && route === 'books/cover') return booksService.GET(request);
   if (get && route === 'auth/users') return HttpResponse.json({ users: [] });
   if (!get && route === 'auth/login') {
     if (!await allowLogin(request)) return HttpResponse.json({ error: 'Too many login attempts. Try again in a minute.' }, { status: 429 });
@@ -153,6 +155,11 @@ async function dispatchContent(request: HttpRequest, context: Context) {
     return get?integrationsService.GET(request):integrationsService.POST(request);
   }
   if (get && route === 'requested') return requestedService.GET(request);
+  if (route === 'books' || route.startsWith('books/')) {
+    if (get || request.method === 'HEAD') return booksService.GET(request);
+    if (request.method === 'POST') return booksService.POST(request);
+    if (request.method === 'DELETE') return booksService.DELETE(request);
+  }
   if (route === 'music' || route.startsWith('music/')) {
     if (get || request.method === 'HEAD') return musicService.GET(request);
     if (request.method === 'POST') return musicService.POST(request);

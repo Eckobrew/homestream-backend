@@ -7,8 +7,9 @@ import { RadarrClient } from '@/lib/radarr';
 import { SonarrClient } from '@/lib/sonarr';
 import { TmdbClient } from '@/lib/tmdb';
 import { SlskdClient } from '@/lib/slskd';
+import { BookshelfClient } from '@/lib/bookshelf';
 import { withParentalControls } from '@/lib/parental-controls';
-const fields={jellyfin:['jellyfinUrl','jellyfinApiKey'],seerr:['seerrUrl','seerrApiKey'],qbittorrent:['qbittorrentUrl','qbittorrentPassword'],slskd:['slskdUrl','slskdApiKey'],radarr:['radarrUrl','radarrApiKey'],sonarr:['sonarrUrl','sonarrApiKey'],tmdb:['','tmdbApiKey'],spotify:['spotifyClientId','spotifyClientSecret']} as const;
+const fields={jellyfin:['jellyfinUrl','jellyfinApiKey'],seerr:['seerrUrl','seerrApiKey'],qbittorrent:['qbittorrentUrl','qbittorrentPassword'],slskd:['slskdUrl','slskdApiKey'],bookshelf:['bookshelfUrl','bookshelfApiKey'],radarr:['radarrUrl','radarrApiKey'],sonarr:['sonarrUrl','sonarrApiKey'],tmdb:['','tmdbApiKey'],spotify:['spotifyClientId','spotifyClientSecret']} as const;
 async function get(_r:HttpRequest) {
   const c=getServerConfig();return HttpResponse.json({integrations:Object.entries(fields).map(([id,[urlField,keyField]])=>{
     const isTmdb = id === 'tmdb';
@@ -16,9 +17,9 @@ async function get(_r:HttpRequest) {
     const url = isTmdb ? 'https://api.themoviedb.org/3' : isSpotify ? c.spotifyClientId || '' : (c as any)[urlField] || '';
     const configured = isTmdb ? Boolean(c.tmdbApiKey) : isSpotify ? Boolean(c.spotifyClientId && c.spotifyClientSecret) : Boolean((c as any)[urlField] && (id==='qbittorrent' || (c as any)[keyField]));
     const credentialSet = Boolean((c as any)[keyField]);
-    const name = id==='slskd'?'slskd (Soulseek Music)':id==='qbittorrent'?'qBittorrent':id==='seerr'?'Seerr':id==='radarr'?'Radarr':id==='sonarr'?'Sonarr':id==='tmdb'?'TMDB':id==='spotify'?'Spotify (Optional Client ID & Secret)':'Jellyfin';
+    const name = id==='slskd'?'slskd (Soulseek Music)':id==='bookshelf'?'Bookshelf (Books)':id==='qbittorrent'?'qBittorrent':id==='seerr'?'Seerr':id==='radarr'?'Radarr':id==='sonarr'?'Sonarr':id==='tmdb'?'TMDB':id==='spotify'?'Spotify (Optional Client ID & Secret)':'Jellyfin';
     return { id, name, url, configured, credentialSet, ...(id==='qbittorrent'?{username:c.qbittorrentUsername||''}:{}) };
-  }),downloadsPath:c.downloadsPath||'/downloads'});
+  }),downloadsPath:c.downloadsPath||'/downloads',booksPath:c.booksPath||'/books'});
 }
 async function post(r:HttpRequest) {
  const body=await r.json().catch(()=>null);if(!body || !Object.hasOwn(fields,body.integration) || !['save','test'].includes(body.action))return HttpResponse.json({error:'Choose a supported integration and action'},{status:400});
@@ -37,12 +38,14 @@ async function post(r:HttpRequest) {
   else if (id === 'radarr') result = await new RadarrClient(url, secret).testConnection();
   else if (id === 'sonarr') result = await new SonarrClient(url, secret).testConnection();
   else if (id === 'slskd') result = await new SlskdClient(url, secret).testConnection();
+  else if (id === 'bookshelf') result = await new BookshelfClient(url, secret).testConnection();
   else if (id === 'spotify') result = { success: true, version: 'Spotify Web API' };
   return HttpResponse.json({success:result.success,...('version' in result && result.version?{version:result.version}:{})});
  }catch{return HttpResponse.json({success:false,error:'Connection failed. Check the URL, credential and upstream service.'},{status:502});}}
  const patch:Record<string,string>={};
  if (id === 'spotify') { if (body.url !== undefined) patch.spotifyClientId = body.url.trim(); if (body.secret) patch.spotifyClientSecret = body.secret; }
  else { if(urlField)patch[urlField]=url; if(body.secret)patch[secretField]=body.secret; if(id==='qbittorrent')patch.qbittorrentUsername=username; }
+ if(body.booksPath!==undefined) {if(typeof body.booksPath!=='string'||!body.booksPath.startsWith('/')||/[\r\n\0]/.test(body.booksPath))return HttpResponse.json({error:'Books path must be an absolute path inside the backend container'},{status:400});patch.booksPath=body.booksPath;}
  if(body.downloadsPath!==undefined) {if(typeof body.downloadsPath!=='string'||!body.downloadsPath.startsWith('/')||/[\r\n\0]/.test(body.downloadsPath))return HttpResponse.json({error:'Downloads path must be an absolute path inside the backend container'},{status:400});patch.downloadsPath=body.downloadsPath;}
  saveServerConfig(patch);return HttpResponse.json({success:true});
 }

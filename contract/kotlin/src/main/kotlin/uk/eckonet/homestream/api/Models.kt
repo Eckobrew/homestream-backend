@@ -273,6 +273,79 @@ data class MusicAlbumResponse(
 )
 
 @Serializable
+data class BookItem(
+    @SerialName("id") val `id`: String,
+    @SerialName("foreignBookId") val `foreignBookId`: String,
+    @SerialName("title") val `title`: String,
+    @SerialName("author") val `author`: String,
+    @SerialName("year") val `year`: Double? = null,
+    @SerialName("overview") val `overview`: String,
+    @SerialName("series") val `series`: String,
+    @SerialName("pageCount") val `pageCount`: Double,
+    @SerialName("rating") val `rating`: Double,
+    @SerialName("coverUrl") val `coverUrl`: String,
+    @SerialName("inLibrary") val `inLibrary`: Boolean,
+    @SerialName("onShelf") val `onShelf`: Boolean,
+    @SerialName("formats") val `formats`: List<String>,
+    @SerialName("readable") val `readable`: Boolean,
+    @SerialName("requestStatus") val `requestStatus`: String? = null
+)
+
+@Serializable
+data class BookRequestItem(
+    @SerialName("foreignBookId") val `foreignBookId`: String,
+    @SerialName("bookId") val `bookId`: String? = null,
+    @SerialName("title") val `title`: String,
+    @SerialName("author") val `author`: String,
+    @SerialName("coverUrl") val `coverUrl`: String,
+    @SerialName("status") val `status`: String,
+    @SerialName("error") val `error`: String? = null,
+    @SerialName("createdAt") val `createdAt`: String
+)
+
+@Serializable
+data class BookProgress(
+    @SerialName("location") val `location`: String,
+    @SerialName("percent") val `percent`: Double,
+    @SerialName("updatedAt") val `updatedAt`: String
+)
+
+@Serializable
+data class BooksResponse(
+    @SerialName("configured") val `configured`: Boolean,
+    @SerialName("books") val `books`: List<BookItem>,
+    @SerialName("total") val `total`: Double,
+    @SerialName("requests") val `requests`: List<BookRequestItem>
+)
+
+@Serializable
+data class BookSearchResponse(
+    @SerialName("books") val `books`: List<BookItem>
+)
+
+@Serializable
+data class BookDetailResponse(
+    @SerialName("book") val `book`: BookItem,
+    @SerialName("progress") val `progress`: BookProgress?
+)
+
+@Serializable
+data class BookQueueItem(
+    @SerialName("id") val `id`: String,
+    @SerialName("bookId") val `bookId`: String? = null,
+    @SerialName("title") val `title`: String,
+    @SerialName("status") val `status`: String,
+    @SerialName("progress") val `progress`: Double,
+    @SerialName("timeLeft") val `timeLeft`: String? = null,
+    @SerialName("error") val `error`: String? = null
+)
+
+@Serializable
+data class BookQueueResponse(
+    @SerialName("queue") val `queue`: List<BookQueueItem>
+)
+
+@Serializable
 data class RequestedItem(
     @SerialName("id") val `id`: String,
     @SerialName("title") val `title`: String,
@@ -309,7 +382,8 @@ data class IntegrationSummary(
 @Serializable
 data class IntegrationsResponse(
     @SerialName("integrations") val `integrations`: List<IntegrationSummary>,
-    @SerialName("downloadsPath") val `downloadsPath`: String
+    @SerialName("downloadsPath") val `downloadsPath`: String,
+    @SerialName("booksPath") val `booksPath`: String? = null
 )
 
 @Serializable
@@ -471,6 +545,9 @@ data class WebPostConfigBody(
     @SerialName("qbittorrentUrl") val `qbittorrentUrl`: String? = null,
     @SerialName("qbittorrentUsername") val `qbittorrentUsername`: String? = null,
     @SerialName("qbittorrentPassword") val `qbittorrentPassword`: String? = null,
+    @SerialName("bookshelfUrl") val `bookshelfUrl`: String? = null,
+    @SerialName("bookshelfApiKey") val `bookshelfApiKey`: String? = null,
+    @SerialName("booksPath") val `booksPath`: String? = null,
     @SerialName("downloadsPath") val `downloadsPath`: String? = null,
     @SerialName("radarrUrl") val `radarrUrl`: String? = null,
     @SerialName("radarrApiKey") val `radarrApiKey`: String? = null,
@@ -813,6 +890,114 @@ data class WebGetCatalogLinksResponseItemsItem(
 )
 
 @Serializable
+data class WebGetBooksQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("q") val `q`: String? = null,
+    @SerialName("offset") val `offset`: String? = null
+)
+
+@Serializable
+data class WebGetBooksSearchQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("q") val `q`: String? = null
+)
+
+@Serializable
+data class WebGetBooksBookQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("bookId") val `bookId`: String
+)
+
+@Serializable
+data class WebGetBooksCoverQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("bookId") val `bookId`: String
+)
+
+@Serializable
+data class WebGetBooksFileQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("bookId") val `bookId`: String,
+    @SerialName("format") val `format`: String? = null,
+    @SerialName("download") val `download`: String? = null
+)
+
+@Serializable
+data class WebGetBooksQueueQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class WebGetBooksProgressQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("bookId") val `bookId`: String
+)
+
+@Serializable
+data class WebPostBooksProgressQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class WebPostBooksProgressBody(
+    @SerialName("bookId") val `bookId`: String,
+    @SerialName("location") val `location`: String,
+    @SerialName("percent") val `percent`: Double? = null
+)
+
+@Serializable
+data class WebPostBooksProgressResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null
+)
+
+@Serializable
+data class WebPostBooksRequestQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class WebPostBooksRequestBody(
+    @SerialName("foreignBookId") val `foreignBookId`: String,
+    @SerialName("title") val `title`: String,
+    @SerialName("author") val `author`: String
+)
+
+@Serializable
+data class WebPostBooksRequestResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null
+)
+
+@Serializable
+data class WebPostBooksProfileBookQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class WebPostBooksProfileBookBody(
+    @SerialName("bookId") val `bookId`: String
+)
+
+@Serializable
+data class WebPostBooksProfileBookResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null
+)
+
+@Serializable
+data class WebDeleteBooksProfileBookQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("bookId") val `bookId`: String? = null
+)
+
+@Serializable
+data class WebDeleteBooksProfileBookResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null
+)
+
+@Serializable
 data class WebGetMusicQuery(
     @SerialName("userId") val `userId`: String? = null,
     @SerialName("q") val `q`: String? = null,
@@ -1087,6 +1272,7 @@ data class WebPostIntegrationsBody(
     @SerialName("secret") val `secret`: String? = null,
     @SerialName("username") val `username`: String? = null,
     @SerialName("downloadsPath") val `downloadsPath`: String? = null,
+    @SerialName("booksPath") val `booksPath`: String? = null,
     @SerialName("parentPin") val `parentPin`: String? = null
 )
 
@@ -1799,6 +1985,7 @@ data class MobilePostIntegrationsBody(
     @SerialName("secret") val `secret`: String? = null,
     @SerialName("username") val `username`: String? = null,
     @SerialName("downloadsPath") val `downloadsPath`: String? = null,
+    @SerialName("booksPath") val `booksPath`: String? = null,
     @SerialName("parentPin") val `parentPin`: String? = null
 )
 

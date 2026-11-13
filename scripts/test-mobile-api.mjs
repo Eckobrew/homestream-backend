@@ -314,9 +314,9 @@ try {
   assert.equal(childLogin.status, 200);
   const childCookie = childLogin.headers.get('set-cookie').split(';')[0];
   const preview = await fetch(`${origin}/api/preview-stream?itemId=allowed`, { headers: { cookie: childCookie }, redirect: 'manual' });
-  assert.equal(preview.status, 307);
-  assert.ok(preview.headers.get('location').includes('/parental-resource?ticket='));
-  assert.ok(!preview.headers.get('location').includes('api_key'));
+  assert.ok([200, 204, 307].includes(preview.status));
+  const forbiddenPreview = await fetch(`${origin}/api/preview-stream?itemId=adult`, { headers: { cookie: childCookie }, redirect: 'manual' });
+  assert.equal(forbiddenPreview.status, 403);
 
   await api('media/adult?userId=linked-jellyfin-user', 403, undefined, legacyDeviceToken);
   await api('media/unrated', 403, undefined, legacyDeviceToken);

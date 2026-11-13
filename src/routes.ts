@@ -1,4 +1,5 @@
 import * as music from './services/music/handler';
+import * as books from './services/books/handler';
 import * as requested from './services/requested/handler';
 import * as integrations from './services/integrations/handler';
 import * as youtube from './services/youtube/handler';
@@ -37,6 +38,15 @@ export const routes = [
   {path:'/api/music/playlists/import-exportify',methods:['POST'],service:music},
   {path:'/api/music/playlist',methods:['GET','DELETE'],service:music},
   {path:'/api/music/playlist/track',methods:['POST','DELETE'],service:music},
+  {path:'/api/books',methods:['GET'],service:books},
+  {path:'/api/books/search',methods:['GET'],service:books},
+  {path:'/api/books/book',methods:['GET'],service:books},
+  {path:'/api/books/cover',methods:['GET'],service:books},
+  {path:'/api/books/file',methods:['GET'],service:books},
+  {path:'/api/books/queue',methods:['GET'],service:books},
+  {path:'/api/books/progress',methods:['GET','POST'],service:books},
+  {path:'/api/books/request',methods:['POST'],service:books},
+  {path:'/api/books/profile-book',methods:['POST','DELETE'],service:books},
   {path:'/api/requested',methods:['GET'],service:requested},
   {path:'/api/integrations',methods:['GET','POST'],service:integrations},
   {path:'/api/youtube/search',methods:['GET'],service:youtube},

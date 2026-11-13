@@ -1,0 +1,301 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { stateDatabase } from '@/state/database';
+import { getServerConfig } from './config';
+import { BookshelfClient, type BookshelfBook, type BookshelfBookFile } from './bookshelf';
+import type { BookItem, BookRequestItem, BookProgress } from '@/types';
+
+export const safeBookId = (id: string) => /^\d{1,12}$/.test(id);
+const READABLE = ['epub', 'pdf'];
+const FORMAT_ORDER = ['epub', 'pdf', 'azw3', 'mobi', 'cbz', 'cbr'];
+const CONTENT_TYPES: Record<string, string> = {
+  epub: 'application/epub+zip',
+  pdf: 'application/pdf',
+  mobi: 'application/x-mobipocket-ebook',
+  azw3: 'application/vnd.amazon.ebook',
+  cbz: 'application/vnd.comicbook+zip',
+  cbr: 'application/vnd.comicbook-rar',
+};
+
+let initialized = false;
+export function ensureBookTables() {
+  if (initialized) return;
+  const db = stateDatabase();
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS profile_books (
+      profile_id TEXT NOT NULL,
+      book_id INTEGER NOT NULL,
+      added_at TEXT NOT NULL,
+      PRIMARY KEY (profile_id, book_id)
+    );
+    CREATE TABLE IF NOT EXISTS book_progress (
+      profile_id TEXT NOT NULL,
+      book_id INTEGER NOT NULL,
+      location TEXT NOT NULL,
+      percent REAL NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (profile_id, book_id)
+    );
+    CREATE TABLE IF NOT EXISTS book_requests (
+      foreign_book_id TEXT PRIMARY KEY,
+      book_id INTEGER,
+      title TEXT NOT NULL,
+      author TEXT NOT NULL,
+      cover_url TEXT,
+      status TEXT NOT NULL,
+      profile_id TEXT,
+      error_message TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_profile_books_profile ON profile_books(profile_id);
+  `);
+  initialized = true;
+}
+
+const client = () => new BookshelfClient();
+export const booksConfigured = () => client().isConfigured();
+
+let booksCache: { at: number; books: BookshelfBook[]; files: Map<number, BookshelfBookFile[]> } | undefined;
+async function library(force = false) {
+  if (!force && booksCache && Date.now() - booksCache.at < 30000) return booksCache;
+  const c = client();
+  const [books, files] = await Promise.all([c.listBooks(), c.listBookFiles()]);
+  const byBook = new Map<number, BookshelfBookFile[]>();
+  for (const file of files || []) byBook.set(file.bookId, [...(byBook.get(file.bookId) || []), file]);
+  booksCache = { at: Date.now(), books: books || [], files: byBook };
+  return booksCache;
+}
+export const invalidateBooks = () => { booksCache = undefined; };
+
+const extOf = (file: string) => path.extname(file).slice(1).toLowerCase();
+const formatsOf = (files: BookshelfBookFile[] = []) =>
+  [...new Set(files.map(f => extOf(f.path)).filter(Boolean))].sort((a, b) => (FORMAT_ORDER.indexOf(a) + 99) % 99 - (FORMAT_ORDER.indexOf(b) + 99) % 99);
+
+function remoteCover(book: BookshelfBook): string {
+  return book.images?.find(i => i.coverType === 'cover')?.remoteUrl || book.images?.[0]?.remoteUrl || book.remoteCover || '';
+}
+function toItem(book: BookshelfBook, files: BookshelfBookFile[], shelf: Set<number>, requested?: BookRequestItem): BookItem {
+  const formats = formatsOf(files);
+  const inLibrary = files.length > 0;
+  return {
+    id: book.id ? String(book.id) : '',
+    foreignBookId: book.foreignBookId,
+    title: book.title,
+    author: book.author?.authorName || book.authorTitle?.replace(/^(.*?), (.*?) .*$/, '$2 $1') || '',
+    year: book.releaseDate ? Number(book.releaseDate.slice(0, 4)) || undefined : undefined,
+    overview: book.overview || '',
+    series: book.seriesTitle || '',
+    pageCount: book.pageCount || 0,
+    rating: book.ratings?.value || 0,
+    coverUrl: book.id ? `/api/v1/books/cover?bookId=${book.id}` : remoteCover(book),
+    inLibrary,
+    onShelf: book.id ? shelf.has(book.id) : false,
+    formats,
+    readable: formats.some(f => READABLE.includes(f)),
+    requestStatus: inLibrary ? 'available' : requested?.status,
+  };
+}
+
+const shelfOf = (profileId?: string) => {
+  ensureBookTables();
+  const rows = stateDatabase().prepare('SELECT book_id FROM profile_books WHERE profile_id = ?').all(profileId || '') as { book_id: number }[];
+  return new Set(rows.map(r => r.book_id));
+};
+function requestRows(): BookRequestItem[] {
+  ensureBookTables();
+  return (stateDatabase().prepare('SELECT * FROM book_requests ORDER BY created_at DESC').all() as any[]).map(r => ({
+    foreignBookId: r.foreign_book_id,
+    bookId: r.book_id ? String(r.book_id) : undefined,
+    title: r.title,
+    author: r.author,
+    coverUrl: r.cover_url || '',
+    status: r.status,
+    error: r.error_message || undefined,
+    createdAt: r.created_at,
+  }));
+}
+
+/** Books that have files in Bookshelf, with the profile's shelf marked. */
+export async function getBooks(q: string, offset: number, profileId?: string) {
+  if (!booksConfigured()) return { configured: false, books: [], total: 0, requests: [] };
+  const lib = await library();
+  const shelf = shelfOf(profileId);
+  const term = q.toLowerCase();
+  const all = lib.books
+    .filter(b => (lib.files.get(b.id)?.length || 0) > 0)
+    .map(b => toItem(b, lib.files.get(b.id) || [], shelf))
+    .filter(b => !term || `${b.title} ${b.author} ${b.series}`.toLowerCase().includes(term))
+    .sort((a, b) => Number(b.onShelf) - Number(a.onShelf) || a.title.localeCompare(b.title));
+  return { configured: true, books: all.slice(offset, offset + 60), total: all.length, requests: requestRows().filter(r => r.status !== 'available') };
+}
+
+export async function getBook(id: string, profileId?: string): Promise<BookItem | null> {
+  const lib = await library();
+  const book = lib.books.find(b => String(b.id) === id);
+  return book ? toItem(book, lib.files.get(book.id) || [], shelfOf(profileId)) : null;
+}
+
+export async function searchBooks(q: string, profileId?: string): Promise<{ books: BookItem[] }> {
+  if (!q.trim()) return { books: [] };
+  const [results, lib] = await Promise.all([client().lookupBooks(q.trim()), library()]);
+  const shelf = shelfOf(profileId);
+  const known = new Map(lib.books.map(b => [b.foreignBookId, b]));
+  const requests = new Map(requestRows().map(r => [r.foreignBookId, r]));
+  return {
+    books: results.slice(0, 30).map(r => {
+      const local = known.get(r.foreignBookId);
+      return toItem(local ? { ...r, ...local, author: r.author || local.author } : r, local ? lib.files.get(local.id) || [] : [], shelf, requests.get(r.foreignBookId));
+    }),
+  };
+}
+
+export async function requestBook(foreignBookId: string, title: string, author: string, profileId?: string) {
+  if (!booksConfigured()) throw new Error('Bookshelf is not configured');
+  if (!/^[\w-]{1,64}$/.test(foreignBookId)) throw new Error('Invalid book ID');
+  ensureBookTables();
+  const lib = await library(true);
+  const existing = lib.books.find(b => b.foreignBookId === foreignBookId);
+  if (existing && (lib.files.get(existing.id)?.length || 0) > 0) {
+    addBookToProfile(existing.id, profileId);
+    return { success: true, status: 'available', message: 'Already in the library — added to your shelf', bookId: String(existing.id) };
+  }
+  const now = new Date().toISOString();
+  stateDatabase().prepare(`
+    INSERT INTO book_requests (foreign_book_id, title, author, cover_url, status, profile_id, created_at, updated_at)
+    VALUES (?, ?, ?, ?, 'requested', ?, ?, ?)
+    ON CONFLICT(foreign_book_id) DO UPDATE SET status = CASE WHEN status = 'failed' THEN 'requested' ELSE status END, error_message = NULL, updated_at = excluded.updated_at
+  `).run(foreignBookId, title.slice(0, 300), author.slice(0, 200), existing ? '' : '', profileId || null, now, now);
+  void advanceBookRequests().catch(() => undefined);
+  return { success: true, status: 'requested', message: 'Book requested' };
+}
+
+export function addBookToProfile(bookId: number, profileId?: string) {
+  ensureBookTables();
+  if (!profileId) return { success: false };
+  stateDatabase().prepare('INSERT OR IGNORE INTO profile_books (profile_id, book_id, added_at) VALUES (?, ?, ?)').run(profileId, bookId, new Date().toISOString());
+  return { success: true };
+}
+export function removeBookFromProfile(bookId: number, profileId?: string) {
+  ensureBookTables();
+  stateDatabase().prepare('DELETE FROM profile_books WHERE profile_id = ? AND book_id = ?').run(profileId || '', bookId);
+  return { success: true };
+}
+
+export function getProgress(bookId: number, profileId?: string): BookProgress | null {
+  ensureBookTables();
+  const row = stateDatabase().prepare('SELECT location, percent, updated_at FROM book_progress WHERE profile_id = ? AND book_id = ?').get(profileId || '', bookId) as any;
+  return row ? { location: row.location, percent: row.percent, updatedAt: row.updated_at } : null;
+}
+export function saveProgress(bookId: number, profileId: string | undefined, location: string, percent: number) {
+  ensureBookTables();
+  if (!profileId || !location || location.length > 2000) return { success: false };
+  stateDatabase().prepare(`
+    INSERT INTO book_progress (profile_id, book_id, location, percent, updated_at) VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(profile_id, book_id) DO UPDATE SET location = excluded.location, percent = excluded.percent, updated_at = excluded.updated_at
+  `).run(profileId, bookId, location, Math.max(0, Math.min(100, Number(percent) || 0)), new Date().toISOString());
+  return { success: true };
+}
+
+export async function getBookCover(bookId: number) {
+  const lib = await library();
+  const book = lib.books.find(b => b.id === bookId);
+  return book ? client().cover(book) : null;
+}
+
+/** Map a path reported by Bookshelf (container path) to this server's mount and refuse anything outside it. */
+export function resolveBookPath(bookshelfPath: string): string | null {
+  const root = path.resolve(getServerConfig().booksPath || '/books');
+  const mapped = bookshelfPath.startsWith('/books/') ? path.join(root, bookshelfPath.slice('/books/'.length)) : bookshelfPath;
+  try {
+    const real = fs.realpathSync(mapped);
+    const realRoot = fs.realpathSync(root);
+    return real === realRoot || real.startsWith(realRoot + path.sep) ? real : null;
+  } catch { return null; }
+}
+
+export async function getBookFileInfo(bookId: number, format?: string) {
+  const lib = await library();
+  const files = lib.files.get(bookId) || (await client().bookFiles(bookId));
+  const wanted = (format || '').toLowerCase();
+  const ranked = [...files].sort((a, b) => FORMAT_ORDER.indexOf(extOf(a.path)) - FORMAT_ORDER.indexOf(extOf(b.path)));
+  for (const file of ranked) {
+    const ext = extOf(file.path);
+    if (wanted && ext !== wanted) continue;
+    const resolved = resolveBookPath(file.path);
+    if (!resolved) continue;
+    const stat = fs.statSync(resolved);
+    return { filePath: resolved, size: stat.size, ext, contentType: CONTENT_TYPES[ext] || 'application/octet-stream', fileName: path.basename(resolved) };
+  }
+  throw new Error('Book file not found');
+}
+
+export async function getBookQueue() {
+  if (!booksConfigured()) return [];
+  const requests = new Map(requestRows().map(r => [r.bookId, r]));
+  return (await client().queue()).map(item => {
+    const size = item.size || 0;
+    return {
+      id: String(item.id),
+      bookId: item.bookId ? String(item.bookId) : undefined,
+      title: requests.get(item.bookId ? String(item.bookId) : undefined)?.title || item.title || 'Book',
+      status: item.status || 'queued',
+      progress: size > 0 ? Math.round(((size - (item.sizeleft || 0)) / size) * 100) : 0,
+      timeLeft: item.timeleft,
+      error: item.errorMessage,
+    };
+  });
+}
+
+let advancing = false;
+export async function advanceBookRequests() {
+  if (advancing || !booksConfigured()) return;
+  advancing = true;
+  try {
+    ensureBookTables();
+    const db = stateDatabase();
+    const open = requestRows().filter(r => ['requested', 'searching', 'downloading'].includes(r.status));
+    if (!open.length) return;
+    const c = client();
+    const lib = await library(true);
+    const queued = new Set((await c.queue().catch(() => [])).map(q => String(q.bookId)));
+    const set = (r: BookRequestItem, status: string, bookId?: number, error?: string) =>
+      db.prepare('UPDATE book_requests SET status = ?, book_id = COALESCE(?, book_id), error_message = ?, updated_at = ? WHERE foreign_book_id = ?')
+        .run(status, bookId ?? null, error ?? null, new Date().toISOString(), r.foreignBookId);
+    for (const r of open) {
+      try {
+        const book = lib.books.find(b => b.foreignBookId === r.foreignBookId);
+        if (book && (lib.files.get(book.id)?.length || 0) > 0) {
+          set(r, 'available', book.id);
+          const owner = (db.prepare('SELECT profile_id FROM book_requests WHERE foreign_book_id = ?').get(r.foreignBookId) as any)?.profile_id;
+          if (owner) addBookToProfile(book.id, owner);
+          continue;
+        }
+        if (book) {
+          if (r.status === 'requested') {
+            await c.monitorBooks([book.id], true);
+            await c.searchBooks([book.id]);
+            set(r, 'searching', book.id);
+          } else if (queued.has(String(book.id))) set(r, 'downloading', book.id);
+          continue;
+        }
+        // Book is not in Bookshelf yet: add its author, which imports their catalogue asynchronously.
+        const authors = await c.listAuthors();
+        const matches = await c.lookupAuthors(r.author);
+        const wanted = matches.find(a => a.authorName.toLowerCase() === r.author.toLowerCase()) || matches[0];
+        if (wanted && !authors.some(a => a.foreignAuthorId === wanted.foreignAuthorId)) await c.addAuthor(wanted);
+        if (Date.now() - Date.parse(r.createdAt) > 15 * 60 * 1000) set(r, 'failed', undefined, 'Book was not found in the metadata catalogue');
+      } catch (error) {
+        if (Date.now() - Date.parse(r.createdAt) > 15 * 60 * 1000) set(r, 'failed', undefined, error instanceof Error ? error.message : 'Request failed');
+      }
+    }
+    invalidateBooks();
+  } finally { advancing = false; }
+}
+
+let timer: NodeJS.Timeout | undefined;
+export function startBooksMonitor() {
+  if (timer) return;
+  timer = setInterval(() => { void advanceBookRequests().catch(() => undefined); }, 20000);
+  timer.unref?.();
+}
