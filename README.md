@@ -70,3 +70,7 @@ Discover and Requested cover movies, TV and music. Native Music integration prov
 Music streams, YouTube video streams, and artwork are proxied through HomeStream with authentication and byte-range support. YouTube videos stream via `/api/mobile/v1/youtube/stream-video?videoId=...` with full caching and seeking support. Music is unavailable in Kids mode until explicit-content policy can be verified. Admin integration editing requires the existing local/admin web policy or an actual signed mobile administrator session, not a household pairing token.
 
 See the [mobile API guide](docs/mobile-api.md) and [generated API contract](contract/) for client integration. Existing port-3000 LAN pairing remains enabled by the live gateway's explicit policy.
+
+## Bookshelf
+
+Set `BOOKSHELF_URL` and `BOOKSHELF_API_KEY`, or configure them in Admin. Mount the imported Bookshelf library at `/books`. The backend resolves the files indexed by Bookshelf within this mount and stores shelves and reading progress per profile. See the [deployment configuration](https://github.com/Eckobrew/HomeStream/blob/main/docs/integrations.md#bookshelf).
