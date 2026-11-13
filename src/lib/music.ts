@@ -445,6 +445,53 @@ function rowToMusicAlbum(row: any, inLibraryOverride?: boolean, isDownloadedOver
   };
 }
 
+export function normalizeMusicString(str: string): string {
+  return (str || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '') // remove diacritics
+    .replace(/\s*[\[(][^\])]*?(?:edition|deluxe|bonus|remaster(?:ed)?|expanded|anniversary|version|explicit|clean|mono|stereo|\d{4})[^\])]*?[\])]/gi, '')
+    .replace(/\s*[-–—:]\s*(?:deluxe|remaster(?:ed)?|bonus|expanded|edition).*$/gi, '')
+    .replace(/\s*[-–—:]?\s*\b(?:ep|lp|single)\b/gi, '')
+    .replace(/[^\w\s]/g, '') // remove punctuation
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function findLocalAlbumMatch(db: any, artist?: string, title?: string, idOrMbId?: string): any {
+  if (idOrMbId) {
+    const direct = db.prepare('SELECT * FROM music_albums WHERE (id=? OR musicbrainz_id=?) AND in_library=1').get(idOrMbId, idOrMbId) as any;
+    if (direct) return direct;
+  }
+
+  if (!artist || !title) return null;
+
+  const exact = db.prepare(`
+    SELECT * FROM music_albums
+    WHERE LOWER(artist)=? AND LOWER(title)=? AND in_library=1
+  `).get(artist.toLowerCase().trim(), title.toLowerCase().trim()) as any;
+  if (exact) return exact;
+
+  const normArt = normalizeMusicString(artist);
+  const normTit = normalizeMusicString(title);
+  if (!normArt || !normTit) return null;
+
+  const candidates = db.prepare(`
+    SELECT * FROM music_albums
+    WHERE (LOWER(artist)=? OR artist LIKE ?) AND in_library=1
+  `).all(artist.toLowerCase().trim(), `%${normArt}%`) as any[];
+
+  for (const c of candidates) {
+    const cNormArt = normalizeMusicString(c.artist);
+    const cNormTit = normalizeMusicString(c.title);
+    if (cNormArt === normArt && (cNormTit === normTit || cNormTit.startsWith(normTit) || normTit.startsWith(cNormTit))) {
+      return c;
+    }
+  }
+
+  return null;
+}
+
 /**
  * Search MusicBrainz release-groups for music discovery, with local library status.
  */
@@ -466,6 +513,7 @@ export async function searchMusicBrainz(query: string, profileId?: string): Prom
   const localMap = new Map<string, any>();
   for (const a of localAlbums) {
     localMap.set(`${a.artist.toLowerCase()}|${a.title.toLowerCase()}`, a);
+    localMap.set(`${normalizeMusicString(a.artist)}|${normalizeMusicString(a.title)}`, a);
     if (a.musicbrainz_id) localMap.set(a.musicbrainz_id.toLowerCase(), a);
     localMap.set(a.id.toLowerCase(), a);
   }
@@ -506,16 +554,20 @@ export async function searchMusicBrainz(query: string, profileId?: string): Prom
         const year = date ? parseInt(date.slice(0, 4), 10) : undefined;
 
         const key = `${artist.toLowerCase()}|${title.toLowerCase()}`;
-        const local = localMap.get(key) || localMap.get(id.toLowerCase());
+        const normKey = `${normalizeMusicString(artist)}|${normalizeMusicString(title)}`;
+        const local = localMap.get(key) || localMap.get(normKey) || localMap.get(id.toLowerCase());
 
         // Don't duplicate if already in local results
         if (local) continue;
 
         // Check if there is ANY local album that matches this release group
-        const existingLocal = db.prepare(`
-          SELECT * FROM music_albums
-          WHERE (musicbrainz_id = ? OR (LOWER(artist) = ? AND LOWER(title) = ?)) AND in_library = 1
-        `).get(id, artist.toLowerCase(), title.toLowerCase()) as any;
+        const existingLocal = findLocalAlbumMatch(db, artist, title, id);
+        if (existingLocal) {
+          if (localMap.has(existingLocal.id.toLowerCase())) continue;
+          if (!existingLocal.musicbrainz_id) {
+            db.prepare('UPDATE music_albums SET musicbrainz_id=? WHERE id=?').run(id, existingLocal.id);
+          }
+        }
 
         const isDownloaded = Boolean(existingLocal);
         const inLibrary = existingLocal ? profileSet.has(existingLocal.id) : false;
@@ -596,8 +648,8 @@ export async function getAlbum(id: string, profileId?: string): Promise<{ album:
   const db = stateDatabase();
   const pid = profileId || resolveDefaultProfileId();
 
-  // 1. Try local library first by id or musicbrainz_id
-  const localAlbum = db.prepare('SELECT * FROM music_albums WHERE id=? OR musicbrainz_id=?').get(id, id) as any;
+  // 1. Try local library first by id or musicbrainz_id or normalized match
+  const localAlbum = findLocalAlbumMatch(db, undefined, undefined, id);
 
   if (localAlbum) {
     const inProfile = db.prepare('SELECT 1 FROM profile_music_albums WHERE profile_id=? AND album_id=?').get(pid, localAlbum.id);
@@ -621,7 +673,7 @@ export async function getAlbum(id: string, profileId?: string): Promise<{ album:
     }));
 
     return {
-      album: rowToMusicAlbum(localAlbum, Boolean(inProfile), true),
+      album: rowToMusicAlbum({ ...localAlbum, musicbrainz_id: localAlbum.musicbrainz_id || id }, Boolean(inProfile), true),
       tracks,
     };
   }
@@ -645,6 +697,37 @@ export async function getAlbum(id: string, profileId?: string): Promise<{ album:
       const year = date ? parseInt(date.slice(0, 4), 10) : undefined;
       const releases = data.releases || [];
       const firstReleaseId = releases[0]?.id;
+
+      // Check if artist + title matches an existing local album with normalized title
+      const matchedLocal = findLocalAlbumMatch(db, artist, title, id);
+      if (matchedLocal) {
+        if (!matchedLocal.musicbrainz_id) {
+          db.prepare('UPDATE music_albums SET musicbrainz_id=? WHERE id=?').run(id, matchedLocal.id);
+        }
+        db.prepare('DELETE FROM music_requests WHERE musicbrainz_id=?').run(id);
+        const inProfile = db.prepare('SELECT 1 FROM profile_music_albums WHERE profile_id=? AND album_id=?').get(pid, matchedLocal.id);
+        const trackRows = db.prepare(`
+          SELECT * FROM music_tracks
+          WHERE album_id=?
+          ORDER BY disc_number ASC, track_number ASC
+        `).all(matchedLocal.id) as any[];
+
+        const albumCover = `/api/v1/music/artwork?albumId=${encodeURIComponent(id)}`;
+        return {
+          album: rowToMusicAlbum({ ...matchedLocal, musicbrainz_id: id }, Boolean(inProfile), true),
+          tracks: trackRows.map(t => ({
+            id: t.id,
+            title: t.title,
+            artist: t.artist,
+            album: t.album,
+            trackNumber: Number(t.track_number) || 0,
+            discNumber: Number(t.disc_number) || 1,
+            durationSeconds: t.duration_seconds ? Number(t.duration_seconds) : undefined,
+            streamUrl: `/api/v1/music/stream?trackId=${encodeURIComponent(t.id)}`,
+            coverUrl: albumCover,
+          })),
+        };
+      }
 
       let tracks: MusicTrack[] = [];
       if (firstReleaseId) {
@@ -1044,21 +1127,13 @@ export async function requestMusicAlbum(
   const pid = profileId || resolveDefaultProfileId();
 
   // 1. Check if album is ALREADY downloaded locally on the server in music_albums
-  let localAlbum = db.prepare(`
-    SELECT * FROM music_albums
-    WHERE (musicbrainz_id = ? OR id = ?) AND in_library = 1
-  `).get(musicbrainzId, musicbrainzId) as any;
+  let localAlbum = findLocalAlbumMatch(db, undefined, undefined, musicbrainzId);
 
   if (!localAlbum) {
     // Also check by artist & title if not directly matched by ID
     const albumData = await getAlbum(musicbrainzId, pid).catch(() => null);
     if (albumData?.album) {
-      const art = albumData.album.artist.toLowerCase().trim();
-      const tit = albumData.album.title.toLowerCase().trim();
-      localAlbum = db.prepare(`
-        SELECT * FROM music_albums
-        WHERE LOWER(artist) = ? AND LOWER(title) = ? AND in_library = 1
-      `).get(art, tit) as any;
+      localAlbum = findLocalAlbumMatch(db, albumData.album.artist, albumData.album.title, musicbrainzId);
     }
   }
 
@@ -1069,6 +1144,11 @@ export async function requestMusicAlbum(
       INSERT OR IGNORE INTO profile_music_albums (profile_id, album_id, added_at)
       VALUES (?, ?, ?)
     `).run(pid, localAlbum.id, now);
+
+    if (!localAlbum.musicbrainz_id && musicbrainzId && musicbrainzId !== localAlbum.id) {
+      db.prepare('UPDATE music_albums SET musicbrainz_id=? WHERE id=?').run(musicbrainzId, localAlbum.id);
+    }
+    db.prepare('DELETE FROM music_requests WHERE musicbrainz_id=?').run(musicbrainzId);
 
     return {
       success: true,
@@ -1139,7 +1219,7 @@ export function addMusicAlbumToProfile(albumId: string, profileId?: string): { s
   const db = stateDatabase();
   const pid = profileId || resolveDefaultProfileId();
 
-  const localAlbum = db.prepare('SELECT * FROM music_albums WHERE (id=? OR musicbrainz_id=?) AND in_library=1').get(albumId, albumId) as any;
+  let localAlbum = findLocalAlbumMatch(db, undefined, undefined, albumId);
   if (!localAlbum) {
     return { success: false, message: 'Album is not downloaded on server', inLibrary: false };
   }
@@ -1148,6 +1228,11 @@ export function addMusicAlbumToProfile(albumId: string, profileId?: string): { s
     INSERT OR IGNORE INTO profile_music_albums (profile_id, album_id, added_at)
     VALUES (?, ?, ?)
   `).run(pid, localAlbum.id, new Date().toISOString());
+
+  if (!localAlbum.musicbrainz_id && albumId !== localAlbum.id) {
+    db.prepare('UPDATE music_albums SET musicbrainz_id=? WHERE id=?').run(albumId, localAlbum.id);
+  }
+  db.prepare('DELETE FROM music_requests WHERE musicbrainz_id=?').run(albumId);
 
   return {
     success: true,
@@ -1164,7 +1249,7 @@ export function removeMusicAlbumFromProfile(albumId: string, profileId?: string)
   const db = stateDatabase();
   const pid = profileId || resolveDefaultProfileId();
 
-  const localAlbum = db.prepare('SELECT id, title FROM music_albums WHERE id=? OR musicbrainz_id=?').get(albumId, albumId) as any;
+  const localAlbum = findLocalAlbumMatch(db, undefined, undefined, albumId);
   const targetId = localAlbum?.id || albumId;
 
   db.prepare('DELETE FROM profile_music_albums WHERE profile_id=? AND album_id=?').run(pid, targetId);
@@ -1188,6 +1273,8 @@ async function dispatchAlbumDownload(requestId: string, artist: string, album: s
   }
 
   const query = `${artist} ${album}`.trim();
+  const cleanAlbum = normalizeMusicString(album);
+  const cleanQuery = cleanAlbum && cleanAlbum !== album.toLowerCase() ? `${artist} ${cleanAlbum}`.trim() : '';
   console.log(`[music] Initiating slskd search for: "${query}"`);
 
   db.prepare('UPDATE music_requests SET status=?, updated_at=? WHERE id=?').run(
@@ -1219,6 +1306,23 @@ async function dispatchAlbumDownload(requestId: string, artist: string, album: s
     try {
       responses = await slskd.getSearchResponses(searchRes.id);
       if (responses.length >= 5) break;
+    } catch {}
+  }
+
+  if (!responses.length && cleanQuery) {
+    console.log(`[music] No sources for "${query}", retrying slskd search with normalized query: "${cleanQuery}"`);
+    try {
+      searchRes = await slskd.startSearch(cleanQuery, 20);
+      for (let i = 0; i < 5; i++) {
+        await new Promise(r => {
+          const t = setTimeout(r, process.env.NODE_ENV === 'test' ? 100 : 2000);
+          t.unref();
+        });
+        try {
+          responses = await slskd.getSearchResponses(searchRes.id);
+          if (responses.length >= 5) break;
+        } catch {}
+      }
     } catch {}
   }
 
