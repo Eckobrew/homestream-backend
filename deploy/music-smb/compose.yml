@@ -1,0 +1,19 @@
+services:
+  music-smb:
+    profiles: [music-smb]
+    build: .
+    restart: unless-stopped
+    command: ["-listen", ":1445", "-accounts", "/config/accounts.json"]
+    environment:
+      GOMEMLIMIT: 48MiB
+    mem_limit: 96m
+    pids_limit: 64
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    ports:
+      - "${HOMESTREAM_SMB_BIND_IP:?Set the HomeStream LAN IP}:445:1445"
+    volumes:
+      - "${HOMESTREAM_MUSIC_PATH:?Set the existing music mount}:/music:ro"
+      - "${HOMESTREAM_STATE_PATH:?Set the backend state directory}:/state:ro"
+      - "${HOMESTREAM_SMB_CONFIG_PATH:?Set the SMB config directory}:/config:ro"
