@@ -49,6 +49,12 @@ export function ensureBookTables() {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS book_request_profiles (
+      foreign_book_id TEXT NOT NULL,
+      profile_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (foreign_book_id, profile_id)
+    );
     CREATE INDEX IF NOT EXISTS idx_profile_books_profile ON profile_books(profile_id);
   `);
   initialized = true;
@@ -79,6 +85,7 @@ function remoteCover(book: BookshelfBook): string {
 function toItem(book: BookshelfBook, files: BookshelfBookFile[], shelf: Set<number>, requested?: BookRequestItem): BookItem {
   const formats = formatsOf(files);
   const inLibrary = files.length > 0;
+  const onShelf = book.id ? shelf.has(book.id) : false;
   return {
     id: book.id ? String(book.id) : '',
     foreignBookId: book.foreignBookId,
@@ -91,35 +98,45 @@ function toItem(book: BookshelfBook, files: BookshelfBookFile[], shelf: Set<numb
     rating: book.ratings?.value || 0,
     coverUrl: book.id ? `/api/v1/books/cover?bookId=${book.id}` : remoteCover(book),
     inLibrary,
-    onShelf: book.id ? shelf.has(book.id) : false,
+    onShelf,
     formats,
     readable: formats.some(f => READABLE.includes(f)),
-    requestStatus: inLibrary ? 'available' : requested?.status,
+    requestStatus: onShelf ? 'available' : requested?.status,
   };
 }
 
 const pidOf = (profileId?: string) => profileId || resolveDefaultProfileId();
 
-let seededInitialBooks = false;
-function seedNathanProfileBooks(booksWithFiles: BookshelfBook[]) {
-  if (seededInitialBooks || booksWithFiles.length === 0) return;
+/** Reconcile completed book_requests so any profile that requested a downloaded book gets it on their shelf. */
+function reconcileRequestedBooks(downloadedBooks: BookshelfBook[]) {
+  if (downloadedBooks.length === 0) return;
   try {
     ensureBookTables();
     const db = stateDatabase();
-    const row = db.prepare('SELECT COUNT(*) as c FROM profile_books').get() as { c: number } | undefined;
-    if (row && row.c > 0) {
-      seededInitialBooks = true;
-      return;
-    }
-    const nathanId = resolveDefaultProfileId();
+    const byForeignId = new Map(downloadedBooks.map(b => [b.foreignBookId, b]));
+    const rows = db.prepare('SELECT foreign_book_id, profile_id, status, book_id FROM book_requests').all() as {
+      foreign_book_id: string;
+      profile_id?: string;
+      status: string;
+      book_id?: number;
+    }[];
     const now = new Date().toISOString();
-    const stmt = db.prepare('INSERT OR IGNORE INTO profile_books (profile_id, book_id, added_at) VALUES (?, ?, ?)');
-    for (const b of booksWithFiles) {
-      if (b.id) stmt.run(nathanId, b.id, now);
+    const insertShelf = db.prepare('INSERT OR IGNORE INTO profile_books (profile_id, book_id, added_at) VALUES (?, ?, ?)');
+    const markAvail = db.prepare("UPDATE book_requests SET status = 'available', book_id = ?, updated_at = ? WHERE foreign_book_id = ?");
+    for (const r of rows) {
+      const book = byForeignId.get(r.foreign_book_id);
+      if (!book?.id) continue;
+      if (r.profile_id) insertShelf.run(r.profile_id, book.id, now);
+      const requesters = db.prepare('SELECT profile_id FROM book_request_profiles WHERE foreign_book_id = ?').all(r.foreign_book_id) as { profile_id: string }[];
+      for (const req of requesters) {
+        if (req.profile_id) insertShelf.run(req.profile_id, book.id, now);
+      }
+      if (r.status !== 'available' || r.book_id !== book.id) {
+        markAvail.run(book.id, now, r.foreign_book_id);
+      }
     }
-    seededInitialBooks = true;
   } catch {
-    // ignore seed errors
+    // ignore reconciliation errors
   }
 }
 
@@ -131,9 +148,16 @@ const shelfOf = (profileId?: string) => {
 };
 function requestRows(profileId?: string): BookRequestItem[] {
   ensureBookTables();
-  const rows = profileId
-    ? (stateDatabase().prepare('SELECT * FROM book_requests WHERE profile_id = ? OR profile_id IS NULL ORDER BY created_at DESC').all(pidOf(profileId)) as any[])
-    : (stateDatabase().prepare('SELECT * FROM book_requests ORDER BY created_at DESC').all() as any[]);
+  const db = stateDatabase();
+  const pid = profileId ? pidOf(profileId) : undefined;
+  const rows = pid
+    ? (db.prepare(`
+        SELECT DISTINCT r.* FROM book_requests r
+        LEFT JOIN book_request_profiles p ON p.foreign_book_id = r.foreign_book_id
+        WHERE r.profile_id = ? OR p.profile_id = ?
+        ORDER BY r.created_at DESC
+      `).all(pid, pid) as any[])
+    : (db.prepare('SELECT * FROM book_requests ORDER BY created_at DESC').all() as any[]);
   return rows.map(r => ({
     foreignBookId: r.foreign_book_id,
     bookId: r.book_id ? String(r.book_id) : undefined,
@@ -151,7 +175,7 @@ export async function getBooks(q: string, offset: number, profileId?: string) {
   if (!booksConfigured()) return { configured: false, books: [], total: 0, requests: [] };
   const lib = await library();
   const downloadedBooks = lib.books.filter(b => (lib.files.get(b.id)?.length || 0) > 0);
-  seedNathanProfileBooks(downloadedBooks);
+  reconcileRequestedBooks(downloadedBooks);
   const pid = pidOf(profileId);
   const shelf = shelfOf(pid);
   const term = q.toLowerCase();
@@ -201,11 +225,16 @@ export async function requestBook(foreignBookId: string, title: string, author: 
     return { success: true, status: 'available', message: 'Added to your bookshelf', bookId: String(existing.id) };
   }
   const now = new Date().toISOString();
-  stateDatabase().prepare(`
+  const db = stateDatabase();
+  db.prepare(`
     INSERT INTO book_requests (foreign_book_id, title, author, cover_url, status, profile_id, created_at, updated_at)
     VALUES (?, ?, ?, ?, 'requested', ?, ?, ?)
-    ON CONFLICT(foreign_book_id) DO UPDATE SET status = CASE WHEN status = 'failed' THEN 'requested' ELSE status END, profile_id = excluded.profile_id, error_message = NULL, updated_at = excluded.updated_at
+    ON CONFLICT(foreign_book_id) DO UPDATE SET status = CASE WHEN status = 'failed' THEN 'requested' ELSE status END, profile_id = COALESCE(book_requests.profile_id, excluded.profile_id), error_message = NULL, updated_at = excluded.updated_at
   `).run(foreignBookId, title.slice(0, 300), author.slice(0, 200), '', pid, now, now);
+  db.prepare(`
+    INSERT OR IGNORE INTO book_request_profiles (foreign_book_id, profile_id, created_at)
+    VALUES (?, ?, ?)
+  `).run(foreignBookId, pid, now);
   void advanceBookRequests().catch(() => undefined);
   return { success: true, status: 'requested', message: 'Book requested' };
 }
@@ -312,6 +341,10 @@ export async function advanceBookRequests() {
           set(r, 'available', book.id);
           const owner = (db.prepare('SELECT profile_id FROM book_requests WHERE foreign_book_id = ?').get(r.foreignBookId) as any)?.profile_id;
           if (owner) addBookToProfile(book.id, owner);
+          const requesters = db.prepare('SELECT profile_id FROM book_request_profiles WHERE foreign_book_id = ?').all(r.foreignBookId) as { profile_id: string }[];
+          for (const req of requesters) {
+            if (req.profile_id) addBookToProfile(book.id, req.profile_id);
+          }
           continue;
         }
         if (book) {
