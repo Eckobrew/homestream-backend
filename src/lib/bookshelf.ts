@@ -84,7 +84,13 @@ export class BookshelfClient {
   listBooks() { return this.request<BookshelfBook[]>('GET', '/book'); }
   listAuthors() { return this.request<BookshelfAuthor[]>('GET', '/author'); }
   getBook(id: number) { return this.request<BookshelfBook>('GET', `/book/${id}`); }
-  listBookFiles() { return this.request<BookshelfBookFile[]>('GET', '/bookfile'); }
+  async listBookFiles(books?: BookshelfBook[]): Promise<BookshelfBookFile[]> {
+    const allBooks = books || (await this.listBooks());
+    const withFiles = (allBooks || []).filter(b => b.id && (b.statistics?.bookFileCount || 0) > 0);
+    if (!withFiles.length) return [];
+    const qs = withFiles.map(b => `bookId=${b.id}`).join('&');
+    return (await this.request<BookshelfBookFile[]>('GET', `/bookfile?${qs}`).catch(() => [])) || [];
+  }
   bookFiles(bookId: number) { return this.request<BookshelfBookFile[]>('GET', `/bookfile?bookId=${bookId}`); }
   async queue(): Promise<BookshelfQueueItem[]> {
     const page = await this.request<{ records?: BookshelfQueueItem[] }>('GET', '/queue?pageSize=200&includeBook=false');
@@ -107,6 +113,24 @@ export class BookshelfClient {
   }
   monitorBooks(bookIds: number[], monitored: boolean) { return this.request<unknown>('PUT', '/book/monitor', { bookIds, monitored }); }
   searchBooks(bookIds: number[]) { return this.request<unknown>('POST', '/command', { name: 'BookSearch', bookIds }); }
+  async addBook(lookupBook: BookshelfBook, author: BookshelfAuthor): Promise<BookshelfBook> {
+    return this.request<BookshelfBook>('POST', '/book', {
+      ...lookupBook,
+      author,
+      authorId: author.id,
+      monitored: true,
+      addOptions: { addType: 'automatic', searchForNewBook: true },
+      editions: [
+        {
+          foreignEditionId: lookupBook.foreignEditionId || lookupBook.foreignBookId,
+          title: lookupBook.title,
+          titleSlug: lookupBook.foreignBookId,
+          monitored: true,
+          manualAdd: true,
+        },
+      ],
+    }, 60000);
+  }
 
   async cover(book: BookshelfBook): Promise<{ buffer: Buffer; contentType: string } | null> {
     const image = book.images?.find(i => i.coverType === 'cover') || book.images?.[0];

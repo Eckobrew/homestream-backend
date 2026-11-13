@@ -75,10 +75,11 @@ let booksCache: { at: number; books: BookshelfBook[]; files: Map<number, Bookshe
 async function library(force = false) {
   if (!force && booksCache && Date.now() - booksCache.at < 30000) return booksCache;
   const c = client();
-  const [books, files] = await Promise.all([c.listBooks(), c.listBookFiles()]);
+  const books = (await c.listBooks()) || [];
+  const files = await c.listBookFiles(books);
   const byBook = new Map<number, BookshelfBookFile[]>();
   for (const file of files || []) byBook.set(file.bookId, [...(byBook.get(file.bookId) || []), file]);
-  booksCache = { at: Date.now(), books: books || [], files: byBook };
+  booksCache = { at: Date.now(), books, files: byBook };
   syncBooksCatalog(booksCache.books, booksCache.files);
   return booksCache;
 }
@@ -99,13 +100,20 @@ function syncBooksCatalog(books: BookshelfBook[], files: Map<number, BookshelfBo
         file_path = excluded.file_path,
         updated_at = excluded.updated_at
     `);
+    const validIds: number[] = [];
     for (const b of books) {
       if (!b.id) continue;
       const bFiles = files.get(b.id) || [];
       if (!bFiles.length) continue;
+      validIds.push(b.id);
       const ranked = [...bFiles].sort((x, y) => (FORMAT_ORDER.indexOf(extOf(x.path)) + 99) % 99 - (FORMAT_ORDER.indexOf(extOf(y.path)) + 99) % 99);
       const author = b.author?.authorName || b.authorTitle?.replace(/^(.*?), (.*?) .*$/, '$2 $1') || 'Unknown Author';
       upsert.run(b.id, b.foreignBookId || '', b.title || 'Book', author, ranked[0].path, now);
+    }
+    if (validIds.length > 0) {
+      db.prepare(`DELETE FROM books_catalog WHERE book_id NOT IN (${validIds.map(() => '?').join(',')})`).run(...validIds);
+    } else if (books.length > 0) {
+      db.prepare('DELETE FROM books_catalog').run();
     }
   } catch {
     // ignore catalog sync errors
@@ -279,7 +287,10 @@ export async function requestBook(foreignBookId: string, title: string, author: 
 export function addBookToProfile(bookId: number, profileId?: string) {
   ensureBookTables();
   const pid = pidOf(profileId);
-  stateDatabase().prepare('INSERT OR IGNORE INTO profile_books (profile_id, book_id, added_at) VALUES (?, ?, ?)').run(pid, bookId, new Date().toISOString());
+  stateDatabase().prepare('INSERT OR REPLACE INTO profile_books (profile_id, book_id, added_at) VALUES (?, ?, ?)').run(pid, bookId, new Date().toISOString());
+  if (booksConfigured()) {
+    void library().catch(() => undefined);
+  }
   return { success: true };
 }
 export function removeBookFromProfile(bookId: number, profileId?: string) {
@@ -363,10 +374,12 @@ export async function advanceBookRequests() {
   try {
     ensureBookTables();
     const db = stateDatabase();
-    const open = requestRows().filter(r => ['requested', 'searching', 'downloading'].includes(r.status));
-    if (!open.length) return;
     const c = client();
     const lib = await library(true);
+    const downloadedBooks = lib.books.filter(b => (lib.files.get(b.id)?.length || 0) > 0);
+    reconcileRequestedBooks(downloadedBooks);
+    const open = requestRows().filter(r => ['requested', 'searching', 'downloading'].includes(r.status));
+    if (!open.length) return;
     const queued = new Set((await c.queue().catch(() => [])).map(q => String(q.bookId)));
     const set = (r: BookRequestItem, status: string, bookId?: number, error?: string) =>
       db.prepare('UPDATE book_requests SET status = ?, book_id = COALESCE(?, book_id), error_message = ?, updated_at = ? WHERE foreign_book_id = ?')
@@ -396,7 +409,21 @@ export async function advanceBookRequests() {
         const authors = await c.listAuthors();
         const matches = await c.lookupAuthors(r.author);
         const wanted = matches.find(a => a.authorName.toLowerCase() === r.author.toLowerCase()) || matches[0];
-        if (wanted && !authors.some(a => a.foreignAuthorId === wanted.foreignAuthorId)) await c.addAuthor(wanted);
+        let existingAuthor = wanted ? authors.find(a => a.foreignAuthorId === wanted.foreignAuthorId) : undefined;
+        if (wanted && !existingAuthor) {
+          existingAuthor = await c.addAuthor(wanted);
+        }
+        if (existingAuthor) {
+          const lookedUp = await c.lookupBooks(`${r.author} ${r.title}`).catch(() => []);
+          const targetBook = lookedUp.find(b => b.foreignBookId === r.foreignBookId);
+          if (targetBook) {
+            const added = await c.addBook(targetBook, existingAuthor).catch(() => null);
+            if (added?.id) {
+              set(r, 'searching', added.id);
+              continue;
+            }
+          }
+        }
         if (Date.now() - Date.parse(r.createdAt) > 15 * 60 * 1000) set(r, 'failed', undefined, 'Book was not found in the metadata catalogue');
       } catch (error) {
         if (Date.now() - Date.parse(r.createdAt) > 15 * 60 * 1000) set(r, 'failed', undefined, error instanceof Error ? error.message : 'Request failed');

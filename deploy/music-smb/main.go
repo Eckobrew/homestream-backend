@@ -37,6 +37,7 @@ type pilot struct {
 
 type snapshot struct {
 	expires time.Time
+	stamp   string
 	dirs    map[string][]vfs.FileInfo
 	files   map[string]entry
 }
@@ -104,8 +105,15 @@ func (p *pilot) view(ctx context.Context) (snapshot, error) {
 		if err != nil {
 			return snapshot{}, err
 		}
+		var stamp string
+		_ = p.db.QueryRowContext(ctx, `SELECT
+			COALESCE((SELECT COUNT(*) || ':' || COALESCE(MAX(added_at),'') FROM profile_books WHERE profile_id=?),'0:') || '|' ||
+			COALESCE((SELECT COUNT(*) || ':' || COALESCE(MAX(updated_at),'') FROM books_catalog),'0:') || '|' ||
+			COALESCE((SELECT COUNT(*) || ':' || COALESCE(MAX(added_at),'') FROM profile_music_albums WHERE profile_id=?),'0:') || '|' ||
+			COALESCE((SELECT COUNT(*) || ':' || COALESCE(MAX(updated_at),'') FROM playlists WHERE profile_id=?),'0:')`,
+			a.ProfileID, a.ProfileID, a.ProfileID).Scan(&stamp)
 		view := p.cached[key]
-		if !time.Now().Before(view.expires) {
+		if !time.Now().Before(view.expires) || (stamp != "" && view.stamp != stamp) {
 			fn := p.loadFn
 			if fn == nil {
 				fn = (*pilot).musicProfileView
@@ -114,6 +122,7 @@ func (p *pilot) view(ctx context.Context) (snapshot, error) {
 			if err != nil {
 				return snapshot{}, err
 			}
+			view.stamp = stamp
 			p.cached[key] = view
 		}
 		result.dirs[""] = append(result.dirs[""], view.dirs[""]...)
@@ -144,7 +153,7 @@ func (p *pilot) musicProfileView(ctx context.Context, id, name string) (snapshot
 		return snapshot{}, err
 	}
 	defer rows.Close()
-	result := snapshot{time.Now().Add(15 * time.Second), map[string][]vfs.FileInfo{"": {}}, map[string]entry{}}
+	result := snapshot{expires: time.Now().Add(2 * time.Second), dirs: map[string][]vfs.FileInfo{"": {}}, files: map[string]entry{}}
 	addDir := func(parent, name string) string {
 		key := strings.ToLower(path.Join(parent, name))
 		if _, exists := result.dirs[key]; !exists {
@@ -186,7 +195,7 @@ func (p *pilot) musicProfileView(ctx context.Context, id, name string) (snapshot
 }
 
 func (p *pilot) booksProfileView(ctx context.Context, id, name string) (snapshot, error) {
-	result := snapshot{time.Now().Add(15 * time.Second), map[string][]vfs.FileInfo{"": {}}, map[string]entry{}}
+	result := snapshot{expires: time.Now().Add(2 * time.Second), dirs: map[string][]vfs.FileInfo{"": {}}, files: map[string]entry{}}
 	addDir := func(parent, name string) string {
 		key := strings.ToLower(path.Join(parent, name))
 		if _, exists := result.dirs[key]; !exists {
