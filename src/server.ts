@@ -1,3 +1,4 @@
+import { startPreviewCleanup } from './services/preview-stream/handler';
 import { shutdownConversions } from './media/conversions';
 import { createApp } from './app';
 import { ensureYouTubeTables, processNextDownload, pollAllSubscribedChannels } from './lib/youtube';
@@ -11,6 +12,7 @@ try {
   processNextDownload();
   ensureMusicTables();
   startDownloadMonitor();
+  startPreviewCleanup();
   processNextPlaylistTrack();
   const youtubePoller = setInterval(() => {
     pollAllSubscribedChannels().catch(() => {});
