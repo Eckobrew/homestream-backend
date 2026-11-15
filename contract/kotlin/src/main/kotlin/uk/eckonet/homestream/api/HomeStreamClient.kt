@@ -609,6 +609,32 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         return executeStream(url.build().toString(), "GET", null, range)
     }
 
+    fun `web_get_sessions`(query: WebGetSessionsQuery): ApiResponse<WebGetSessionsResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("sessions")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`excludeDeviceId`?.let { url.addQueryParameter("excludeDeviceId", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `web_post_sessions_heartbeat`(query: WebPostSessionsHeartbeatQuery, body: WebPostSessionsHeartbeatBody): ApiResponse<WebPostSessionsHeartbeatResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("sessions").addPathSegment("heartbeat")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
+    fun `web_post_sessions_command`(query: WebPostSessionsCommandQuery, body: WebPostSessionsCommandBody): ApiResponse<WebPostSessionsCommandResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("sessions").addPathSegment("command")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
+    fun `web_get_sessions_commands`(query: WebGetSessionsCommandsQuery, range: String? = null): okhttp3.Response {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("sessions").addPathSegment("commands")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`deviceId`.let { url.addQueryParameter("deviceId", it.toString()) }
+        return executeStream(url.build().toString(), "GET", null, range)
+    }
+
     fun `mobile_get_home`(query: MobileGetHomeQuery): ApiResponse<HomeResponse> {
         val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("home")
         query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
@@ -1037,6 +1063,32 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("youtube").addPathSegment("thumbnail")
         query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
         query.`path`.let { url.addQueryParameter("path", it.toString()) }
+        return executeStream(url.build().toString(), "GET", null, range)
+    }
+
+    fun `mobile_get_sessions`(query: MobileGetSessionsQuery): ApiResponse<MobileGetSessionsResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("sessions")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`excludeDeviceId`?.let { url.addQueryParameter("excludeDeviceId", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `mobile_post_sessions_heartbeat`(query: MobilePostSessionsHeartbeatQuery, body: MobilePostSessionsHeartbeatBody): ApiResponse<MobilePostSessionsHeartbeatResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("sessions").addPathSegment("heartbeat")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
+    fun `mobile_post_sessions_command`(query: MobilePostSessionsCommandQuery, body: MobilePostSessionsCommandBody): ApiResponse<MobilePostSessionsCommandResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("sessions").addPathSegment("command")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
+    fun `mobile_get_sessions_commands`(query: MobileGetSessionsCommandsQuery, range: String? = null): okhttp3.Response {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("sessions").addPathSegment("commands")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`deviceId`.let { url.addQueryParameter("deviceId", it.toString()) }
         return executeStream(url.build().toString(), "GET", null, range)
     }
 

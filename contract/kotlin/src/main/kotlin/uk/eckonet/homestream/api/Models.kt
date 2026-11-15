@@ -1551,6 +1551,75 @@ data class WebGetYoutubeThumbnailQuery(
 )
 
 @Serializable
+data class WebGetSessionsQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("excludeDeviceId") val `excludeDeviceId`: String? = null
+)
+
+@Serializable
+data class WebGetSessionsResponse(
+    @SerialName("localNetwork") val `localNetwork`: Boolean? = null,
+    @SerialName("sessions") val `sessions`: List<JsonElement>? = null,
+    @SerialName("tvDevices") val `tvDevices`: List<JsonElement>? = null
+)
+
+@Serializable
+data class WebPostSessionsHeartbeatQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class WebPostSessionsHeartbeatBody(
+    @SerialName("deviceId") val `deviceId`: String,
+    @SerialName("deviceName") val `deviceName`: String? = null,
+    @SerialName("deviceType") val `deviceType`: String? = null,
+    @SerialName("mediaId") val `mediaId`: String? = null,
+    @SerialName("mediaType") val `mediaType`: String? = null,
+    @SerialName("title") val `title`: String? = null,
+    @SerialName("subtitle") val `subtitle`: String? = null,
+    @SerialName("artworkUrl") val `artworkUrl`: String? = null,
+    @SerialName("isPlaying") val `isPlaying`: Boolean? = null,
+    @SerialName("positionMs") val `positionMs`: Long? = null,
+    @SerialName("durationMs") val `durationMs`: Long? = null,
+    @SerialName("canSeek") val `canSeek`: Boolean? = null,
+    @SerialName("canSkipNext") val `canSkipNext`: Boolean? = null,
+    @SerialName("canSkipPrev") val `canSkipPrev`: Boolean? = null,
+    @SerialName("isStopped") val `isStopped`: Boolean? = null
+)
+
+@Serializable
+data class WebPostSessionsHeartbeatResponse(
+    @SerialName("localNetwork") val `localNetwork`: Boolean? = null,
+    @SerialName("recorded") val `recorded`: Boolean? = null,
+    @SerialName("session") val `session`: JsonElement? = null
+)
+
+@Serializable
+data class WebPostSessionsCommandQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class WebPostSessionsCommandBody(
+    @SerialName("targetDeviceId") val `targetDeviceId`: String,
+    @SerialName("type") val `type`: String,
+    @SerialName("positionMs") val `positionMs`: Long? = null,
+    @SerialName("deltaMs") val `deltaMs`: Long? = null
+)
+
+@Serializable
+data class WebPostSessionsCommandResponse(
+    @SerialName("ok") val `ok`: Boolean? = null,
+    @SerialName("command") val `command`: JsonElement? = null
+)
+
+@Serializable
+data class WebGetSessionsCommandsQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("deviceId") val `deviceId`: String
+)
+
+@Serializable
 data class MobileGetHomeQuery(
     @SerialName("userId") val `userId`: String? = null
 )
@@ -2295,6 +2364,75 @@ data class MobileGetYoutubeStreamLocalQuery(
 data class MobileGetYoutubeThumbnailQuery(
     @SerialName("userId") val `userId`: String? = null,
     @SerialName("path") val `path`: String
+)
+
+@Serializable
+data class MobileGetSessionsQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("excludeDeviceId") val `excludeDeviceId`: String? = null
+)
+
+@Serializable
+data class MobileGetSessionsResponse(
+    @SerialName("localNetwork") val `localNetwork`: Boolean? = null,
+    @SerialName("sessions") val `sessions`: List<JsonElement>? = null,
+    @SerialName("tvDevices") val `tvDevices`: List<JsonElement>? = null
+)
+
+@Serializable
+data class MobilePostSessionsHeartbeatQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class MobilePostSessionsHeartbeatBody(
+    @SerialName("deviceId") val `deviceId`: String,
+    @SerialName("deviceName") val `deviceName`: String? = null,
+    @SerialName("deviceType") val `deviceType`: String? = null,
+    @SerialName("mediaId") val `mediaId`: String? = null,
+    @SerialName("mediaType") val `mediaType`: String? = null,
+    @SerialName("title") val `title`: String? = null,
+    @SerialName("subtitle") val `subtitle`: String? = null,
+    @SerialName("artworkUrl") val `artworkUrl`: String? = null,
+    @SerialName("isPlaying") val `isPlaying`: Boolean? = null,
+    @SerialName("positionMs") val `positionMs`: Long? = null,
+    @SerialName("durationMs") val `durationMs`: Long? = null,
+    @SerialName("canSeek") val `canSeek`: Boolean? = null,
+    @SerialName("canSkipNext") val `canSkipNext`: Boolean? = null,
+    @SerialName("canSkipPrev") val `canSkipPrev`: Boolean? = null,
+    @SerialName("isStopped") val `isStopped`: Boolean? = null
+)
+
+@Serializable
+data class MobilePostSessionsHeartbeatResponse(
+    @SerialName("localNetwork") val `localNetwork`: Boolean? = null,
+    @SerialName("recorded") val `recorded`: Boolean? = null,
+    @SerialName("session") val `session`: JsonElement? = null
+)
+
+@Serializable
+data class MobilePostSessionsCommandQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class MobilePostSessionsCommandBody(
+    @SerialName("targetDeviceId") val `targetDeviceId`: String,
+    @SerialName("type") val `type`: String,
+    @SerialName("positionMs") val `positionMs`: Long? = null,
+    @SerialName("deltaMs") val `deltaMs`: Long? = null
+)
+
+@Serializable
+data class MobilePostSessionsCommandResponse(
+    @SerialName("ok") val `ok`: Boolean? = null,
+    @SerialName("command") val `command`: JsonElement? = null
+)
+
+@Serializable
+data class MobileGetSessionsCommandsQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("deviceId") val `deviceId`: String
 )
 
 @Serializable
