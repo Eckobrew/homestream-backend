@@ -23,6 +23,7 @@ import * as serviceTorrent from './services/stream/torrent/handler';
 import * as service16 from './services/subtitles/handler';
 import * as service17 from './services/trailer/handler';
 import * as service18 from './services/webhook/arr/handler';
+import * as sessions from './services/sessions/handler';
 export const routes = [
   {path:'/api/music',methods:['GET'],service:music},
   {path:'/api/music/album',methods:['GET','DELETE'],service:music},
@@ -84,4 +85,8 @@ export const routes = [
   { path: "/api/subtitles", methods: ["GET"], service: service16 },
   { path: "/api/trailer", methods: ["GET"], service: service17 },
   { path: "/api/webhook/arr", methods: ["POST", "GET"], service: service18 },
+  { path: "/api/sessions", methods: ["GET"], service: sessions },
+  { path: "/api/sessions/heartbeat", methods: ["POST"], service: sessions },
+  { path: "/api/sessions/command", methods: ["POST"], service: sessions },
+  { path: "/api/sessions/commands", methods: ["GET"], service: sessions },
 ];

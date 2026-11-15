@@ -42,6 +42,7 @@ import { isLocalOrTailscaleIp } from '@/lib/network';
 import { SeerrClient } from '@/lib/seerr';
 import { TmdbClient } from '@/lib/tmdb';
 import { GET as trailer } from '@/services/trailer/handler';
+import * as sessionsService from '@/services/sessions/handler';
 
 
 export const runtime = 'nodejs';
@@ -341,6 +342,8 @@ async function dispatchContent(request: HttpRequest, context: Context) {
   }
   if (get && route === 'request') return requestOptions(request);
   if (!get && route === 'request') return requestMedia(request);
+  if (route === 'sessions' || route === 'sessions/commands') return get ? sessionsService.GET(request) : HttpResponse.json({ error: 'Method not allowed' }, { status: 405 });
+  if (route === 'sessions/heartbeat' || route === 'sessions/command') return !get ? sessionsService.POST(request) : HttpResponse.json({ error: 'Method not allowed' }, { status: 405 });
   return HttpResponse.json({ error: 'Unknown mobile endpoint' }, { status: 404 });
 }
 

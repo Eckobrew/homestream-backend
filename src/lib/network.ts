@@ -11,14 +11,27 @@ export async function getClientIp(_req: Request | HttpRequest): Promise<string> 
   return peerIdentity()?.clientIp || '';
 }
 
-export function isLocalOrTailscaleIp(ip: string): boolean {
+export function isLanIp(ip: string): boolean {
   const clean = ip.replace(/^::ffff:/i, '').toLowerCase();
   if (!validIp(clean)) return false;
   if (clean === '::1') return true;
   if (clean.includes(':')) return /^(fc|fd)/.test(clean) || /^fe[89ab]/.test(clean);
   const [a, b] = clean.split('.').map(Number);
   return a === 127 || a === 10 || (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168) || (a === 169 && b === 254) || (a === 100 && b >= 64 && b <= 127);
+    (a === 192 && b === 168) || (a === 169 && b === 254);
+}
+
+export function isLocalOrTailscaleIp(ip: string): boolean {
+  if (isLanIp(ip)) return true;
+  const clean = ip.replace(/^::ffff:/i, '').toLowerCase();
+  if (!validIp(clean) || clean.includes(':')) return false;
+  const [a, b] = clean.split('.').map(Number);
+  return a === 100 && b >= 64 && b <= 127;
+}
+
+export async function isRequestOnLan(req: Request | HttpRequest): Promise<boolean> {
+  const clientIp = await getClientIp(req);
+  return isLanIp(clientIp);
 }
 
 export async function isRequestLocalOrTailscale(req: Request | HttpRequest): Promise<{ isLocalOrTailscale: boolean; clientIp: string; reason: string }> {
