@@ -151,14 +151,26 @@ async function handleGET(request: HttpRequest) {
     };
 
     if (sourceParam) {
-      return torrentStreamFileResponse(request, targetFile, types[ext] || 'video/mp4');
+      return torrentStreamFileResponse(
+        request,
+        targetFile,
+        types[ext] || 'video/mp4',
+        () => active.acquireReader(),
+        () => active.releaseReader(targetFile),
+      );
     }
 
     const isDirectWebPlayable = !forceTranscode && receiver !== 'cast' && receiver !== 'native-tv' && (ext === '.mp4' || ext === '.webm');
     const nativeRequest = searchParams.get('native') === '1' && !forceTranscode;
 
     if (isDirectWebPlayable || nativeRequest) {
-      return torrentStreamFileResponse(request, targetFile, types[ext] || 'video/mp4');
+      return torrentStreamFileResponse(
+        request,
+        targetFile,
+        types[ext] || 'video/mp4',
+        () => active.acquireReader(),
+        () => active.releaseReader(targetFile),
+      );
     }
 
     const port = process.env.PORT || '3001';

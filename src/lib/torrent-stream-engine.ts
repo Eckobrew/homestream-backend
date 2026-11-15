@@ -19,10 +19,32 @@ export interface ActiveStreamEngine {
   files: TorrentStreamFile[];
   ready: Promise<void>;
   lastAccess: number;
+  activeReaders: number;
+  acquireReader: () => void;
+  releaseReader: (file?: TorrentStreamFile) => void;
   destroy: () => void;
 }
 
 const engines = new Map<string, ActiveStreamEngine>();
+const MAX_ACTIVE_ENGINES = Math.max(1, Number(process.env.HOMESTREAM_MAX_TORRENT_ENGINES || '2') || 2);
+const IDLE_WITH_READERS_MS = 10 * 60 * 1000;
+const IDLE_NO_READERS_MS = 2 * 60 * 1000;
+
+let sweeperStarted = false;
+function ensureSweeper() {
+  if (sweeperStarted) return;
+  sweeperStarted = true;
+  const timer = setInterval(() => {
+    const now = Date.now();
+    for (const entry of [...engines.values()]) {
+      const limit = entry.activeReaders > 0 ? IDLE_WITH_READERS_MS : IDLE_NO_READERS_MS;
+      if (now - entry.lastAccess > limit) {
+        entry.destroy();
+      }
+    }
+  }, 60_000);
+  timer.unref();
+}
 
 export async function resolveTorrentSource(release: {
   guid?: string;
@@ -73,11 +95,23 @@ export function getOrCreateTorrentEngine(source: string | Buffer): ActiveStreamE
   const existing = engines.get(normalizedKey);
   if (existing) {
     existing.lastAccess = Date.now();
+    // Refresh LRU order
+    engines.delete(normalizedKey);
+    engines.set(normalizedKey, existing);
     return existing;
   }
 
+  ensureSweeper();
+
+  // Evict least-recently-used idle engines when at capacity
+  while (engines.size >= MAX_ACTIVE_ENGINES) {
+    const oldest = [...engines.values()].find(e => e.activeReaders === 0) || engines.values().next().value;
+    if (!oldest) break;
+    oldest.destroy();
+  }
+
   const config = getServerConfig();
-  const cachePath = path.join(config.downloadsPath || '/tmp', '.stream-cache');
+  const cachePath = path.join(config.downloadsPath || '/tmp', '.stream-cache', normalizedKey.slice(0, 16));
   if (!fs.existsSync(cachePath)) {
     fs.mkdirSync(cachePath, { recursive: true });
   }
@@ -86,6 +120,8 @@ export function getOrCreateTorrentEngine(source: string | Buffer): ActiveStreamE
     tmp: cachePath,
     path: cachePath,
     verify: true,
+    connections: 25,
+    uploads: 2,
   });
 
   let resolveReady: () => void;
@@ -99,11 +135,30 @@ export function getOrCreateTorrentEngine(source: string | Buffer): ActiveStreamE
     files: [],
     ready: readyPromise,
     lastAccess: Date.now(),
+    activeReaders: 0,
+    acquireReader: () => {
+      entry.activeReaders++;
+      entry.lastAccess = Date.now();
+    },
+    releaseReader: (file?: TorrentStreamFile) => {
+      entry.activeReaders = Math.max(0, entry.activeReaders - 1);
+      entry.lastAccess = Date.now();
+      if (entry.activeReaders === 0 && file) {
+        try { file.deselect(); } catch {}
+      }
+    },
     destroy: () => {
-      try {
-        engine.destroy();
-      } catch {}
       engines.delete(normalizedKey);
+      try {
+        engine.remove(() => {});
+      } catch {}
+      try {
+        engine.destroy(() => {
+          try { fs.rmSync(cachePath, { recursive: true, force: true }); } catch {}
+        });
+      } catch {
+        try { fs.rmSync(cachePath, { recursive: true, force: true }); } catch {}
+      }
     },
   };
 
@@ -115,14 +170,6 @@ export function getOrCreateTorrentEngine(source: string | Buffer): ActiveStreamE
   });
 
   engines.set(normalizedKey, entry);
-
-  // Auto cleanup after 30 minutes of inactivity
-  setTimeout(() => {
-    const current = engines.get(normalizedKey);
-    if (current && Date.now() - current.lastAccess > 30 * 60 * 1000) {
-      current.destroy();
-    }
-  }, 35 * 60 * 1000).unref();
 
   return entry;
 }

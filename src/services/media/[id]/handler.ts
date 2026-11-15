@@ -7,6 +7,7 @@ import { SeerrClient } from '@/lib/seerr';
 import { TmdbClient } from '@/lib/tmdb';
 import { QBittorrentClient } from '@/lib/qbittorrent';
 import { resolveJellyfinUserId } from '@/lib/profiles';
+import { getStreamProgressMap } from '@/lib/stream-progress';
 import {
   MOCK_HERO_ITEM,
   MOCK_CONTINUE_WATCHING,
@@ -183,10 +184,32 @@ async function handleGET(
           return null;
         };
 
+        const hydrateStreamProgress = (target: MediaItem): MediaItem => {
+          const effectiveProfile = profileId || 'default';
+          const ids = [target.id];
+          for (const season of target.seasons || []) {
+            for (const ep of season.episodes || []) {
+              if (ep.id) ids.push(ep.id);
+            }
+          }
+          const progressMap = getStreamProgressMap(effectiveProfile, ids);
+          if (!target.playbackPositionTicks && progressMap.has(target.id)) {
+            target.playbackPositionTicks = progressMap.get(target.id);
+          }
+          for (const season of target.seasons || []) {
+            for (const ep of season.episodes || []) {
+              if (!ep.playbackPositionTicks && ep.id && progressMap.has(ep.id)) {
+                ep.playbackPositionTicks = progressMap.get(ep.id);
+              }
+            }
+          }
+          return target;
+        };
+
         if (explicitType === 'movie') {
           let movieItem = await fetchMovieDetails(tmdbId);
           if (movieItem) {
-            movieItem = await attachJellyfinMatch(movieItem, 'movie');
+            movieItem = hydrateStreamProgress(await attachJellyfinMatch(movieItem, 'movie'));
             return HttpResponse.json(
               { item: movieItem },
               { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' } }
@@ -195,7 +218,7 @@ async function handleGET(
         } else if (explicitType === 'tv') {
           let tvItem = await fetchTvDetails(tmdbId);
           if (tvItem) {
-            tvItem = await attachJellyfinMatch(tvItem, 'tv');
+            tvItem = hydrateStreamProgress(await attachJellyfinMatch(tvItem, 'tv'));
             return HttpResponse.json(
               { item: tvItem },
               { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' } }
@@ -206,7 +229,7 @@ async function handleGET(
           // Check movie details first
           let movieItem = await fetchMovieDetails(tmdbId);
           if (movieItem) {
-            movieItem = await attachJellyfinMatch(movieItem, 'movie');
+            movieItem = hydrateStreamProgress(await attachJellyfinMatch(movieItem, 'movie'));
             return HttpResponse.json(
               { item: movieItem },
               { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' } }
@@ -214,7 +237,7 @@ async function handleGET(
           }
           let tvItem = await fetchTvDetails(tmdbId);
           if (tvItem) {
-            tvItem = await attachJellyfinMatch(tvItem, 'tv');
+            tvItem = hydrateStreamProgress(await attachJellyfinMatch(tvItem, 'tv'));
             return HttpResponse.json(
               { item: tvItem },
               { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' } }

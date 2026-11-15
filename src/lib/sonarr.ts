@@ -1,4 +1,5 @@
 import { getServerConfig, sanitizeUrl } from './config';
+import { matchesSeriesRelease } from './release-match';
 
 export interface SonarrSeries {
   id: number;
@@ -34,6 +35,8 @@ export interface SonarrRelease {
   seasonNumber?: number;
   episodeNumbers?: number[];
   fullSeason?: boolean;
+  tvdbId?: number;
+  seriesTitle?: string;
 }
 
 export class SonarrClient {
@@ -273,7 +276,11 @@ export class SonarrClient {
     }
 
     const torrents = releases.filter(
-      r => (r.protocol === 'torrent' || !r.protocol) && (r.downloadUrl || r.magnetUrl) && (r.seeders || 0) > 0
+      r =>
+        (r.protocol === 'torrent' || !r.protocol) &&
+        (r.downloadUrl || r.magnetUrl) &&
+        (r.seeders || 0) > 0 &&
+        matchesSeriesRelease(r, series.title, series.tvdbId, seasonNumber, episodeNumber)
     );
 
     if (torrents.length === 0) return null;

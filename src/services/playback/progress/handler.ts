@@ -6,6 +6,7 @@ import { JellyfinClient } from '@/lib/jellyfin';
 import { resolveJellyfinUserId } from '@/lib/profiles';
 import { readSession } from '@/lib/session';
 import { isRequestLocalOrTailscale } from '@/lib/network';
+import { saveStreamProgress } from '@/lib/stream-progress';
 
 
 
@@ -26,16 +27,22 @@ async function handlePOST(request: HttpRequest) {
 
     const session = await readSession(request.cookies.get('homeflix_session')?.value, 'web');
     const profileId = session && !(await isRequestLocalOrTailscale(request)).isLocalOrTailscale ? session.id : userId || request.cookies.get('homeflix_profile_id')?.value;
+    const effectiveProfileId = profileId || 'default';
+
+    const isNonJellyfinId = /^(?:seerr|tmdb|dl|yt)-/i.test(itemId);
+    saveStreamProgress(effectiveProfileId, itemId, positionTicks);
+
     const targetUserId = await resolveJellyfinUserId(profileId);
     const jellyfin = new JellyfinClient(undefined, undefined, targetUserId);
     if (!jellyfin.isConfigured()) {
-      return HttpResponse.json({ success: false, error: 'Jellyfin not configured' }, { status: 503 });
+      return HttpResponse.json(isNonJellyfinId ? { success: true } : { success: false, error: 'Jellyfin not configured' }, { status: isNonJellyfinId ? 200 : 503 });
     }
 
     const success = isStarted ? await jellyfin.reportPlaybackStarted(itemId, positionTicks, Boolean(isPaused))
       : isStopped ? await jellyfin.reportPlaybackStopped(itemId, positionTicks)
       : await jellyfin.reportPlaybackProgress(itemId, positionTicks, Boolean(isPaused));
-    return HttpResponse.json(success ? { success: true } : { success: false, error: 'Jellyfin could not save playback progress' }, { status: success ? 200 : 502 });
+    const ok = success || isNonJellyfinId;
+    return HttpResponse.json(ok ? { success: true } : { success: false, error: 'Jellyfin could not save playback progress' }, { status: ok ? 200 : 502 });
 
   } catch (err) {
     log.error('Error reporting playback progress:', err);

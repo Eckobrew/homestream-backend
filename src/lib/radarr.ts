@@ -1,4 +1,5 @@
 import { getServerConfig, sanitizeUrl } from './config';
+import { matchesMovieRelease } from './release-match';
 
 export interface RadarrMovie {
   id: number;
@@ -28,6 +29,10 @@ export interface RadarrRelease {
   };
   customFormatScore?: number;
   infoHash?: string;
+  tmdbId?: number;
+  movieTitles?: string[];
+  rejected?: boolean;
+  rejections?: string[];
 }
 
 export class RadarrClient {
@@ -202,14 +207,15 @@ export class RadarrClient {
 
     const releases = await this.getReleases(movie.id);
     const torrents = releases.filter(
-      r => (r.protocol === 'torrent' || !r.protocol) && (r.downloadUrl || r.magnetUrl) && (r.seeders || 0) > 0
+      r =>
+        (r.protocol === 'torrent' || !r.protocol) &&
+        (r.downloadUrl || r.magnetUrl) &&
+        (r.seeders || 0) > 0 &&
+        matchesMovieRelease(r, movie.title, tmdbId, movie.year)
     );
 
     if (torrents.length === 0) {
-      // Fallback: any torrent with download/magnet URL
-      const anyTorrents = releases.filter(r => (r.downloadUrl || r.magnetUrl));
-      if (anyTorrents.length === 0) return null;
-      return anyTorrents[0];
+      return null;
     }
 
     // Sort by:

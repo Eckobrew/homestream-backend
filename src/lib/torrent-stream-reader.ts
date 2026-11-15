@@ -5,7 +5,9 @@ import { TorrentStreamFile } from './torrent-stream-engine';
 export function torrentStreamFileResponse(
   request: HttpRequest,
   file: TorrentStreamFile,
-  contentType: string
+  contentType: string,
+  onReaderAcquire?: () => void,
+  onReaderRelease?: () => void,
 ): HttpResponse {
   const size = file.length;
   let start = 0;
@@ -30,16 +32,22 @@ export function torrentStreamFileResponse(
   }
 
   // Request the stream from torrent-stream with on-demand piece deadline priority
+  onReaderAcquire?.();
   file.select();
-  const nodeStream = file.createReadStream({ start, end });
+  const nodeStream = file.createReadStream({ start, end }) as NodeJS.ReadableStream & {
+    pause?: () => void;
+    resume?: () => void;
+    destroy?: () => void;
+  };
 
   let closed = false;
   const cleanup = () => {
     if (!closed) {
       closed = true;
       try {
-        (nodeStream as any).destroy?.();
+        nodeStream.destroy?.();
       } catch {}
+      onReaderRelease?.();
     }
   };
 
@@ -53,7 +61,10 @@ export function torrentStreamFileResponse(
           try { controller.close(); } catch {}
           return;
         }
-        controller.enqueue(new Uint8Array(chunk));
+        controller.enqueue(new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength));
+        if ((controller.desiredSize ?? 1) <= 0) {
+          nodeStream.pause?.();
+        }
       });
 
       nodeStream.on('end', () => {
@@ -66,6 +77,11 @@ export function torrentStreamFileResponse(
         log.warn('[torrent-stream] Read error:', err?.message || err);
         try { controller.error(err); } catch {}
       });
+    },
+    pull() {
+      if (!closed && !request.signal.aborted) {
+        nodeStream.resume?.();
+      }
     },
     cancel: cleanup,
   });
