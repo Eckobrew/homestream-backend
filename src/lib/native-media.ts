@@ -1,0 +1,905 @@
+import fs from 'fs';
+import path from 'path';
+import crypto from 'crypto';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+import { stateDatabase } from '@/state/database';
+import { getServerConfig } from '@/lib/config';
+import { getMediaEngineSettings, MediaLibraryConfig } from '@/lib/media-settings';
+import { MediaItem, MediaVersion, Season, Episode, SkipSegment } from '@/types';
+import { log } from '@/log';
+
+const execFileAsync = promisify(execFile);
+
+const VIDEO_EXTENSIONS = new Set(['.mkv', '.mp4', '.m4v', '.avi', '.webm', '.mov', '.ts']);
+
+export interface NativeMediaFileRow {
+  id: string;
+  item_id: string;
+  episode_id: string | null;
+  file_path: string;
+  file_size: number;
+  version_label: string;
+  resolution: string;
+  video_codec: string;
+  audio_codec: string;
+  has_hdr: number;
+  duration_ticks: number;
+  streams_json: string;
+  chapters_json: string;
+  trickplay_vtt_path: string | null;
+  updated_at: string;
+}
+
+export interface ScanStatus {
+  running: boolean;
+  lastScanAt: string | null;
+  scannedFiles: number;
+  addedItems: number;
+  errors: string[];
+}
+
+let currentScanStatus: ScanStatus = {
+  running: false,
+  lastScanAt: null,
+  scannedFiles: 0,
+  addedItems: 0,
+  errors: [],
+};
+
+export function getNativeScanStatus(): ScanStatus {
+  return currentScanStatus;
+}
+
+export function ensureNativeMediaTables() {
+  const db = stateDatabase();
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS native_media_items (
+      id TEXT PRIMARY KEY,
+      type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      original_title TEXT,
+      overview TEXT,
+      year INTEGER,
+      release_date TEXT,
+      rating TEXT,
+      community_rating REAL,
+      genres_json TEXT NOT NULL DEFAULT '[]',
+      tmdb_id INTEGER,
+      imdb_id TEXT,
+      collection_id INTEGER,
+      collection_name TEXT,
+      poster_path TEXT,
+      backdrop_path TEXT,
+      trailer_key TEXT,
+      library_id TEXT NOT NULL,
+      unmatched INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_native_items_type ON native_media_items(type);
+    CREATE INDEX IF NOT EXISTS idx_native_items_tmdb ON native_media_items(tmdb_id);
+
+    CREATE TABLE IF NOT EXISTS native_media_seasons (
+      id TEXT PRIMARY KEY,
+      series_id TEXT NOT NULL,
+      season_number INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      overview TEXT,
+      poster_path TEXT,
+      air_date TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_native_seasons_series ON native_media_seasons(series_id);
+
+    CREATE TABLE IF NOT EXISTS native_media_episodes (
+      id TEXT PRIMARY KEY,
+      series_id TEXT NOT NULL,
+      season_number INTEGER NOT NULL,
+      episode_number INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      overview TEXT,
+      air_date TEXT,
+      still_path TEXT,
+      tmdb_id INTEGER,
+      runtime_seconds INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_native_episodes_series ON native_media_episodes(series_id, season_number, episode_number);
+
+    CREATE TABLE IF NOT EXISTS native_media_files (
+      id TEXT PRIMARY KEY,
+      item_id TEXT NOT NULL,
+      episode_id TEXT,
+      file_path TEXT UNIQUE NOT NULL,
+      file_size INTEGER NOT NULL DEFAULT 0,
+      version_label TEXT NOT NULL DEFAULT 'Default',
+      resolution TEXT NOT NULL DEFAULT '',
+      video_codec TEXT NOT NULL DEFAULT '',
+      audio_codec TEXT NOT NULL DEFAULT '',
+      has_hdr INTEGER NOT NULL DEFAULT 0,
+      duration_ticks INTEGER NOT NULL DEFAULT 0,
+      streams_json TEXT NOT NULL DEFAULT '[]',
+      chapters_json TEXT NOT NULL DEFAULT '[]',
+      trickplay_vtt_path TEXT,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_native_files_item ON native_media_files(item_id);
+    CREATE INDEX IF NOT EXISTS idx_native_files_ep ON native_media_files(episode_id);
+
+    CREATE TABLE IF NOT EXISTS native_watch_history (
+      profile_id TEXT NOT NULL,
+      item_id TEXT NOT NULL,
+      series_id TEXT,
+      position_ticks INTEGER NOT NULL DEFAULT 0,
+      duration_ticks INTEGER NOT NULL DEFAULT 0,
+      played INTEGER NOT NULL DEFAULT 0,
+      watch_seconds INTEGER NOT NULL DEFAULT 0,
+      play_count INTEGER NOT NULL DEFAULT 0,
+      last_played_at TEXT NOT NULL,
+      PRIMARY KEY (profile_id, item_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_native_watch_profile ON native_watch_history(profile_id, last_played_at DESC);
+  `);
+}
+
+function stableId(prefix: string, seed: string): string {
+  const hash = crypto.createHash('sha1').update(seed).digest('hex').slice(0, 16);
+  return `${prefix}-${hash}`;
+}
+
+export function parseMovieFilename(filePath: string): { title: string; year?: number } {
+  const base = path.basename(filePath, path.extname(filePath));
+  const folder = path.basename(path.dirname(filePath));
+  const candidate = /^(movie|video|feature|film)$/i.test(base) ? folder : base;
+  const yearMatch = /(19\d{2}|20\d{2})/.exec(candidate);
+  const year = yearMatch ? Number(yearMatch[1]) : undefined;
+  const beforeYear = yearMatch ? candidate.slice(0, yearMatch.index) : candidate;
+  const cleaned = beforeYear
+    .replace(/[._]/g, ' ')
+    .replace(/\b(2160p|1080p|720p|480p|4k|uhd|hdr|dv|bluray|bdrip|webrip|web-dl|x264|x265|hevc|av1|remux)\b.*/i, '')
+    .replace(/[()[\]]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return { title: cleaned || base, year };
+}
+
+export function parseEpisodeFilename(filePath: string): {
+  seriesTitle: string;
+  seasonNumber: number;
+  episodeNumber: number;
+  year?: number;
+} | null {
+  const base = path.basename(filePath, path.extname(filePath));
+  const parent = path.basename(path.dirname(filePath));
+  const grandParent = path.basename(path.dirname(path.dirname(filePath)));
+
+  const epMatch = /[sS](\d{1,2})[eE](\d{1,3})|(\d{1,2})x(\d{1,3})/.exec(base);
+  if (!epMatch) return null;
+
+  const seasonNumber = Number(epMatch[1] || epMatch[3] || 1);
+  const episodeNumber = Number(epMatch[2] || epMatch[4] || 1);
+
+  const isSeasonFolder = /^(season|specials|s)\s*\d*$/i.test(parent);
+  const rawSeries = isSeasonFolder ? grandParent : parent || base.slice(0, epMatch.index);
+  const yearMatch = /(19\d{2}|20\d{2})/.exec(rawSeries);
+  const seriesTitle = rawSeries
+    .replace(/\(\d{4}\)/g, '')
+    .replace(/[._]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return {
+    seriesTitle: seriesTitle || 'Unknown Series',
+    seasonNumber,
+    episodeNumber,
+    year: yearMatch ? Number(yearMatch[1]) : undefined,
+  };
+}
+
+function readNfoTmdbId(filePath: string): number | undefined {
+  const nfoPaths = [
+    filePath.replace(/\.[^.]+$/, '.nfo'),
+    path.join(path.dirname(filePath), 'movie.nfo'),
+    path.join(path.dirname(filePath), 'tvshow.nfo'),
+    path.join(path.dirname(path.dirname(filePath)), 'tvshow.nfo'),
+  ];
+  for (const p of nfoPaths) {
+    try {
+      if (!fs.existsSync(p)) continue;
+      const content = fs.readFileSync(p, 'utf8');
+      const m = /<tmdbid>(\d+)<\/tmdbid>/i.exec(content) || /themoviedb\.org\/(?:movie|tv)\/(\d+)/i.exec(content);
+      if (m) return Number(m[1]);
+    } catch {
+      // Ignore unreadable NFO
+    }
+  }
+  return undefined;
+}
+
+export function extractSkipSegmentsFromChapters(chapters: Array<{ start_time?: string; end_time?: string; tags?: { title?: string } }>): SkipSegment[] {
+  const segments: SkipSegment[] = [];
+  for (const ch of chapters) {
+    const title = (ch.tags?.title || '').trim();
+    if (!title) continue;
+    const startSeconds = Math.max(0, Number(ch.start_time || 0));
+    const endSeconds = Math.max(startSeconds, Number(ch.end_time || 0));
+    if (endSeconds <= startSeconds) continue;
+    if (/^(intro|opening|op|recap|theme)\b/i.test(title)) {
+      segments.push({ type: 'intro', startSeconds, endSeconds, title });
+    } else if (/^(credits|outro|ending|ed)\b/i.test(title)) {
+      segments.push({ type: 'credits', startSeconds, endSeconds, title });
+    }
+  }
+  return segments;
+}
+
+async function probeMediaFile(filePath: string): Promise<{
+  resolution: string;
+  videoCodec: string;
+  audioCodec: string;
+  hasHdr: boolean;
+  durationTicks: number;
+  versionLabel: string;
+  streams: unknown[];
+  chapters: SkipSegment[];
+}> {
+  try {
+    const { stdout } = await execFileAsync(
+      'ffprobe',
+      ['-v', 'quiet', '-print_format', 'json', '-show_format', '-show_streams', '-show_chapters', filePath],
+      { timeout: 15000, maxBuffer: 4 * 1024 * 1024 }
+    );
+    const parsed = JSON.parse(stdout || '{}');
+    const streams: Array<Record<string, unknown>> = Array.isArray(parsed.streams) ? parsed.streams : [];
+    const video = streams.find((s) => s.codec_type === 'video');
+    const audio = streams.find((s) => s.codec_type === 'audio');
+    const width = Number(video?.width || 0);
+    const height = Number(video?.height || 0);
+    const resolution = width >= 3800 || height >= 2100 ? '4K'
+      : width >= 1900 || height >= 1000 ? '1080p'
+      : width >= 1200 || height >= 700 ? '720p'
+      : width > 0 ? 'SD' : '';
+    const videoCodec = String(video?.codec_name || '').toUpperCase();
+    const audioCodec = String(audio?.codec_name || '').toUpperCase();
+    const colorTransfer = String(video?.color_transfer || '').toLowerCase();
+    const hasHdr = colorTransfer === 'smpte2084' || colorTransfer === 'arib-std-b67';
+    const durationSec = Number(parsed.format?.duration || 0);
+    const durationTicks = Math.round(durationSec * 10_000_000);
+    const versionParts = [resolution, hasHdr ? 'HDR' : '', videoCodec].filter(Boolean);
+    const versionLabel = versionParts.join(' ') || 'Default';
+    const chapters = extractSkipSegmentsFromChapters(Array.isArray(parsed.chapters) ? parsed.chapters : []);
+    return { resolution, videoCodec, audioCodec, hasHdr, durationTicks, versionLabel, streams, chapters };
+  } catch {
+    return {
+      resolution: '',
+      videoCodec: '',
+      audioCodec: '',
+      hasHdr: false,
+      durationTicks: 0,
+      versionLabel: 'Default',
+      streams: [],
+      chapters: [],
+    };
+  }
+}
+
+async function fetchTmdbMetadata(
+  kind: 'movie' | 'tv',
+  query: string,
+  year?: number,
+  explicitTmdbId?: number
+): Promise<Record<string, unknown> | null> {
+  const { tmdbApiKey } = getServerConfig();
+  const settings = getMediaEngineSettings();
+  if (!tmdbApiKey) return null;
+
+  try {
+    let tmdbId = explicitTmdbId;
+    if (!tmdbId) {
+      const searchParams = new URLSearchParams({
+        api_key: tmdbApiKey,
+        query,
+        language: settings.metadataLanguage || 'en-US',
+      });
+      if (year) searchParams.set(kind === 'movie' ? 'year' : 'first_air_date_year', String(year));
+      const searchRes = await fetch(`https://api.themoviedb.org/3/search/${kind}?${searchParams}`, {
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!searchRes.ok) return null;
+      const searchJson = (await searchRes.json()) as { results?: Array<{ id: number }> };
+      tmdbId = searchJson.results?.[0]?.id;
+    }
+    if (!tmdbId) return null;
+
+    const detailParams = new URLSearchParams({
+      api_key: tmdbApiKey,
+      language: settings.metadataLanguage || 'en-US',
+      append_to_response: kind === 'movie' ? 'release_dates,videos,credits' : 'content_ratings,videos,credits',
+    });
+    const detailRes = await fetch(`https://api.themoviedb.org/3/${kind}/${tmdbId}?${detailParams}`, {
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!detailRes.ok) return null;
+    return (await detailRes.json()) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+async function cacheArtworkIfNeeded(remoteUrl: string, targetKey: string): Promise<string> {
+  if (!remoteUrl) return '';
+  const settings = getMediaEngineSettings();
+  const dir = settings.artworkCacheDir || '/app/data/artwork';
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    const ext = '.jpg';
+    const dest = path.join(dir, `${targetKey}${ext}`);
+    if (fs.existsSync(dest)) return `/api/native/stream?artwork=${encodeURIComponent(`${targetKey}${ext}`)}`;
+    const res = await fetch(remoteUrl, { signal: AbortSignal.timeout(10000) });
+    if (res.ok) {
+      const buf = Buffer.from(await res.arrayBuffer());
+      fs.writeFileSync(dest, buf);
+      return `/api/native/stream?artwork=${encodeURIComponent(`${targetKey}${ext}`)}`;
+    }
+  } catch {
+    // Fall back to remote URL if cache write fails
+  }
+  return remoteUrl;
+}
+
+export async function generateTrickplayForFile(fileId: string): Promise<string | null> {
+  ensureNativeMediaTables();
+  const db = stateDatabase();
+  const fileRow = db.prepare('SELECT * FROM native_media_files WHERE id = ?').get(fileId) as NativeMediaFileRow | undefined;
+  if (!fileRow || !fs.existsSync(fileRow.file_path)) return null;
+
+  const settings = getMediaEngineSettings();
+  const baseDir = path.join(settings.artworkCacheDir || '/app/data/artwork', 'trickplay', fileId);
+  fs.mkdirSync(baseDir, { recursive: true });
+  const spritePath = path.join(baseDir, 'sprite.jpg');
+  const vttPath = path.join(baseDir, 'trickplay.vtt');
+
+  const interval = settings.trickplayIntervalSeconds || 10;
+  const width = settings.trickplayWidth || 320;
+  const durationSec = Math.max(10, Math.round(fileRow.duration_ticks / 10_000_000) || 120);
+  const count = Math.min(200, Math.max(1, Math.floor(durationSec / interval)));
+  const cols = 10;
+  const rows = Math.max(1, Math.ceil(count / cols));
+
+  await execFileAsync(
+    'ffmpeg',
+    [
+      '-y',
+      '-i', fileRow.file_path,
+      '-vf', `fps=1/${interval},scale=${width}:-1,tile=${cols}x${rows}`,
+      '-frames:v', '1',
+      '-q:v', '6',
+      spritePath,
+    ],
+    { timeout: 120000 }
+  );
+
+  const thumbHeight = Math.round((width * 9) / 16);
+  const lines = ['WEBVTT', ''];
+  const fmt = (sec: number) => {
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = sec % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.000`;
+  };
+  for (let i = 0; i < count; i++) {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const start = i * interval;
+    const end = (i + 1) * interval;
+    lines.push(`${fmt(start)} --> ${fmt(end)}`);
+    lines.push(`/api/native/stream?trickplay=${encodeURIComponent(fileId)}&asset=sprite.jpg#xywh=${col * width},${row * thumbHeight},${width},${thumbHeight}`);
+    lines.push('');
+  }
+  fs.writeFileSync(vttPath, lines.join('\n'), 'utf8');
+
+  db.prepare('UPDATE native_media_files SET trickplay_vtt_path = ? WHERE id = ?').run(vttPath, fileId);
+  return vttPath;
+}
+
+function walkVideoFiles(dirPath: string): string[] {
+  const results: string[] = [];
+  if (!dirPath || !fs.existsSync(dirPath)) return results;
+  const stack = [dirPath];
+  while (stack.length > 0) {
+    const current = stack.pop()!;
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(current, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (entry.name.startsWith('.')) continue;
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(full);
+      } else if (entry.isFile() && VIDEO_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
+        results.push(full);
+      }
+    }
+  }
+  return results;
+}
+
+export async function scanNativeLibraries(libraryId?: string): Promise<ScanStatus> {
+  ensureNativeMediaTables();
+  if (currentScanStatus.running) return currentScanStatus;
+
+  const settings = getMediaEngineSettings();
+  const libs: MediaLibraryConfig[] = settings.libraries.filter(
+    (l) => l.enabled && (!libraryId || l.id === libraryId)
+  );
+
+  currentScanStatus = {
+    running: true,
+    lastScanAt: new Date().toISOString(),
+    scannedFiles: 0,
+    addedItems: 0,
+    errors: [],
+  };
+
+  const db = stateDatabase();
+  const now = new Date().toISOString();
+
+  try {
+    for (const lib of libs) {
+      for (const rootDir of lib.paths) {
+        const files = walkVideoFiles(rootDir);
+        for (const filePath of files) {
+          currentScanStatus.scannedFiles += 1;
+          try {
+            const stat = fs.statSync(filePath);
+            const existingFile = db
+              .prepare('SELECT id, file_size FROM native_media_files WHERE file_path = ?')
+              .get(filePath) as { id: string; file_size: number } | undefined;
+            if (existingFile && existingFile.file_size === stat.size) {
+              continue;
+            }
+
+            const probe = await probeMediaFile(filePath);
+            const nfoTmdb = lib.preferNfo ? readNfoTmdbId(filePath) : undefined;
+
+            if (lib.type === 'movie') {
+              const parsed = parseMovieFilename(filePath);
+              const tmdb = await fetchTmdbMetadata('movie', parsed.title, parsed.year, nfoTmdb);
+              const tmdbId = Number(tmdb?.id || nfoTmdb || 0) || null;
+              const title = String(tmdb?.title || parsed.title);
+              const releaseDate = String(tmdb?.release_date || '');
+              const year = releaseDate ? Number(releaseDate.slice(0, 4)) : parsed.year || null;
+
+              const itemSeed = settings.enableMultiVersionGrouping && tmdbId
+                ? `movie-tmdb-${tmdbId}`
+                : settings.enableMultiVersionGrouping
+                ? `movie-title-${title.toLowerCase()}-${year || ''}`
+                : `movie-file-${filePath}`;
+              const itemId = stableId('nat-m', itemSeed);
+
+              const existingItem = db.prepare('SELECT id FROM native_media_items WHERE id = ?').get(itemId);
+              if (!existingItem) {
+                const posterRemote = tmdb?.poster_path ? `https://image.tmdb.org/t/p/w500${tmdb.poster_path}` : '';
+                const backdropRemote = tmdb?.backdrop_path ? `https://image.tmdb.org/t/p/w1280${tmdb.backdrop_path}` : '';
+                const posterPath = lib.autoDownloadArtwork && posterRemote
+                  ? await cacheArtworkIfNeeded(posterRemote, `${itemId}-poster`)
+                  : posterRemote;
+                const backdropPath = lib.autoDownloadArtwork && backdropRemote
+                  ? await cacheArtworkIfNeeded(backdropRemote, `${itemId}-backdrop`)
+                  : backdropRemote;
+                const genres = Array.isArray(tmdb?.genres)
+                  ? (tmdb.genres as Array<{ name: string }>).map((g) => g.name)
+                  : [];
+                const col = tmdb?.belongs_to_collection as { id?: number; name?: string } | null | undefined;
+                db.prepare(`
+                  INSERT INTO native_media_items
+                    (id, type, title, original_title, overview, year, release_date, rating, community_rating, genres_json, tmdb_id, collection_id, collection_name, poster_path, backdrop_path, library_id, unmatched, created_at, updated_at)
+                  VALUES (?, 'Movie', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `).run(
+                  itemId,
+                  title,
+                  String(tmdb?.original_title || title),
+                  String(tmdb?.overview || ''),
+                  year,
+                  releaseDate || null,
+                  '',
+                  Number(tmdb?.vote_average || 0) || null,
+                  JSON.stringify(genres),
+                  tmdbId,
+                  col?.id || null,
+                  col?.name || null,
+                  posterPath || null,
+                  backdropPath || null,
+                  lib.id,
+                  tmdbId ? 0 : 1,
+                  now,
+                  now
+                );
+                currentScanStatus.addedItems += 1;
+              }
+
+              const fileId = existingFile?.id || stableId('nat-f', filePath);
+              db.prepare(`
+                INSERT OR REPLACE INTO native_media_files
+                  (id, item_id, episode_id, file_path, file_size, version_label, resolution, video_codec, audio_codec, has_hdr, duration_ticks, streams_json, chapters_json, updated_at)
+                VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              `).run(
+                fileId,
+                itemId,
+                filePath,
+                stat.size,
+                probe.versionLabel,
+                probe.resolution,
+                probe.videoCodec,
+                probe.audioCodec,
+                probe.hasHdr ? 1 : 0,
+                probe.durationTicks,
+                JSON.stringify(probe.streams),
+                JSON.stringify(probe.chapters),
+                now
+              );
+
+              if (settings.enableTrickplay) {
+                await generateTrickplayForFile(fileId).catch(() => null);
+              }
+            } else {
+              const epParsed = parseEpisodeFilename(filePath);
+              const seriesTitle = epParsed?.seriesTitle || path.basename(path.dirname(filePath));
+              const seasonNum = epParsed?.seasonNumber ?? 1;
+              const episodeNum = epParsed?.episodeNumber ?? 1;
+              const tmdb = await fetchTmdbMetadata('tv', seriesTitle, epParsed?.year, nfoTmdb);
+              const tmdbId = Number(tmdb?.id || nfoTmdb || 0) || null;
+              const resolvedTitle = String(tmdb?.name || seriesTitle);
+              const seriesSeed = tmdbId ? `tv-tmdb-${tmdbId}` : `tv-title-${resolvedTitle.toLowerCase()}`;
+              const seriesId = stableId('nat-s', seriesSeed);
+
+              if (!db.prepare('SELECT id FROM native_media_items WHERE id = ?').get(seriesId)) {
+                const posterRemote = tmdb?.poster_path ? `https://image.tmdb.org/t/p/w500${tmdb.poster_path}` : '';
+                const backdropRemote = tmdb?.backdrop_path ? `https://image.tmdb.org/t/p/w1280${tmdb.backdrop_path}` : '';
+                const posterPath = lib.autoDownloadArtwork && posterRemote
+                  ? await cacheArtworkIfNeeded(posterRemote, `${seriesId}-poster`)
+                  : posterRemote;
+                const backdropPath = lib.autoDownloadArtwork && backdropRemote
+                  ? await cacheArtworkIfNeeded(backdropRemote, `${seriesId}-backdrop`)
+                  : backdropRemote;
+                const genres = Array.isArray(tmdb?.genres)
+                  ? (tmdb.genres as Array<{ name: string }>).map((g) => g.name)
+                  : [];
+                const firstAir = String(tmdb?.first_air_date || '');
+                db.prepare(`
+                  INSERT INTO native_media_items
+                    (id, type, title, original_title, overview, year, release_date, community_rating, genres_json, tmdb_id, poster_path, backdrop_path, library_id, unmatched, created_at, updated_at)
+                  VALUES (?, 'Series', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `).run(
+                  seriesId,
+                  resolvedTitle,
+                  String(tmdb?.original_name || resolvedTitle),
+                  String(tmdb?.overview || ''),
+                  firstAir ? Number(firstAir.slice(0, 4)) : epParsed?.year || null,
+                  firstAir || null,
+                  Number(tmdb?.vote_average || 0) || null,
+                  JSON.stringify(genres),
+                  tmdbId,
+                  posterPath || null,
+                  backdropPath || null,
+                  lib.id,
+                  tmdbId ? 0 : 1,
+                  now,
+                  now
+                );
+                currentScanStatus.addedItems += 1;
+              }
+
+              const seasonId = stableId('nat-sn', `${seriesId}-s${seasonNum}`);
+              db.prepare(`
+                INSERT OR IGNORE INTO native_media_seasons (id, series_id, season_number, name)
+                VALUES (?, ?, ?, ?)
+              `).run(seasonId, seriesId, seasonNum, seasonNum === 0 ? 'Specials' : `Season ${seasonNum}`);
+
+              const episodeId = stableId('nat-e', `${seriesId}-s${seasonNum}e${episodeNum}`);
+              db.prepare(`
+                INSERT OR IGNORE INTO native_media_episodes (id, series_id, season_number, episode_number, name, runtime_seconds)
+                VALUES (?, ?, ?, ?, ?, ?)
+              `).run(
+                episodeId,
+                seriesId,
+                seasonNum,
+                episodeNum,
+                `Episode ${episodeNum}`,
+                Math.round(probe.durationTicks / 10_000_000)
+              );
+
+              const fileId = existingFile?.id || stableId('nat-f', filePath);
+              db.prepare(`
+                INSERT OR REPLACE INTO native_media_files
+                  (id, item_id, episode_id, file_path, file_size, version_label, resolution, video_codec, audio_codec, has_hdr, duration_ticks, streams_json, chapters_json, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              `).run(
+                fileId,
+                seriesId,
+                episodeId,
+                filePath,
+                stat.size,
+                probe.versionLabel,
+                probe.resolution,
+                probe.videoCodec,
+                probe.audioCodec,
+                probe.hasHdr ? 1 : 0,
+                probe.durationTicks,
+                JSON.stringify(probe.streams),
+                JSON.stringify(probe.chapters),
+                now
+              );
+
+              if (settings.enableTrickplay) {
+                await generateTrickplayForFile(fileId).catch(() => null);
+              }
+            }
+          } catch (err) {
+            currentScanStatus.errors.push(`${path.basename(filePath)}: ${err instanceof Error ? err.message : 'Scan error'}`);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    log.error('Native library scan failed:', err);
+  } finally {
+    currentScanStatus.running = false;
+    currentScanStatus.lastScanAt = new Date().toISOString();
+  }
+  return currentScanStatus;
+}
+
+export function listNativeLibraryItems(options?: { type?: 'Movie' | 'Series'; unmatchedOnly?: boolean }): MediaItem[] {
+  ensureNativeMediaTables();
+  const db = stateDatabase();
+  const conditions: string[] = [];
+  const params: Array<string | number> = [];
+  if (options?.type) {
+    conditions.push('type = ?');
+    params.push(options.type);
+  }
+  if (options?.unmatchedOnly) {
+    conditions.push('unmatched = 1');
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  const rows = db
+    .prepare(`SELECT * FROM native_media_items ${where} ORDER BY title ASC`)
+    .all(...params) as Array<Record<string, unknown>>;
+
+  return rows.map((row) => {
+    const id = String(row.id);
+    const files = db.prepare('SELECT id, version_label, resolution, video_codec, audio_codec, file_size, chapters_json, trickplay_vtt_path FROM native_media_files WHERE item_id = ?').all(id) as Array<Record<string, unknown>>;
+    const versions: MediaVersion[] = files.map((f) => ({
+      id: String(f.id),
+      label: String(f.version_label || 'Default'),
+      resolution: String(f.resolution || ''),
+      videoCodec: String(f.video_codec || ''),
+      audioCodec: String(f.audio_codec || ''),
+      fileSize: Number(f.file_size || 0),
+    }));
+    const firstFile = files[0];
+    let skipSegments: SkipSegment[] = [];
+    try {
+      skipSegments = JSON.parse(String(firstFile?.chapters_json || '[]'));
+    } catch {
+      skipSegments = [];
+    }
+    return {
+      id,
+      title: String(row.title),
+      originalTitle: row.original_title ? String(row.original_title) : undefined,
+      overview: String(row.overview || ''),
+      type: (row.type === 'Series' ? 'Series' : 'Movie'),
+      posterUrl: String(row.poster_path || ''),
+      backdropUrl: String(row.backdrop_path || ''),
+      year: row.year ? Number(row.year) : undefined,
+      releaseDate: row.release_date ? String(row.release_date) : undefined,
+      rating: row.rating ? String(row.rating) : undefined,
+      communityRating: row.community_rating ? Number(row.community_rating) : undefined,
+      genres: JSON.parse(String(row.genres_json || '[]')),
+      source: 'native',
+      tmdbId: row.tmdb_id ? Number(row.tmdb_id) : undefined,
+      status: 'available',
+      resolution: versions[0]?.resolution || undefined,
+      versions: versions.length > 1 ? versions : undefined,
+      skipSegments: skipSegments.length > 0 ? skipSegments : undefined,
+      trickplayUrl: firstFile?.trickplay_vtt_path
+        ? `/api/native/stream?trickplay=${encodeURIComponent(String(firstFile.id))}&asset=trickplay.vtt`
+        : undefined,
+    };
+  });
+}
+
+export async function identifyNativeItem(itemId: string, tmdbId: number): Promise<boolean> {
+  ensureNativeMediaTables();
+  const db = stateDatabase();
+  const row = db.prepare('SELECT * FROM native_media_items WHERE id = ?').get(itemId) as Record<string, unknown> | undefined;
+  if (!row) return false;
+  const kind = row.type === 'Series' ? 'tv' : 'movie';
+  const tmdb = await fetchTmdbMetadata(kind, '', undefined, tmdbId);
+  if (!tmdb) return false;
+
+  const title = String(tmdb.title || tmdb.name || row.title);
+  const releaseDate = String(tmdb.release_date || tmdb.first_air_date || '');
+  const year = releaseDate ? Number(releaseDate.slice(0, 4)) : (row.year ? Number(row.year) : null);
+  const genres = Array.isArray(tmdb.genres) ? (tmdb.genres as Array<{ name: string }>).map((g) => g.name) : [];
+  const poster = tmdb.poster_path ? await cacheArtworkIfNeeded(`https://image.tmdb.org/t/p/w500${tmdb.poster_path}`, `${itemId}-poster`) : (row.poster_path ? String(row.poster_path) : null);
+  const backdrop = tmdb.backdrop_path ? await cacheArtworkIfNeeded(`https://image.tmdb.org/t/p/w1280${tmdb.backdrop_path}`, `${itemId}-backdrop`) : (row.backdrop_path ? String(row.backdrop_path) : null);
+
+  db.prepare(`
+    UPDATE native_media_items
+    SET title = ?, overview = ?, year = ?, release_date = ?, community_rating = ?, genres_json = ?, tmdb_id = ?, poster_path = ?, backdrop_path = ?, unmatched = 0, updated_at = ?
+    WHERE id = ?
+  `).run(
+    title,
+    String(tmdb.overview || row.overview || ''),
+    year,
+    releaseDate || null,
+    Number(tmdb.vote_average || 0) || null,
+    JSON.stringify(genres),
+    tmdbId,
+    poster || null,
+    backdrop || null,
+    new Date().toISOString(),
+    itemId
+  );
+  return true;
+}
+
+export function editNativeItemMetadata(
+  itemId: string,
+  patch: { title?: string; overview?: string; year?: number; rating?: string; posterPath?: string; backdropPath?: string }
+): boolean {
+  ensureNativeMediaTables();
+  const db = stateDatabase();
+  const row = db.prepare('SELECT * FROM native_media_items WHERE id = ?').get(itemId) as Record<string, unknown> | undefined;
+  if (!row) return false;
+  db.prepare(`
+    UPDATE native_media_items
+    SET title = ?, overview = ?, year = ?, rating = ?, poster_path = ?, backdrop_path = ?, updated_at = ?
+    WHERE id = ?
+  `).run(
+    patch.title !== undefined ? patch.title.trim() : String(row.title || ''),
+    patch.overview !== undefined ? patch.overview : (row.overview ? String(row.overview) : null),
+    patch.year !== undefined ? patch.year : (row.year ? Number(row.year) : null),
+    patch.rating !== undefined ? patch.rating : (row.rating ? String(row.rating) : null),
+    patch.posterPath !== undefined ? patch.posterPath : (row.poster_path ? String(row.poster_path) : null),
+    patch.backdropPath !== undefined ? patch.backdropPath : (row.backdrop_path ? String(row.backdrop_path) : null),
+    new Date().toISOString(),
+    itemId
+  );
+  return true;
+}
+
+export function deleteNativeItem(itemId: string): boolean {
+  ensureNativeMediaTables();
+  const db = stateDatabase();
+  db.prepare('DELETE FROM native_media_files WHERE item_id = ?').run(itemId);
+  db.prepare('DELETE FROM native_media_episodes WHERE series_id = ?').run(itemId);
+  db.prepare('DELETE FROM native_media_seasons WHERE series_id = ?').run(itemId);
+  const res = db.prepare('DELETE FROM native_media_items WHERE id = ?').run(itemId);
+  return res.changes > 0;
+}
+
+export function recordNativeWatchProgress(
+  profileId: string,
+  itemId: string,
+  positionTicks: number,
+  durationTicks = 0,
+  played?: boolean,
+  seriesId?: string,
+  deltaWatchSeconds = 0
+) {
+  ensureNativeMediaTables();
+  const db = stateDatabase();
+  const existing = db
+    .prepare('SELECT * FROM native_watch_history WHERE profile_id = ? AND item_id = ?')
+    .get(profileId, itemId) as Record<string, unknown> | undefined;
+
+  const effectiveDuration = durationTicks || Number(existing?.duration_ticks || 0);
+  const isPlayed = played !== undefined
+    ? played
+    : (effectiveDuration > 0 && positionTicks >= effectiveDuration * 0.9) || Boolean(existing?.played);
+  const watchSeconds = Number(existing?.watch_seconds || 0) + Math.max(0, Math.round(deltaWatchSeconds));
+  const playCount = Number(existing?.play_count || 0) + (existing ? 0 : 1);
+
+  db.prepare(`
+    INSERT OR REPLACE INTO native_watch_history
+      (profile_id, item_id, series_id, position_ticks, duration_ticks, played, watch_seconds, play_count, last_played_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    profileId,
+    itemId,
+    seriesId || (existing?.series_id ? String(existing.series_id) : null),
+    isPlayed ? 0 : Math.max(0, positionTicks),
+    effectiveDuration,
+    isPlayed ? 1 : 0,
+    watchSeconds,
+    playCount,
+    new Date().toISOString()
+  );
+}
+
+export function getNativeWatchStats(profileId?: string): {
+  totalWatchHours: number;
+  itemsWatched: number;
+  inProgressCount: number;
+  recent: Array<{ itemId: string; title: string; type: string; lastPlayedAt: string; played: boolean; watchMinutes: number }>;
+} {
+  ensureNativeMediaTables();
+  const db = stateDatabase();
+  const where = profileId ? 'WHERE h.profile_id = ?' : '';
+  const params = profileId ? [profileId] : [];
+
+  const agg = db.prepare(`
+    SELECT
+      COALESCE(SUM(watch_seconds), 0) AS total_sec,
+      SUM(CASE WHEN played = 1 THEN 1 ELSE 0 END) AS watched_count,
+      SUM(CASE WHEN played = 0 AND position_ticks > 0 THEN 1 ELSE 0 END) AS progress_count
+    FROM native_watch_history h
+    ${where}
+  `).get(...params) as { total_sec: number; watched_count: number; progress_count: number };
+
+  const recentRows = db.prepare(`
+    SELECT h.item_id, h.played, h.watch_seconds, h.last_played_at,
+           COALESCE(m.title, e.name, h.item_id) AS title,
+           COALESCE(m.type, 'Episode') AS type
+    FROM native_watch_history h
+    LEFT JOIN native_media_items m ON m.id = h.item_id
+    LEFT JOIN native_media_episodes e ON e.id = h.item_id
+    ${where}
+    ORDER BY h.last_played_at DESC
+    LIMIT 20
+  `).all(...params) as Array<Record<string, unknown>>;
+
+  return {
+    totalWatchHours: Math.round((Number(agg?.total_sec || 0) / 3600) * 10) / 10,
+    itemsWatched: Number(agg?.watched_count || 0),
+    inProgressCount: Number(agg?.progress_count || 0),
+    recent: recentRows.map((r) => ({
+      itemId: String(r.item_id),
+      title: String(r.title),
+      type: String(r.type),
+      lastPlayedAt: String(r.last_played_at),
+      played: Boolean(r.played),
+      watchMinutes: Math.round(Number(r.watch_seconds || 0) / 60),
+    })),
+  };
+}
+
+export function getNativeSeasonsForSeries(seriesId: string): Season[] {
+  ensureNativeMediaTables();
+  const db = stateDatabase();
+  const seasons = db
+    .prepare('SELECT * FROM native_media_seasons WHERE series_id = ? ORDER BY season_number ASC')
+    .all(seriesId) as Array<Record<string, unknown>>;
+
+  return seasons.map((s) => {
+    const seasonNum = Number(s.season_number);
+    const eps = db
+      .prepare('SELECT * FROM native_media_episodes WHERE series_id = ? AND season_number = ? ORDER BY episode_number ASC')
+      .all(seriesId, seasonNum) as Array<Record<string, unknown>>;
+    const episodes: Episode[] = eps.map((e) => ({
+      id: String(e.id),
+      episodeNumber: Number(e.episode_number),
+      seasonNumber: seasonNum,
+      name: String(e.name),
+      overview: String(e.overview || ''),
+      durationMinutes: Math.round(Number(e.runtime_seconds || 0) / 60),
+      thumbnailUrl: String(e.still_path || ''),
+      seriesId,
+    }));
+    return {
+      id: String(s.id),
+      seasonNumber: seasonNum,
+      name: String(s.name),
+      episodeCount: episodes.length,
+      overview: s.overview ? String(s.overview) : undefined,
+      posterUrl: s.poster_path ? String(s.poster_path) : undefined,
+      episodes,
+    };
+  });
+}
