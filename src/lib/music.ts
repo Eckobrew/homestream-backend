@@ -1407,8 +1407,8 @@ const SOURCE_COOLDOWN_MS = 24 * 60 * 60_000;
 const MISSING_TRANSFER_MS = 60_000;
 const STALLED_TRANSFER_MS = 30 * 60_000;
 const REMOTE_QUEUE_MS = 6 * 60 * 60_000;
-const MAX_ACTIVE_PLAYLIST_DOWNLOADS = 32;
-const MAX_CONCURRENT_SEARCHES = 3;
+const MAX_ACTIVE_PLAYLIST_DOWNLOADS = 50;
+const MAX_CONCURRENT_SEARCHES = 5;
 const runMediaCheck = promisify(execFile);
 type DownloadTable = 'music_requests' | 'playlist_tracks';
 
@@ -2259,9 +2259,8 @@ async function executeTrackSearchAndDownload(track: any) {
       const normalizedName = normalizeMusicString(name);
       const normalizedTitle = normalizeMusicString(cleanTitle);
       if (!normalizedTitle || !(` ${normalizedName} `).includes(` ${normalizedTitle} `)) continue;
-      if (normalizedArtist) {
-        const normalizedPath = normalizeMusicString(fn);
-        score += normalizedPath.includes(normalizedArtist) ? 25 : -30;
+      if (normalizedArtist && normalizeMusicString(fn).includes(normalizedArtist)) {
+        score += 25;
       }
       const feature = track.title.match(/\bfeat\.?\s+([^)]*)/i)?.[1];
       if (feature && normalizedName.includes(normalizeMusicString(feature))) score += 25;
