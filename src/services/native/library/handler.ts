@@ -99,8 +99,8 @@ export async function POST(request: HttpRequest) {
 
   if (action === 'scan') {
     const libraryId = typeof body.libraryId === 'string' ? body.libraryId : undefined;
-    const status = await scanNativeLibraries(libraryId);
-    return HttpResponse.json({ success: true, scanStatus: status });
+    void scanNativeLibraries(libraryId);
+    return HttpResponse.json({ success: true, started: true, scanStatus: getNativeScanStatus() });
   }
 
   if (action === 'identify') {
