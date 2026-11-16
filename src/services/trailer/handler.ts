@@ -3,6 +3,7 @@ import { HttpRequest, HttpResponse } from '@/http';
 import { SeerrClient } from '@/lib/seerr';
 import { JellyfinClient } from '@/lib/jellyfin';
 import { getNativeItemById } from '@/lib/native-media';
+import { TmdbClient } from '@/lib/tmdb';
 
 
 
@@ -68,7 +69,7 @@ async function handleGET(request: HttpRequest) {
   }
 
   const seerr = new SeerrClient();
-  const trailer = await seerr.getTrailers(tmdbId, mediaType);
+  const trailer = await seerr.getTrailers(tmdbId, mediaType) || await new TmdbClient().getTrailers(tmdbId, mediaType);
 
   trailerCache.set(cacheKey, trailer);
 

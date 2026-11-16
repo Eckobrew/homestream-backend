@@ -11,7 +11,7 @@ export interface MediaLibraryConfig {
   autoDownloadArtwork: boolean;
 }
 
-export type HwAccelMode = 'none' | 'vaapi' | 'qsv' | 'nvenc' | 'videotoolbox';
+export type HwAccelMode = 'none' | 'auto' | 'vaapi' | 'qsv' | 'nvenc' | 'videotoolbox';
 export type TranscodePreset = 'ultrafast' | 'superfast' | 'veryfast' | 'faster' | 'fast' | 'medium';
 export type SubtitleMode = 'default' | 'forced' | 'always' | 'none';
 
@@ -72,7 +72,7 @@ const DEFAULT_LIBRARIES: MediaLibraryConfig[] = [
 export const DEFAULT_MEDIA_ENGINE_SETTINGS: MediaEngineSettings = {
   mediaEngine: process.env.MEDIA_ENGINE === 'native' ? 'native' : 'jellyfin',
   libraries: DEFAULT_LIBRARIES,
-  hwAccel: 'none',
+  hwAccel: 'auto',
   vaapiDevice: '/dev/dri/renderD128',
   transcodeTempDir: '/tmp/homestream-transcode',
   maxTranscodeBitrateMbps: 20,
@@ -110,7 +110,7 @@ export function getMediaEngineSettings(): MediaEngineSettings {
   return {
     ...DEFAULT_MEDIA_ENGINE_SETTINGS,
     ...stored,
-    libraries: Array.isArray(stored.libraries) && stored.libraries.length > 0
+    libraries: Array.isArray(stored.libraries)
       ? stored.libraries
       : DEFAULT_LIBRARIES,
   };

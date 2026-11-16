@@ -46,9 +46,24 @@ let currentScanStatus: ScanStatus = {
   addedItems: 0,
   errors: [],
 };
+const lastLibraryScan = new Map<string, number>();
 
 export function getNativeScanStatus(): ScanStatus {
   return currentScanStatus;
+}
+
+export function startNativeLibraryMonitor(): void {
+  setInterval(() => {
+    if (currentScanStatus.running) return;
+    const settings = getMediaEngineSettings();
+    if (settings.mediaEngine !== 'native') return;
+    const now = Date.now();
+    const due = settings.libraries.find(library => {
+      const interval = Number(library.scanIntervalMinutes);
+      return library.enabled && interval > 0 && now - (lastLibraryScan.get(library.id) ?? 0) >= interval * 60_000;
+    });
+    if (due) void scanNativeLibraries(due.id).catch(error => log.error('Native library scan failed:', error));
+  }, 30_000).unref();
 }
 
 export function ensureNativeMediaTables() {
@@ -195,24 +210,37 @@ export function parseEpisodeFilename(filePath: string): {
   };
 }
 
-function readNfoTmdbId(filePath: string): number | undefined {
+function readNativeNfo(filePath: string): { tmdbId?: number; rating?: string } {
   const nfoPaths = [
     filePath.replace(/\.[^.]+$/, '.nfo'),
     path.join(path.dirname(filePath), 'movie.nfo'),
     path.join(path.dirname(filePath), 'tvshow.nfo'),
     path.join(path.dirname(path.dirname(filePath)), 'tvshow.nfo'),
   ];
+  const metadata: { tmdbId?: number; rating?: string } = {};
   for (const p of nfoPaths) {
     try {
       if (!fs.existsSync(p)) continue;
       const content = fs.readFileSync(p, 'utf8');
-      const m = /<tmdbid>(\d+)<\/tmdbid>/i.exec(content) || /themoviedb\.org\/(?:movie|tv)\/(\d+)/i.exec(content);
-      if (m) return Number(m[1]);
+      const m = /<tmdbid>(\d+)<\/tmdbid>/i.exec(content) ||
+        /<uniqueid\b[^>]*\btype=["']tmdb["'][^>]*>(\d+)<\/uniqueid>/i.exec(content) ||
+        /themoviedb\.org\/(?:movie|tv)\/(\d+)/i.exec(content);
+      if (m && !metadata.tmdbId) metadata.tmdbId = Number(m[1]);
+      metadata.rating ||= /<mpaa>([^<>]+)<\/mpaa>/i.exec(content)?.[1].trim();
     } catch {
       // Ignore unreadable NFO
     }
   }
-  return undefined;
+  return metadata;
+}
+
+function nativeRating(raw: Record<string, unknown> | null, kind: 'movie' | 'tv'): string {
+  if (kind === 'movie') {
+    const results = (raw?.release_dates as { results?: Array<{ iso_3166_1: string; release_dates?: Array<{ certification?: string }> }> } | undefined)?.results || [];
+    return (results.find(region => region.iso_3166_1 === 'US') ?? results[0])?.release_dates?.find(release => release.certification)?.certification || '';
+  }
+  const results = (raw?.content_ratings as { results?: Array<{ iso_3166_1: string; rating?: string }> } | undefined)?.results || [];
+  return (results.find(region => region.iso_3166_1 === 'US') ?? results[0])?.rating || '';
 }
 
 export function extractSkipSegmentsFromChapters(chapters: Array<{ start_time?: string; end_time?: string; tags?: { title?: string } }>): SkipSegment[] {
@@ -358,19 +386,26 @@ export async function generateTrickplayForFile(fileId: string): Promise<string |
   const spritePath = path.join(baseDir, 'sprite.jpg');
   const vttPath = path.join(baseDir, 'trickplay.vtt');
 
-  const interval = settings.trickplayIntervalSeconds || 10;
   const width = settings.trickplayWidth || 320;
-  const durationSec = Math.max(10, Math.round(fileRow.duration_ticks / 10_000_000) || 120);
-  const count = Math.min(200, Math.max(1, Math.floor(durationSec / interval)));
-  const cols = 10;
-  const rows = Math.max(1, Math.ceil(count / cols));
+  const thumbHeight = Math.round((width * 9) / 16);
+  const durationSec = Math.ceil(fileRow.duration_ticks / 10_000_000) || settings.trickplayIntervalSeconds;
+  const interval = Math.max(settings.trickplayIntervalSeconds, Math.ceil(durationSec / 200));
+  const count = Math.ceil(durationSec / interval);
+  const cols = Math.min(10, count);
+  const rows = Math.ceil(count / cols);
 
   await execFileAsync(
     'ffmpeg',
     [
       '-y',
       '-i', fileRow.file_path,
-      '-vf', `fps=1/${interval},scale=${width}:-1,tile=${cols}x${rows}`,
+      '-vf', [
+        `fps=1/${interval}:start_time=0:round=up`,
+        `scale=${width}:${thumbHeight}:force_original_aspect_ratio=decrease`,
+        `pad=${width}:${thumbHeight}:(ow-iw)/2:(oh-ih)/2`,
+        'setsar=1',
+        `tile=${cols}x${rows}`,
+      ].join(','),
       '-frames:v', '1',
       '-q:v', '6',
       spritePath,
@@ -378,7 +413,6 @@ export async function generateTrickplayForFile(fileId: string): Promise<string |
     { timeout: 120000 }
   );
 
-  const thumbHeight = Math.round((width * 9) / 16);
   const lines = ['WEBVTT', ''];
   const fmt = (sec: number) => {
     const h = Math.floor(sec / 3600);
@@ -390,7 +424,7 @@ export async function generateTrickplayForFile(fileId: string): Promise<string |
     const col = i % cols;
     const row = Math.floor(i / cols);
     const start = i * interval;
-    const end = (i + 1) * interval;
+    const end = Math.min(durationSec, (i + 1) * interval);
     lines.push(`${fmt(start)} --> ${fmt(end)}`);
     lines.push(`/api/native/stream?trickplay=${encodeURIComponent(fileId)}&asset=sprite.jpg#xywh=${col * width},${row * thumbHeight},${width},${thumbHeight}`);
     lines.push('');
@@ -448,6 +482,7 @@ export async function scanNativeLibraries(libraryId?: string): Promise<ScanStatu
 
   try {
     for (const lib of libs) {
+      lastLibraryScan.set(lib.id, Date.now());
       for (const rootDir of lib.paths) {
         const files = walkVideoFiles(rootDir);
         for (const filePath of files) {
@@ -455,14 +490,19 @@ export async function scanNativeLibraries(libraryId?: string): Promise<ScanStatu
           try {
             const stat = fs.statSync(filePath);
             const existingFile = db
-              .prepare('SELECT id, file_size FROM native_media_files WHERE file_path = ?')
-              .get(filePath) as { id: string; file_size: number } | undefined;
+              .prepare('SELECT id, item_id, file_size FROM native_media_files WHERE file_path = ?')
+              .get(filePath) as { id: string; item_id: string; file_size: number } | undefined;
+            const nfo = lib.preferNfo ? readNativeNfo(filePath) : {};
             if (existingFile && existingFile.file_size === stat.size) {
+              if (nfo.rating) {
+                db.prepare("UPDATE native_media_items SET rating = ? WHERE id = ? AND COALESCE(rating, '') = ''")
+                  .run(nfo.rating, existingFile.item_id);
+              }
               continue;
             }
 
             const probe = await probeMediaFile(filePath);
-            const nfoTmdb = lib.preferNfo ? readNfoTmdbId(filePath) : undefined;
+            const nfoTmdb = nfo.tmdbId;
 
             if (lib.type === 'movie') {
               const parsed = parseMovieFilename(filePath);
@@ -504,7 +544,7 @@ export async function scanNativeLibraries(libraryId?: string): Promise<ScanStatu
                   String(tmdb?.overview || ''),
                   year,
                   releaseDate || null,
-                  '',
+                  nfo.rating || nativeRating(tmdb, 'movie'),
                   Number(tmdb?.vote_average || 0) || null,
                   JSON.stringify(genres),
                   tmdbId,
@@ -570,8 +610,8 @@ export async function scanNativeLibraries(libraryId?: string): Promise<ScanStatu
                 const firstAir = String(tmdb?.first_air_date || '');
                 db.prepare(`
                   INSERT INTO native_media_items
-                    (id, type, title, original_title, overview, year, release_date, community_rating, genres_json, tmdb_id, poster_path, backdrop_path, library_id, unmatched, created_at, updated_at)
-                  VALUES (?, 'Series', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (id, type, title, original_title, overview, year, release_date, rating, community_rating, genres_json, tmdb_id, poster_path, backdrop_path, library_id, unmatched, created_at, updated_at)
+                  VALUES (?, 'Series', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 `).run(
                   seriesId,
                   resolvedTitle,
@@ -579,6 +619,7 @@ export async function scanNativeLibraries(libraryId?: string): Promise<ScanStatu
                   String(tmdb?.overview || ''),
                   firstAir ? Number(firstAir.slice(0, 4)) : epParsed?.year || null,
                   firstAir || null,
+                  nfo.rating || nativeRating(tmdb, 'tv'),
                   Number(tmdb?.vote_average || 0) || null,
                   JSON.stringify(genres),
                   tmdbId,
@@ -703,6 +744,7 @@ export function listNativeLibraryItems(options?: { type?: 'Movie' | 'Series'; un
       source: 'native',
       tmdbId: row.tmdb_id ? Number(row.tmdb_id) : undefined,
       status: 'available',
+      videoStreamUrl: firstFile ? `/api/preview-stream?itemId=${id}` : undefined,
       resolution: versions[0]?.resolution || undefined,
       versions: versions.length > 1 ? versions : undefined,
       skipSegments: skipSegments.length > 0 ? skipSegments : undefined,
@@ -926,6 +968,7 @@ export function getNativeItemById(id: string, profileId = 'default'): MediaItem 
       genres: seriesRow ? JSON.parse(String(seriesRow.genres_json || '[]')) : [],
       source: 'native',
       status: 'available',
+      videoStreamUrl: firstFile ? `/api/preview-stream?itemId=${id}` : undefined,
       seriesId: String(epRow.series_id),
       seriesName: seriesRow ? String(seriesRow.title) : undefined,
       seasonNumber: Number(epRow.season_number),
@@ -990,6 +1033,7 @@ export function getNativeItemById(id: string, profileId = 'default'): MediaItem 
     tmdbId: row.tmdb_id ? Number(row.tmdb_id) : undefined,
     playableEpisodeId,
     status: 'available',
+    videoStreamUrl: firstFile ? `/api/preview-stream?itemId=${playableEpisodeId || id}` : undefined,
     played: Boolean(watch?.played),
     playbackPositionTicks: Number(watch?.position_ticks || 0),
     totalDurationTicks: Number(firstFile?.duration_ticks || watch?.duration_ticks || 0),
@@ -999,6 +1043,18 @@ export function getNativeItemById(id: string, profileId = 'default'): MediaItem 
     skipSegments: skipSegments.length > 0 ? skipSegments : undefined,
     trickplayUrl: firstFile?.trickplay_vtt_path ? `/api/native/stream?trickplay=${encodeURIComponent(firstFile.id)}&asset=trickplay.vtt` : undefined,
   };
+}
+
+export function getNativeMovieCollection(itemId: string, profileId?: string): { name: string; parts: MediaItem[] } | null {
+  ensureNativeMediaTables();
+  const db = stateDatabase();
+  const movie = db.prepare("SELECT collection_id, collection_name FROM native_media_items WHERE id = ? AND type = 'Movie'")
+    .get(itemId) as { collection_id: number | null; collection_name: string | null } | undefined;
+  if (!movie?.collection_id) return null;
+  const movies = db.prepare("SELECT id FROM native_media_items WHERE type = 'Movie' AND collection_id = ? ORDER BY year, title")
+    .all(movie.collection_id);
+  const parts = movies.map(row => getNativeItemById(String(row.id), profileId)).filter((part): part is MediaItem => part !== null);
+  return parts.length > 1 ? { name: movie.collection_name || 'Movie Collection', parts } : null;
 }
 
 export function getNativeSeriesFirstPlayableEpisodeId(seriesId: string, profileId = 'default'): string | undefined {

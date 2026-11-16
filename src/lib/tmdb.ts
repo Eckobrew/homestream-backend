@@ -317,6 +317,14 @@ export class TmdbClient {
     return this.mapItem(raw, 'Movie');
   }
 
+  async getTrailers(tmdbId: number, kind: 'movie' | 'tv') {
+    const videos = await this.fetch<{ results: Array<{ key: string; name: string; site: string; type: string }> }>(
+      `/${kind}/${tmdbId}/videos`, {}, 24 * 60 * 60 * 1000,
+    );
+    const youtube = videos?.results.filter(video => video.site === 'YouTube') || [];
+    return youtube.find(video => video.type === 'Trailer') || youtube[0] || null;
+  }
+
   async getTvSeason(tmdbId: number, seasonNumber: number, fallbackBackdrop?: string, fallbackPoster?: string): Promise<Season | null> {
     const seasonData = await this.fetch<{
       id: number;

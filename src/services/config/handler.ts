@@ -8,6 +8,7 @@ import { SonarrClient } from '@/lib/sonarr';
 import { TmdbClient } from '@/lib/tmdb';
 import { getServerConfig, saveServerConfig } from '@/lib/config';
 import { getHomeflixProfiles } from '@/lib/profiles';
+import { getMediaEngineSettings } from '@/lib/media-settings';
 
 async function handleGET(_request: HttpRequest) {
   const config = getServerConfig();
@@ -19,7 +20,9 @@ async function handleGET(_request: HttpRequest) {
   const isQbittorrentConfigured = Boolean(config.qbittorrentUrl);
   const isRadarrConfigured = Boolean(config.radarrUrl && config.radarrApiKey);
   const isSonarrConfigured = Boolean(config.sonarrUrl && config.sonarrApiKey);
-  const isSetupNeeded = !isJellyfinConfigured || profiles.length === 0;
+  const mediaEngine = getMediaEngineSettings().mediaEngine;
+  const isConfigured = mediaEngine === 'native' || config.isConfigured;
+  const isSetupNeeded = (mediaEngine !== 'native' && !isJellyfinConfigured) || profiles.length === 0;
 
   return HttpResponse.json({
     appName: config.appName || 'HomeStream',
@@ -38,7 +41,8 @@ async function handleGET(_request: HttpRequest) {
     hasRadarrKey: Boolean(config.radarrApiKey),
     sonarrUrl: config.sonarrUrl,
     hasSonarrKey: Boolean(config.sonarrApiKey),
-    isConfigured: config.isConfigured,
+    isConfigured,
+    mediaEngine,
     isJellyfinConfigured,
     isSeerrConfigured,
     isQbittorrentConfigured,

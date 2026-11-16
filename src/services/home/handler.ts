@@ -125,7 +125,7 @@ async function handleGET(request: HttpRequest) {
   try {
     const [resumeItems, latestMovies, latestSeries, topRated] = useNative
       ? [
-          getNativeResumeItems(profileId || 'default', 15),
+          getNativeResumeItems(targetUserId || 'default', 15),
           listNativeLibraryItems({ type: 'Movie' }).slice(0, 15),
           listNativeLibraryItems({ type: 'Series' }).slice(0, 15),
           [...listNativeLibraryItems({ type: 'Movie' }), ...listNativeLibraryItems({ type: 'Series' })]

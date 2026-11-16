@@ -26,6 +26,8 @@ export interface JellyfinItem {
     PlaybackPositionTicks?: number;
     Played?: boolean;
     IsFavorite?: boolean;
+    LastPlayedDate?: string;
+    PlayCount?: number;
   };
   People?: { Name: string; Role: string; Type: string }[];
   ImageTags?: {
@@ -173,6 +175,19 @@ export class JellyfinClient {
 
   isConfigured(): boolean {
     return Boolean(this.url && this.apiKey);
+  }
+
+  async getWatchHistoryPage(userId: string, startIndex: number): Promise<JellyfinItem[]> {
+    const query = new URLSearchParams({
+      UserId: userId, Recursive: 'true', IncludeItemTypes: 'Movie,Series,Episode',
+      Fields: 'ProviderIds', EnableUserData: 'true', EnableImages: 'false',
+      StartIndex: String(startIndex), Limit: '200',
+    });
+    const response = await this.fetch(`${this.url}/Items?${query}`, { headers: this.getHeaders(), cache: 'no-store' });
+    if (!response.ok) throw new Error(`Jellyfin watch history request failed (${response.status})`);
+    const result = await response.json();
+    if (!Array.isArray(result.Items)) throw new Error('Jellyfin returned invalid watch history');
+    return result.Items;
   }
 
   getHeaders(): Record<string, string> {

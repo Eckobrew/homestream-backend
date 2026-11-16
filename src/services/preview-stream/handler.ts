@@ -9,9 +9,10 @@ import { HttpRequest, HttpResponse } from '@/http';
 import { JellyfinClient } from '@/lib/jellyfin';
 import { getServerConfig } from '@/lib/config';
 import { dataDirectory } from '@/state/database';
+import { resolveNativeFileByItemOrFileId } from '@/lib/native-transcode';
 
 const run = promisify(execFile);
-const queued = new Map<string, { origin: string; token: string }>();
+const queued = new Map<string, { input: string; start: number; token?: string }>();
 const failedUntil = new Map<string, number>();
 let generating = false;
 const maxCacheBytes = 8 * 1024 * 1024 * 1024;
@@ -39,8 +40,9 @@ async function prunePreviews(checkDeleted = false) {
   if (!config.jellyfinUrl || !config.jellyfinApiKey) return;
   const userId = config.jellyfinUserId || await new JellyfinClient().getFirstUserId();
   if (!userId) return;
-  for (let offset = 0; offset < entries.length; offset += 50) {
-    const batch = entries.slice(offset, offset + 50);
+  const jellyfinEntries = entries.filter(entry => !entry.id.startsWith('nat-'));
+  for (let offset = 0; offset < jellyfinEntries.length; offset += 50) {
+    const batch = jellyfinEntries.slice(offset, offset + 50);
     const url = new URL(config.jellyfinUrl.replace(/\/+$/, "") + "/Items");
     url.searchParams.set("userId", userId);
     url.searchParams.set("Recursive", "true");
@@ -78,8 +80,6 @@ async function generate() {
       const partial = destination + ".tmp";
       try {
         await fs.promises.mkdir(directory, { recursive: true, mode: 0o700 });
-        const input = new URL(source.origin.replace(/\/+$/, "") + "/Videos/" + id + "/stream");
-        input.searchParams.set("Static", "true");
         await run(
           "nice",
           [
@@ -93,13 +93,11 @@ async function generate() {
             "1",
             "-rw_timeout",
             "15000000",
-            "-headers",
-            `X-Emby-Token: ${source.token}\r
-`,
+            ...(source.token ? ["-headers", `X-Emby-Token: ${source.token}\r\n`] : []),
             "-ss",
-            "30",
+            String(source.start),
             "-i",
-            input.toString(),
+            source.input,
             "-map",
             "0:v:0",
             "-an",
@@ -156,11 +154,21 @@ async function handleGET(request: HttpRequest) {
   const file = path.join(cacheDir(), id + ".mp4");
   const stat = await fs.promises.stat(file).catch(() => null);
   if (!stat?.isFile() || stat.size > 4_500_000 || Date.now() - stat.mtimeMs > maxAge) {
-    const config = getServerConfig();
-    const token = requestJellyfinSession()?.accessToken || config.jellyfinApiKey;
-    if (request.method === "GET" && queued.size < 8 && !queued.has(id) && (failedUntil.get(id) || 0) <= Date.now() && config.jellyfinUrl && token && !/[\r\n]/.test(token)) {
-      queued.set(id, { origin: config.jellyfinUrl, token });
-      void generate();
+    if (request.method === "GET" && queued.size < 8 && !queued.has(id) && (failedUntil.get(id) || 0) <= Date.now()) {
+      if (id.startsWith('nat-')) {
+        const native = resolveNativeFileByItemOrFileId(id);
+        if (native && fs.existsSync(native.file_path)) {
+          queued.set(id, { input: native.file_path, start: Math.min(30, Math.floor(native.duration_ticks / 30_000_000)) });
+        }
+      } else {
+        const config = getServerConfig();
+        const token = requestJellyfinSession()?.accessToken || config.jellyfinApiKey;
+        if (config.jellyfinUrl && token && !/[\r\n]/.test(token)) {
+          const input = `${config.jellyfinUrl.replace(/\/+$/, '')}/Videos/${id}/stream?Static=true`;
+          queued.set(id, { input, token, start: 30 });
+        }
+      }
+      if (queued.has(id)) void generate();
     }
     return new HttpResponse(null, { status: 204, headers: { "Cache-Control": "no-store" } });
   }

@@ -34,7 +34,7 @@ async function handleGET(
     request.cookies.get('homeflix_profile_id')?.value;
 
   if (id.startsWith('nat-') || getMediaEngineSettings().mediaEngine === 'native') {
-    const nativeItem = getNativeItemById(id, profileId || 'default');
+    const nativeItem = getNativeItemById(id, await resolveJellyfinUserId(profileId) || 'default');
     if (nativeItem) {
       return HttpResponse.json({ item: nativeItem });
     }
