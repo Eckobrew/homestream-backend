@@ -36,6 +36,11 @@ add('profiles','GET',object({profiles:list(profile),activeProfileId:text,needsSe
 add('profiles','POST',object({success:boolean,profiles:list(profile),profile}),{},profilesBody);
 add('accounts','GET',object({accounts:list(),profiles:list(profile),needsFirstStart:boolean}),{status:natural});
 add('accounts','POST',object({success:boolean,account:object(),accounts:list()}),{},object({action:{type:'string',enum:['bootstrap','create','set-password','set-admin','delete']},accountId:id,username:text,displayName:text,password:text,isAdmin:boolean,parentPin:{type:'string',pattern:'^\\d{4,8}$'}},['action']));
+add('native/library','GET',object({settings:object(),scanStatus:object(),items:list(),activeStreams:list(),stats:object()}),{view:text,profileId:id,unmatched:natural,type:text});
+add('native/library','POST',object({success:boolean,settings:object(),scanStatus:object()}),{},object({action:text},['action']));
+add('native/stream','GET',object(),{fileId:id,itemId:id,versionId:id,hls:id,segment:text,trickplay:id,asset:text,artwork:text},undefined,{binary:true});
+add('syncplay','GET',object({room:object()}),{code:text});
+add('syncplay','POST',object({success:boolean,room:object()}),{},object({action:text,code:text,itemId:id,episodeId:id,title:text,positionTicks:integer,isPaused:boolean},['action']));
 add('search','GET',object({results:list(media),isDemoMode:boolean}),{q:text});
 add('downloads','GET',object({items:list()}));
 add('downloads/manager','GET',object(),{hash:text,profileId:id});

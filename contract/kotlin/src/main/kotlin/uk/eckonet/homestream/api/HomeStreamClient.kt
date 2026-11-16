@@ -118,6 +118,49 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         return execute(url.build().toString(), "POST", json.encodeToString(body), null)
     }
 
+    fun `web_get_native_library`(query: WebGetNativeLibraryQuery): ApiResponse<WebGetNativeLibraryResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("native").addPathSegment("library")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`view`?.let { url.addQueryParameter("view", it.toString()) }
+        query.`profileId`?.let { url.addQueryParameter("profileId", it.toString()) }
+        query.`unmatched`?.let { url.addQueryParameter("unmatched", it.toString()) }
+        query.`type`?.let { url.addQueryParameter("type", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `web_post_native_library`(query: WebPostNativeLibraryQuery, body: WebPostNativeLibraryBody): ApiResponse<WebPostNativeLibraryResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("native").addPathSegment("library")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
+    fun `web_get_native_stream`(query: WebGetNativeStreamQuery, range: String? = null): okhttp3.Response {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("native").addPathSegment("stream")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`fileId`?.let { url.addQueryParameter("fileId", it.toString()) }
+        query.`itemId`?.let { url.addQueryParameter("itemId", it.toString()) }
+        query.`versionId`?.let { url.addQueryParameter("versionId", it.toString()) }
+        query.`hls`?.let { url.addQueryParameter("hls", it.toString()) }
+        query.`segment`?.let { url.addQueryParameter("segment", it.toString()) }
+        query.`trickplay`?.let { url.addQueryParameter("trickplay", it.toString()) }
+        query.`asset`?.let { url.addQueryParameter("asset", it.toString()) }
+        query.`artwork`?.let { url.addQueryParameter("artwork", it.toString()) }
+        return executeStream(url.build().toString(), "GET", null, range)
+    }
+
+    fun `web_get_syncplay`(query: WebGetSyncplayQuery): ApiResponse<WebGetSyncplayResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("syncplay")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`code`?.let { url.addQueryParameter("code", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `web_post_syncplay`(query: WebPostSyncplayQuery, body: WebPostSyncplayBody): ApiResponse<WebPostSyncplayResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("syncplay")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
     fun `web_get_search`(query: WebGetSearchQuery): ApiResponse<WebGetSearchResponse> {
         val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("search")
         query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }

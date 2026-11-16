@@ -34,6 +34,9 @@ data class MediaItem(
     @SerialName("seerrId") val `seerrId`: Double? = null,
     @SerialName("tmdbId") val `tmdbId`: Double? = null,
     @SerialName("playableEpisodeId") val `playableEpisodeId`: String? = null,
+    @SerialName("versions") val `versions`: List<MediaVersion>? = null,
+    @SerialName("skipSegments") val `skipSegments`: List<SkipSegment>? = null,
+    @SerialName("trickplayUrl") val `trickplayUrl`: String? = null,
     @SerialName("status") val `status`: AvailabilityStatus,
     @SerialName("played") val `played`: Boolean? = null,
     @SerialName("playbackPositionTicks") val `playbackPositionTicks`: Double? = null,
@@ -64,6 +67,24 @@ data class MediaItem(
 )
 
 typealias MediaType = String
+
+@Serializable
+data class MediaVersion(
+    @SerialName("id") val `id`: String,
+    @SerialName("label") val `label`: String,
+    @SerialName("resolution") val `resolution`: String? = null,
+    @SerialName("videoCodec") val `videoCodec`: String? = null,
+    @SerialName("audioCodec") val `audioCodec`: String? = null,
+    @SerialName("fileSize") val `fileSize`: Double? = null
+)
+
+@Serializable
+data class SkipSegment(
+    @SerialName("type") val `type`: String,
+    @SerialName("startSeconds") val `startSeconds`: Double,
+    @SerialName("endSeconds") val `endSeconds`: Double,
+    @SerialName("title") val `title`: String? = null
+)
 
 typealias AvailabilityStatus = String
 
@@ -108,7 +129,10 @@ data class Episode(
     @SerialName("voteAverage") val `voteAverage`: Double? = null,
     @SerialName("tmdbId") val `tmdbId`: Double? = null,
     @SerialName("seriesId") val `seriesId`: String? = null,
-    @SerialName("seriesName") val `seriesName`: String? = null
+    @SerialName("seriesName") val `seriesName`: String? = null,
+    @SerialName("versions") val `versions`: List<MediaVersion>? = null,
+    @SerialName("skipSegments") val `skipSegments`: List<SkipSegment>? = null,
+    @SerialName("trickplayUrl") val `trickplayUrl`: String? = null
 )
 
 @Serializable
@@ -714,6 +738,87 @@ data class WebPostAccountsResponse(
     @SerialName("success") val `success`: Boolean? = null,
     @SerialName("account") val `account`: JsonElement? = null,
     @SerialName("accounts") val `accounts`: List<JsonElement>? = null
+)
+
+@Serializable
+data class WebGetNativeLibraryQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("view") val `view`: String? = null,
+    @SerialName("profileId") val `profileId`: String? = null,
+    @SerialName("unmatched") val `unmatched`: String? = null,
+    @SerialName("type") val `type`: String? = null
+)
+
+@Serializable
+data class WebGetNativeLibraryResponse(
+    @SerialName("settings") val `settings`: JsonElement? = null,
+    @SerialName("scanStatus") val `scanStatus`: JsonElement? = null,
+    @SerialName("items") val `items`: List<JsonElement>? = null,
+    @SerialName("activeStreams") val `activeStreams`: List<JsonElement>? = null,
+    @SerialName("stats") val `stats`: JsonElement? = null
+)
+
+@Serializable
+data class WebPostNativeLibraryQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class WebPostNativeLibraryBody(
+    @SerialName("action") val `action`: String
+)
+
+@Serializable
+data class WebPostNativeLibraryResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("settings") val `settings`: JsonElement? = null,
+    @SerialName("scanStatus") val `scanStatus`: JsonElement? = null
+)
+
+@Serializable
+data class WebGetNativeStreamQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("fileId") val `fileId`: String? = null,
+    @SerialName("itemId") val `itemId`: String? = null,
+    @SerialName("versionId") val `versionId`: String? = null,
+    @SerialName("hls") val `hls`: String? = null,
+    @SerialName("segment") val `segment`: String? = null,
+    @SerialName("trickplay") val `trickplay`: String? = null,
+    @SerialName("asset") val `asset`: String? = null,
+    @SerialName("artwork") val `artwork`: String? = null
+)
+
+@Serializable
+data class WebGetSyncplayQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("code") val `code`: String? = null
+)
+
+@Serializable
+data class WebGetSyncplayResponse(
+    @SerialName("room") val `room`: JsonElement? = null
+)
+
+@Serializable
+data class WebPostSyncplayQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class WebPostSyncplayBody(
+    @SerialName("action") val `action`: String,
+    @SerialName("code") val `code`: String? = null,
+    @SerialName("itemId") val `itemId`: String? = null,
+    @SerialName("episodeId") val `episodeId`: String? = null,
+    @SerialName("title") val `title`: String? = null,
+    @SerialName("positionTicks") val `positionTicks`: Long? = null,
+    @SerialName("isPaused") val `isPaused`: Boolean? = null
+)
+
+@Serializable
+data class WebPostSyncplayResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("room") val `room`: JsonElement? = null
 )
 
 @Serializable
