@@ -23,6 +23,16 @@ import { MediaItem, MediaRowSection } from '@/types';
 
 export const revalidate = 0;
 
+function isReleasedItem(item: MediaItem): boolean {
+  if (item.status === 'available' || item.source === 'jellyfin' || item.source === 'native') return true;
+  if (item.releaseDate) {
+    const parsed = Date.parse(item.releaseDate);
+    if (!Number.isNaN(parsed)) return parsed <= Date.now();
+  }
+  if (item.year && item.year > new Date().getFullYear()) return false;
+  return true;
+}
+
 async function handleGET(request: HttpRequest) {
   const profileId =
     request.nextUrl.searchParams.get('userId') ||
@@ -295,11 +305,12 @@ async function handleGET(request: HttpRequest) {
           tmdb.getPopularTv(),
         ]);
 
-        if (trending.length > 0) {
+        const releasedTrending = trending.filter(isReleasedItem);
+        if (releasedTrending.length > 0) {
           sections.push({
             id: 'trending-tmdb',
-            title: 'Trending Worldwide',
-            items: trending,
+            title: 'Trending & Streamable',
+            items: releasedTrending,
           });
         }
 
@@ -384,11 +395,12 @@ async function handleGET(request: HttpRequest) {
           } catch {}
         }
 
-        if (trending.length > 0) {
+        const releasedSeerrTrending = trending.filter(isReleasedItem);
+        if (releasedSeerrTrending.length > 0) {
           sections.push({
             id: 'trending-seerr',
-            title: 'Trending Worldwide (Seerr)',
-            items: trending,
+            title: 'Trending & Streamable (Seerr)',
+            items: releasedSeerrTrending,
           });
         }
 
