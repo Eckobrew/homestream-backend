@@ -180,6 +180,12 @@ export async function startNativeHlsTranscode(options: {
       args.push('-force_key_frames', `expr:gte(t,n_forced*${settings.hlsSegmentSeconds || 4})`);
       if (encoder === 'libx264') {
         args.push('-preset', settings.transcodePreset || 'veryfast', '-pix_fmt', 'yuv420p', '-crf', '20');
+      } else if (encoder === 'h264_vaapi') {
+        args.push('-rc_mode', 'CQP', '-qp', '21');
+      } else if (encoder === 'h264_nvenc') {
+        args.push('-cq', '21');
+      } else if (encoder === 'h264_qsv') {
+        args.push('-global_quality', '21');
       } else if (bitrateMbps > 0) {
         args.push('-b:v', `${bitrateMbps}M`);
       }
