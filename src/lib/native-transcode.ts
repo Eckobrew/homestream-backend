@@ -90,6 +90,7 @@ export function startNativeHlsTranscode(options: {
   audioIndex?: number;
   burnSubtitleIndex?: number;
   startSeconds?: number;
+  copyVideo?: boolean;
 }): ActiveStreamSession {
   const settings = getMediaEngineSettings();
   const sessionId = crypto.createHash('sha1').update(`${options.file.id}-${options.profileId}-${options.audioIndex ?? 'a0'}-${options.burnSubtitleIndex ?? 'ns'}`).digest('hex').slice(0, 16);
@@ -130,23 +131,30 @@ export function startNativeHlsTranscode(options: {
     args.push('-vf', filters.join(','));
   }
 
-  const videoCodec = settings.hwAccel === 'nvenc'
-    ? 'h264_nvenc'
-    : settings.hwAccel === 'vaapi'
-    ? 'h264_vaapi'
-    : settings.hwAccel === 'qsv'
-    ? 'h264_qsv'
-    : settings.hwAccel === 'videotoolbox'
-    ? 'h264_videotoolbox'
-    : 'libx264';
-
-  args.push('-c:v', videoCodec);
-  if (videoCodec === 'libx264') {
-    args.push('-preset', settings.transcodePreset || 'veryfast', '-pix_fmt', 'yuv420p');
-  }
   const bitrateMbps = settings.maxTranscodeBitrateMbps || 20;
-  if (bitrateMbps > 0) {
-    args.push('-b:v', `${bitrateMbps}M`, '-maxrate', `${bitrateMbps}M`, '-bufsize', `${bitrateMbps * 2}M`);
+  let videoCodec = 'copy';
+  if (options.copyVideo && filters.length === 0) {
+    args.push('-c:v', 'copy');
+  } else {
+    videoCodec = settings.hwAccel === 'nvenc'
+      ? 'h264_nvenc'
+      : settings.hwAccel === 'vaapi'
+      ? 'h264_vaapi'
+      : settings.hwAccel === 'qsv'
+      ? 'h264_qsv'
+      : settings.hwAccel === 'videotoolbox'
+      ? 'h264_videotoolbox'
+      : 'libx264';
+
+    args.push('-c:v', videoCodec);
+    if (videoCodec === 'libx264') {
+      args.push('-preset', settings.transcodePreset || 'veryfast', '-pix_fmt', 'yuv420p', '-crf', '20');
+      if (bitrateMbps > 0) {
+        args.push('-maxrate', `${bitrateMbps}M`, '-bufsize', `${bitrateMbps * 2}M`);
+      }
+    } else if (bitrateMbps > 0) {
+      args.push('-b:v', `${bitrateMbps}M`, '-maxrate', `${bitrateMbps}M`, '-bufsize', `${bitrateMbps * 2}M`);
+    }
   }
 
   args.push('-c:a', 'aac', '-ac', '2', '-b:a', '192k');
@@ -361,6 +369,14 @@ export function negotiateNativePlayback(
     };
   }
 
+  const canCopyVideo =
+    settings.allowDirectStream &&
+    !options?.forceTranscode &&
+    supportedVideo &&
+    vCodec === 'h264' &&
+    !(settings.hdrToneMapping && file.has_hdr) &&
+    options?.burnSubtitleIndex === undefined;
+
   const itemRow = db.prepare('SELECT title FROM native_media_items WHERE id = ?').get(file.item_id) as { title?: string } | undefined;
   const session = startNativeHlsTranscode({
     file,
@@ -368,6 +384,7 @@ export function negotiateNativePlayback(
     profileId,
     audioIndex: options?.audioIndex,
     burnSubtitleIndex: options?.burnSubtitleIndex,
+    copyVideo: canCopyVideo,
   });
 
   return {
