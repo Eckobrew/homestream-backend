@@ -105,6 +105,19 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         return execute(url.build().toString(), "POST", json.encodeToString(body), null)
     }
 
+    fun `web_get_accounts`(query: WebGetAccountsQuery): ApiResponse<WebGetAccountsResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("accounts")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`status`?.let { url.addQueryParameter("status", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `web_post_accounts`(query: WebPostAccountsQuery, body: WebPostAccountsBody): ApiResponse<WebPostAccountsResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("accounts")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
     fun `web_get_search`(query: WebGetSearchQuery): ApiResponse<WebGetSearchResponse> {
         val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("search")
         query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }

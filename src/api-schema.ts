@@ -34,6 +34,8 @@ add('media/{id}','GET',object(),{type:{type:'string',enum:['movie','tv']}},undef
 add('media/{id}/recommendations','GET',object({success:boolean,source:text,recommendations:list(media)}),{tmdbId:natural,type:text});
 add('profiles','GET',object({profiles:list(profile),activeProfileId:text,needsSetup:boolean}),{includeAvailable:flag},undefined,{responseModel:'ProfilesResponse'});
 add('profiles','POST',object({success:boolean,profiles:list(profile),profile}),{},profilesBody);
+add('accounts','GET',object({accounts:list(),profiles:list(profile),needsFirstStart:boolean}),{status:natural});
+add('accounts','POST',object({success:boolean,account:object(),accounts:list()}),{},object({action:{type:'string',enum:['bootstrap','create','set-password','set-admin','delete']},accountId:id,username:text,displayName:text,password:text,isAdmin:boolean,parentPin:{type:'string',pattern:'^\\d{4,8}$'}},['action']));
 add('search','GET',object({results:list(media),isDemoMode:boolean}),{q:text});
 add('downloads','GET',object({items:list()}));
 add('downloads/manager','GET',object(),{hash:text,profileId:id});

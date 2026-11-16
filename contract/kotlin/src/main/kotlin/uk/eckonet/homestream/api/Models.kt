@@ -673,6 +673,50 @@ data class WebPostProfilesResponseProfile(
 )
 
 @Serializable
+data class WebGetAccountsQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("status") val `status`: String? = null
+)
+
+@Serializable
+data class WebGetAccountsResponse(
+    @SerialName("accounts") val `accounts`: List<JsonElement>? = null,
+    @SerialName("profiles") val `profiles`: List<WebGetAccountsResponseProfilesItem>? = null,
+    @SerialName("needsFirstStart") val `needsFirstStart`: Boolean? = null
+)
+
+@Serializable
+data class WebGetAccountsResponseProfilesItem(
+    @SerialName("id") val `id`: String? = null,
+    @SerialName("name") val `name`: String? = null,
+    @SerialName("isKids") val `isKids`: Boolean? = null,
+    @SerialName("kidsRating") val `kidsRating`: String? = null
+)
+
+@Serializable
+data class WebPostAccountsQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class WebPostAccountsBody(
+    @SerialName("action") val `action`: String,
+    @SerialName("accountId") val `accountId`: String? = null,
+    @SerialName("username") val `username`: String? = null,
+    @SerialName("displayName") val `displayName`: String? = null,
+    @SerialName("password") val `password`: String? = null,
+    @SerialName("isAdmin") val `isAdmin`: Boolean? = null,
+    @SerialName("parentPin") val `parentPin`: String? = null
+)
+
+@Serializable
+data class WebPostAccountsResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("account") val `account`: JsonElement? = null,
+    @SerialName("accounts") val `accounts`: List<JsonElement>? = null
+)
+
+@Serializable
 data class WebGetSearchQuery(
     @SerialName("userId") val `userId`: String? = null,
     @SerialName("q") val `q`: String? = null

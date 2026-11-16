@@ -40,14 +40,12 @@ export async function GET(request: HttpRequest) {
   const sessionCookie = request.cookies.get(SESSION_COOKIE_NAME)?.value;
 
   const sessionUser = await readSession(sessionCookie, 'web');
-  const needsFirstStart = listAccounts().length === 0;
 
   // If local or over Tailscale -> NO LOGIN REQUIRED!
   if (netCheck.isLocalOrTailscale && !(await getHomeflixProfiles()).some(isKids)) {
     return HttpResponse.json({
       canManageIntegrations: netCheck.isLocalOrTailscale || Boolean(sessionUser?.admin),
       requiresAuth: false,
-      needsFirstStart,
       isLocalOrTailscale: true,
       isAuthenticated: true,
       clientIp: netCheck.clientIp,
@@ -61,7 +59,6 @@ export async function GET(request: HttpRequest) {
     return HttpResponse.json({
       canManageIntegrations: netCheck.isLocalOrTailscale || Boolean(sessionUser?.admin),
       requiresAuth: false,
-      needsFirstStart,
       isLocalOrTailscale: false,
       isAuthenticated: true,
       clientIp: netCheck.clientIp,
@@ -74,7 +71,6 @@ export async function GET(request: HttpRequest) {
   return HttpResponse.json({
     canManageIntegrations: false,
     requiresAuth: true,
-    needsFirstStart,
     isLocalOrTailscale: false,
     isAuthenticated: false,
     clientIp: netCheck.clientIp,

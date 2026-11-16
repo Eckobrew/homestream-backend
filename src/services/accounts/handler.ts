@@ -19,12 +19,15 @@ async function isAuthorizedAdmin(request: HttpRequest): Promise<boolean> {
 }
 
 async function handleGET(request: HttpRequest) {
+  const accounts = listAccounts();
+  if (request.nextUrl.searchParams.get('status') === '1') {
+    return HttpResponse.json({ needsFirstStart: accounts.length === 0, accounts: [], profiles: [] });
+  }
   if (!await isAuthorizedAdmin(request)) {
     return HttpResponse.json({ error: 'Administrator access required' }, { status: 403 });
   }
-  const accounts = listAccounts();
   const profiles = await getHomeflixProfiles();
-  return HttpResponse.json({ accounts, profiles });
+  return HttpResponse.json({ accounts, profiles, needsFirstStart: accounts.length === 0 });
 }
 
 async function handlePOST(request: HttpRequest) {
