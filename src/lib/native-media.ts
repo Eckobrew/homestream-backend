@@ -194,8 +194,11 @@ export function parseEpisodeFilename(filePath: string): {
   const seasonNumber = Number(epMatch[1] || epMatch[3] || 1);
   const episodeNumber = Number(epMatch[2] || epMatch[4] || 1);
 
-  const isSeasonFolder = /^(season|specials|s)\s*\d*$/i.test(parent);
-  const rawSeries = isSeasonFolder ? grandParent : parent || base.slice(0, epMatch.index);
+  const isSeasonFolder = /^(season|specials|s)\s*\d*$/i.test(parent) || /\b(?:season|series)\s+\d+$/i.test(parent);
+  const rawParent = isSeasonFolder && !/^(tv|tvshows|tv shows|shows|series)$/i.test(grandParent)
+    ? grandParent
+    : parent.replace(/\s*\b(?:season|series)\s+\d+$/i, '').trim() || base.slice(0, epMatch.index);
+  const rawSeries = rawParent || base.slice(0, epMatch.index);
   const yearMatch = /(19\d{2}|20\d{2})/.exec(rawSeries);
   const seriesTitle = rawSeries
     .replace(/\(\d{4}\)/g, '')
