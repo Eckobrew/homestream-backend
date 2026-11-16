@@ -24,7 +24,7 @@ import { GET as playback } from '@/services/playback/handler';
 import { POST as progress } from '@/services/playback/progress/handler';
 import { GET as subtitles } from '@/services/subtitles/handler';
 import { GET as requestOptions, POST as requestMedia } from '@/services/request/handler';
-import { getHomeflixProfiles } from '@/lib/profiles';
+import { getHomeflixProfiles, saveHomeflixProfiles } from '@/lib/profiles';
 import { authenticateAccount, createAccount, profilesForAccount } from '@/lib/accounts';
 import { GET as search } from '@/services/search/handler';
 import { GET as downloads, POST as downloadsPost } from '@/services/downloads/handler';
@@ -113,6 +113,19 @@ async function dispatch(request: HttpRequest, context: Context) {
     if (!auth.User?.Id || !auth.User?.Name) return HttpResponse.json({ error: 'Invalid authentication response' }, { status: 502 });
     if (await denyPasswordlessAdultLogin(auth.User.Id, body.password, auth.User.Name)) return HttpResponse.json({ error: 'Adult accounts need a password different from their username when Kids profiles are enabled.' }, { status: 403 });
     const migrated = createAccount({ username: auth.User.Name, password: body.password, displayName: auth.User.Name, isAdmin: auth.User.Policy?.IsAdministrator === true });
+    const existingProfiles = await getHomeflixProfiles();
+    if (!existingProfiles.some((p) => p.id === auth.User.Id)) {
+      await saveHomeflixProfiles([...existingProfiles, {
+        id: auth.User.Id,
+        name: auth.User.Name,
+        accountId: migrated.id,
+        jellyfinUserId: auth.User.Id,
+        isAdministrator: migrated.isAdmin,
+        avatarColor: 'from-red-600 to-red-800',
+        avatarBg: 'bg-red-600',
+        initials: auth.User.Name.slice(0, 2).toUpperCase(),
+      }]);
+    }
     const user = { id: auth.User.Id, accountId: migrated.id, name: auth.User.Name };
     return HttpResponse.json({ user, token: await createSession({ ...user, admin: migrated.isAdmin, accessToken: auth.AccessToken }, 'mobile') });
   }
