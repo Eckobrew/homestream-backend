@@ -6,6 +6,7 @@ import { promisify } from 'util';
 import { stateDatabase } from '@/state/database';
 import { getServerConfig } from '@/lib/config';
 import { getMediaEngineSettings, MediaLibraryConfig } from '@/lib/media-settings';
+import { catalogCertification } from '@/lib/parental-ratings';
 import { MediaItem, MediaVersion, Season, Episode, SkipSegment } from '@/types';
 import { log } from '@/log';
 
@@ -705,6 +706,19 @@ export async function scanNativeLibraries(libraryId?: string): Promise<ScanStatu
             }
           }
         }
+      }
+    }
+
+    // Backfill missing ratings from TMDB / Seerr for existing matched items
+    const missingRatings = db
+      .prepare("SELECT id, type, tmdb_id FROM native_media_items WHERE tmdb_id IS NOT NULL AND COALESCE(rating, '') = ''")
+      .all() as Array<{ id: string; type: string; tmdb_id: number }>;
+    for (const row of missingRatings) {
+      const kind = row.type === 'Series' ? 'tv' : 'movie';
+      const tmdb = await fetchTmdbMetadata(kind, '', undefined, row.tmdb_id);
+      const rating = nativeRating(tmdb, kind) || (await catalogCertification(row.tmdb_id, kind).catch(() => null)) || '';
+      if (rating) {
+        db.prepare('UPDATE native_media_items SET rating = ? WHERE id = ?').run(rating, row.id);
       }
     }
   } catch (err) {
