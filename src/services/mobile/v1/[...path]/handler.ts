@@ -34,6 +34,7 @@ import { GET as downloadStream } from '@/services/stream/download/handler';
 import { GET as torrentStream } from '@/services/stream/torrent/handler';
 import { getServerConfig } from '@/lib/config';
 import { JellyfinClient } from '@/lib/jellyfin';
+import { getNativeEpisodeQueue, getNativeItemById, recordNativeWatchProgress } from '@/lib/native-media';
 import { resolveJellyfinUserId } from '@/lib/profiles';
 import { createSession, readSession } from '@/lib/session';
 import { allowLogin } from '@/lib/login-limit';
@@ -261,6 +262,10 @@ async function dispatchContent(request: HttpRequest, context: Context) {
   if (!get && route === 'watched') {
     const body = await request.json().catch(() => null);
     if (!body || typeof body.itemId !== 'string' || !body.itemId || typeof body.played !== 'boolean') return HttpResponse.json({ error: 'itemId and played required' }, { status: 400 });
+    if (body.itemId.startsWith('nat-')) {
+      recordNativeWatchProgress(session?.id || body.userId || 'default', body.itemId, 0, 0, body.played);
+      return HttpResponse.json({ success: true });
+    }
     const uid = await resolveJellyfinUserId(session?.id || body.userId || undefined);
     const jellyfin = new JellyfinClient(undefined, undefined, uid);
     if (!jellyfin.isConfigured()) return HttpResponse.json({ error: 'Jellyfin not configured' }, { status: 503 });
@@ -270,6 +275,9 @@ async function dispatchContent(request: HttpRequest, context: Context) {
   if (get && route === 'episodes') {
     const itemId = request.nextUrl.searchParams.get('itemId');
     if (!itemId) return HttpResponse.json({ error: 'itemId required' }, { status: 400 });
+    if (itemId.startsWith('nat-')) {
+      return HttpResponse.json({ items: getNativeEpisodeQueue(itemId) });
+    }
     const uid = await resolveJellyfinUserId(request.nextUrl.searchParams.get('userId') || undefined);
     const jellyfin = new JellyfinClient(undefined, undefined, uid);
     if (!itemId.startsWith('seerr-') && !itemId.startsWith('tmdb-') && jellyfin.isConfigured()) {
@@ -320,7 +328,11 @@ async function dispatchContent(request: HttpRequest, context: Context) {
     const uid = await resolveJellyfinUserId(session?.id || request.nextUrl.searchParams.get('userId') || undefined);
     const jellyfin = new JellyfinClient(undefined, undefined, uid);
     let tmdbId = /^(?:seerr|tmdb)-(?:movie-)?(\d+)$/.exec(id)?.[1] || (/^\d+$/.test(id) ? id : '');
-    if (!tmdbId && jellyfin.isConfigured()) {
+    if (!tmdbId && id.startsWith('nat-')) {
+      const natItem = getNativeItemById(id, session?.id || request.nextUrl.searchParams.get('userId') || undefined);
+      tmdbId = natItem?.tmdbId ? String(natItem.tmdbId) : '';
+    }
+    if (!tmdbId && !id.startsWith('nat-') && jellyfin.isConfigured()) {
       const parts = await jellyfin.getMovieCollection(id);
       if (parts.length) return HttpResponse.json({ collection: { name: 'Movie Collection', parts } });
       const item = await jellyfin.getItemDetails(id);
