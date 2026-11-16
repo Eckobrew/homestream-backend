@@ -123,13 +123,27 @@ export async function startNativeHlsTranscode(options: {
   if (settings.hdrToneMapping && options.file.has_hdr) {
     filters.push('zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p');
   }
+  let bitmapBurnIdx: number | undefined;
   if (settings.burnInImageSubtitles && options.burnSubtitleIndex !== undefined) {
-    const escaped = options.file.file_path.replace(/:/g, '\\:').replace(/'/g, "\\'");
-    filters.push(`subtitles='${escaped}':si=${options.burnSubtitleIndex}`);
+    let subStreams: Array<Record<string, unknown>> = [];
+    try {
+      subStreams = (JSON.parse(options.file.streams_json || '[]') as Array<Record<string, unknown>>)
+        .filter((s) => s.codec_type === 'subtitle');
+    } catch {}
+    const targetSub = subStreams.find((s) => Number(s.index) === options.burnSubtitleIndex);
+    const subCodec = String(targetSub?.codec_name || '').toLowerCase();
+    const isBitmap = ['hdmv_pgs_subtitle', 'pgssub', 'dvd_subtitle', 'vobsub', 'dvb_subtitle'].includes(subCodec);
+    if (isBitmap) {
+      bitmapBurnIdx = options.burnSubtitleIndex;
+    } else {
+      const relIdx = subStreams.findIndex((s) => Number(s.index) === options.burnSubtitleIndex);
+      const escaped = options.file.file_path.replace(/:/g, '\\:').replace(/'/g, "\\'");
+      filters.push(`subtitles='${escaped}':si=${relIdx >= 0 ? relIdx : 0}`);
+    }
   }
 
   const bitrateMbps = settings.maxTranscodeBitrateMbps || 20;
-  const videoCodec = options.copyVideo && filters.length === 0
+  const videoCodec = options.copyVideo && filters.length === 0 && bitmapBurnIdx === undefined
     ? 'copy' : acceleration === 'none' ? 'libx264' : hardwareEncoders[acceleration] || 'libx264';
   const session: ActiveStreamSession = {
     id: sessionId,
@@ -150,10 +164,16 @@ export async function startNativeHlsTranscode(options: {
     const args = ['-y', '-hide_banner', '-loglevel', 'warning'];
     if (startSec > 0) args.push('-ss', String(startSec));
     args.push(...hardwareDeviceArgs(encoder, settings.vaapiDevice));
-    args.push('-i', options.file.file_path, '-map', '0:v:0');
-    args.push('-map', options.audioIndex !== undefined ? `0:${options.audioIndex}` : '0:a:0?');
+    args.push('-i', options.file.file_path);
     const videoFilters = [...filters, ...hardwareVideoFilters(encoder)];
-    if (videoFilters.length) args.push('-vf', videoFilters.join(','));
+    if (bitmapBurnIdx !== undefined) {
+      const chain = videoFilters.length > 0 ? `[0:v:0][0:${bitmapBurnIdx}]overlay[ov];[ov]${videoFilters.join(',')}[v]` : `[0:v:0][0:${bitmapBurnIdx}]overlay[v]`;
+      args.push('-filter_complex', chain, '-map', '[v]');
+    } else {
+      args.push('-map', '0:v:0');
+      if (videoFilters.length > 0 && encoder !== 'copy') args.push('-vf', videoFilters.join(','));
+    }
+    args.push('-map', options.audioIndex !== undefined ? `0:${options.audioIndex}` : '0:a:0?');
 
     args.push('-c:v', encoder);
     if (encoder !== 'copy') {
@@ -252,6 +272,17 @@ export function listNativeSubtitlesForFile(file: NativeMediaFileRow): SubtitleTr
     }
   } catch {
     // Ignore sidecar errors
+  }
+
+  const { subtitleMode, defaultSubtitleLanguage } = getMediaEngineSettings();
+  if (subtitleMode === 'none') {
+    for (const t of tracks) t.isDefault = false;
+  } else if (subtitleMode === 'forced') {
+    for (const t of tracks) t.isDefault = Boolean(t.isForced);
+  } else if (subtitleMode === 'always' && tracks.length > 0 && !tracks.some((t) => t.isDefault)) {
+    const pref = defaultSubtitleLanguage.toLowerCase();
+    const match = tracks.find((t) => (t.language || '').toLowerCase() === pref) || tracks[0];
+    match.isDefault = true;
   }
 
   return tracks;
