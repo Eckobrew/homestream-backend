@@ -231,6 +231,8 @@ export function listNativeSubtitlesForFile(file: NativeMediaFileRow): SubtitleTr
   return tracks;
 }
 
+const inFlightSubtitles = new Map<string, Promise<string | null>>();
+
 export async function extractNativeSubtitleVtt(file: NativeMediaFileRow, index?: number, sidecar?: string): Promise<string | null> {
   const settings = getMediaEngineSettings();
   const cacheDir = path.join(settings.artworkCacheDir || '/app/data/artwork', 'subtitles');
@@ -243,15 +245,31 @@ export async function extractNativeSubtitleVtt(file: NativeMediaFileRow, index?:
     if (full.toLowerCase().endsWith('.vtt')) return fs.readFileSync(full, 'utf8');
     const cached = path.join(cacheDir, `${file.id}-${safeName}.vtt`);
     if (fs.existsSync(cached)) return fs.readFileSync(cached, 'utf8');
-    await execFileAsync('ffmpeg', ['-y', '-i', full, '-f', 'webvtt', cached], { timeout: 15000 });
+    await execFileAsync('ffmpeg', ['-y', '-i', full, '-f', 'webvtt', cached], { timeout: 30000 });
     return fs.existsSync(cached) ? fs.readFileSync(cached, 'utf8') : null;
   }
 
   if (index === undefined || Number.isNaN(index)) return null;
   const cached = path.join(cacheDir, `${file.id}-${index}.vtt`);
   if (fs.existsSync(cached)) return fs.readFileSync(cached, 'utf8');
-  await execFileAsync('ffmpeg', ['-y', '-i', file.file_path, '-map', `0:${index}`, '-f', 'webvtt', cached], { timeout: 30000 });
-  return fs.existsSync(cached) ? fs.readFileSync(cached, 'utf8') : null;
+
+  const pending = inFlightSubtitles.get(cached);
+  if (pending) return pending;
+
+  const job = (async () => {
+    try {
+      await execFileAsync(
+        'ffmpeg',
+        ['-y', '-i', file.file_path, '-vn', '-an', '-dn', '-map', `0:${index}`, '-f', 'webvtt', cached],
+        { timeout: 120000 }
+      );
+      return fs.existsSync(cached) ? fs.readFileSync(cached, 'utf8') : null;
+    } finally {
+      inFlightSubtitles.delete(cached);
+    }
+  })();
+  inFlightSubtitles.set(cached, job);
+  return job;
 }
 
 export function negotiateNativePlayback(

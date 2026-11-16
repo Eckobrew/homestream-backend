@@ -74,6 +74,11 @@ export async function GET(request: HttpRequest) {
     if (!sess) return HttpResponse.json({ error: 'Transcode session expired' }, { status: 404 });
     const asset = path.basename(searchParams.get('segment') || 'master.m3u8');
     const full = path.join(sess.dir, asset);
+    const deadline = Date.now() + 10_000;
+    while (!fs.existsSync(full) && Date.now() < deadline) {
+      if (sess.process && (sess.process.exitCode !== null || sess.process.killed)) break;
+      await new Promise((r) => setTimeout(r, 100));
+    }
     if (!fs.existsSync(full)) return HttpResponse.json({ error: 'Segment not ready' }, { status: 404 });
     if (asset.endsWith('.m3u8')) {
       const text = fs.readFileSync(full, 'utf8').replace(

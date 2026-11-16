@@ -177,7 +177,11 @@ export async function parentalResponse(request: HttpRequest, response: Response,
   if (name === 'subtitles' && Array.isArray(data.subtitles)) {
     const age = isKids(profile) ? await permit(request.nextUrl.searchParams.get('itemId') || '', profile) : 1000;
     data.subtitles = data.subtitles.map((track: Record<string, unknown>) => {
-      const source = new URL(String(track.src), request.url).searchParams;
+      const rawSrc = String(track.src || '');
+      if (rawSrc.startsWith('/api/native/stream')) {
+        return { ...track, src: new URL(resourceUrl(rawSrc, profile, 'stream', age, boundDevice), request.url).toString() };
+      }
+      const source = new URL(rawSrc, request.url).searchParams;
       const id = source.get('itemId') || '';
       const mediaSource = source.get('mediaSourceId') || id;
       const index = source.get('index') || '';
