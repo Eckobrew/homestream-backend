@@ -1,4 +1,5 @@
 import { HttpRequest, HttpResponse } from '@/http';
+import { getMediaEngineSettings } from '@/lib/media-settings';
 import { activeProfile } from '@/lib/parental-controls';
 import {
   createSyncPlayRoom,
@@ -9,6 +10,9 @@ import {
 } from '@/lib/syncplay';
 
 export async function GET(request: HttpRequest) {
+  if (!getMediaEngineSettings().enableSyncPlay) {
+    return HttpResponse.json({ error: 'SyncPlay is disabled in server settings' }, { status: 403 });
+  }
   const code = request.nextUrl.searchParams.get('code') || '';
   if (!code.trim()) {
     return HttpResponse.json({ error: 'Room code is required' }, { status: 400 });
@@ -21,6 +25,9 @@ export async function GET(request: HttpRequest) {
 }
 
 export async function POST(request: HttpRequest) {
+  if (!getMediaEngineSettings().enableSyncPlay) {
+    return HttpResponse.json({ error: 'SyncPlay is disabled in server settings' }, { status: 403 });
+  }
   let body: Record<string, unknown>;
   try {
     body = await request.json();

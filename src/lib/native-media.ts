@@ -682,6 +682,29 @@ export async function scanNativeLibraries(libraryId?: string): Promise<ScanStatu
             currentScanStatus.errors.push(`${path.basename(filePath)}: ${err instanceof Error ? err.message : 'Scan error'}`);
           }
         }
+        // Reconcile files removed from disk while preserving native_watch_history
+        if (fs.existsSync(rootDir)) {
+          const seen = new Set(files);
+          const prefix = rootDir.endsWith(path.sep) ? rootDir : `${rootDir}${path.sep}`;
+          const dbFiles = db
+            .prepare('SELECT id, item_id, episode_id, file_path FROM native_media_files WHERE file_path LIKE ?')
+            .all(`${prefix}%`) as Array<{ id: string; item_id: string; episode_id: string | null; file_path: string }>;
+          for (const row of dbFiles) {
+            if (seen.has(row.file_path)) continue;
+            db.prepare('DELETE FROM native_media_files WHERE id = ?').run(row.id);
+            if (row.episode_id) {
+              const epRemaining = db.prepare('SELECT count(*) as c FROM native_media_files WHERE episode_id = ?').get(row.episode_id) as { c: number };
+              if (epRemaining.c === 0) {
+                db.prepare('DELETE FROM native_media_episodes WHERE id = ?').run(row.episode_id);
+              }
+            }
+            const itemRemaining = db.prepare('SELECT count(*) as c FROM native_media_files WHERE item_id = ?').get(row.item_id) as { c: number };
+            if (itemRemaining.c === 0) {
+              db.prepare('DELETE FROM native_media_seasons WHERE series_id = ?').run(row.item_id);
+              db.prepare('DELETE FROM native_media_items WHERE id = ?').run(row.item_id);
+            }
+          }
+        }
       }
     }
   } catch (err) {
@@ -845,7 +868,8 @@ export function recordNativeWatchProgress(
   const isPlayed = played !== undefined
     ? played
     : (effectiveDuration > 0 && positionTicks >= effectiveDuration * 0.9) || Boolean(existing?.played);
-  const watchSeconds = Number(existing?.watch_seconds || 0) + Math.max(0, Math.round(deltaWatchSeconds));
+  const statsEnabled = getMediaEngineSettings().enableWatchStats;
+  const watchSeconds = Number(existing?.watch_seconds || 0) + (statsEnabled ? Math.max(0, Math.round(deltaWatchSeconds)) : 0);
   const playCount = Number(existing?.play_count || 0) + (existing ? 0 : 1);
 
   db.prepare(`
@@ -871,6 +895,9 @@ export function getNativeWatchStats(profileId?: string): {
   inProgressCount: number;
   recent: Array<{ itemId: string; title: string; type: string; lastPlayedAt: string; played: boolean; watchMinutes: number }>;
 } {
+  if (!getMediaEngineSettings().enableWatchStats) {
+    return { totalWatchHours: 0, itemsWatched: 0, inProgressCount: 0, recent: [] };
+  }
   ensureNativeMediaTables();
   const db = stateDatabase();
   const where = profileId ? 'WHERE h.profile_id = ?' : '';
