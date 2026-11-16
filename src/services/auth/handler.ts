@@ -100,32 +100,73 @@ export async function POST(request: HttpRequest) {
       );
     }
 
-    const account = await authenticateAccount(username.trim(), password || '');
-    if (!account) {
+    const cleanUser = username.trim();
+    const cleanPass = password || '';
+    const account = await authenticateAccount(cleanUser, cleanPass);
+
+    let jellyfinAuth: { id: string; name: string; admin: boolean; accessToken: string } | null = null;
+    const config = getServerConfig();
+    const jellyfinUrl = (config.jellyfinUrl || '').replace(/\/+$/, '');
+    if (jellyfinUrl) {
+      try {
+        const authRes = await fetch(`${jellyfinUrl}/Users/AuthenticateByName`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            Authorization: `MediaBrowser Client="${config.appName || 'HomeStream'}", Device="Web", DeviceId="homestream-web-${Buffer.from(cleanUser).toString('base64url').slice(0, 16)}", Version="1.0.0"`,
+          },
+          body: JSON.stringify({ Username: cleanUser, Pw: cleanPass }),
+        });
+        if (authRes.ok) {
+          const data = await authRes.json();
+          if (data?.User?.Id && data?.AccessToken) {
+            jellyfinAuth = {
+              id: String(data.User.Id),
+              name: String(data.User.Name || cleanUser),
+              admin: Boolean(data.User.Policy?.IsAdministrator),
+              accessToken: String(data.AccessToken),
+            };
+          }
+        }
+      } catch {
+        // Ignore Jellyfin connectivity errors when authenticating in-house accounts
+      }
+    }
+
+    if (!account && !jellyfinAuth) {
       return HttpResponse.json(
         { success: false, error: 'Invalid username or password' },
         { status: 401 }
       );
     }
 
-    if (await denyPasswordlessAdultLogin(account.id, password, account.username)) {
+    const effectiveId = account?.id || jellyfinAuth!.id;
+    const effectiveUsername = account?.username || jellyfinAuth!.name;
+    if (await denyPasswordlessAdultLogin(effectiveId, password, effectiveUsername)) {
       return HttpResponse.json({ error: 'Adult accounts need a password different from their username when Kids profiles are enabled.' }, { status: 403 });
     }
 
     const allProfiles = await getHomeflixProfiles();
-    const accountProfiles = profilesForAccount(allProfiles, account.id);
+    const accountProfiles = account ? profilesForAccount(allProfiles, account.id) : [];
     const defaultProfile = accountProfiles[0];
     const encodedSession = await createSession(
-      { id: defaultProfile?.id || account.id, accountId: account.id, name: account.displayName, admin: account.isAdmin },
+      {
+        id: defaultProfile?.jellyfinUserId || defaultProfile?.id || jellyfinAuth?.id || account!.id,
+        accountId: account?.id,
+        name: account?.displayName || jellyfinAuth!.name,
+        admin: account ? account.isAdmin : jellyfinAuth!.admin,
+        accessToken: jellyfinAuth?.accessToken,
+      },
       'web'
     );
 
     const response = HttpResponse.json({
       success: true,
-      needsProfileSetup: accountProfiles.length === 0,
+      needsProfileSetup: account ? accountProfiles.length === 0 : false,
       user: {
-        id: account.id,
-        name: account.displayName,
+        id: effectiveId,
+        name: account?.displayName || jellyfinAuth!.name,
       },
     });
 
