@@ -6,6 +6,8 @@ import { HttpRequest, HttpResponse } from '@/http';
 import { JellyfinClient } from '@/lib/jellyfin';
 import { resolveJellyfinUserId } from '@/lib/profiles';
 import { TmdbClient } from '@/lib/tmdb';
+import { getMediaEngineSettings } from '@/lib/media-settings';
+import { negotiateNativePlayback } from '@/lib/native-transcode';
 
 async function handleGET(request: HttpRequest) {
   const { searchParams } = new URL(request.url);
@@ -92,6 +94,31 @@ async function handleGET(request: HttpRequest) {
   const profileId = searchParams.get('userId') || request.cookies.get('homeflix_profile_id')?.value;
   const targetUserId = await resolveJellyfinUserId(profileId);
   const jellyfin = new JellyfinClient(undefined, undefined, targetUserId);
+  const videoCodecs = nativeTv || cast
+    ? []
+    : (searchParams.get('videoCodecs') || '').split(',').filter(codec => ['h264', 'hevc', 'vp8', 'vp9', 'av1'].includes(codec));
+  const audioCodecs = (searchParams.get('audioCodecs') || 'aac,mp3').split(',').filter(codec => ['aac', 'mp3', 'opus', 'flac', 'vorbis', 'ac3', 'eac3', 'dts'].includes(codec));
+
+  if (itemId.startsWith('nat-') || getMediaEngineSettings().mediaEngine === 'native') {
+    const profileId = searchParams.get('userId') || request.cookies.get('homeflix_profile_id')?.value || 'default';
+    const nativeResult = negotiateNativePlayback(itemId, profileId, {
+      versionId: searchParams.get('versionId') || undefined,
+      forceTranscode,
+      videoCodecs,
+      audioCodecs,
+      audioIndex: searchParams.get('audioIndex') ? Number(searchParams.get('audioIndex')) : undefined,
+      burnSubtitleIndex: searchParams.get('burnSubtitleIndex') ? Number(searchParams.get('burnSubtitleIndex')) : undefined,
+    });
+    if (nativeResult.streamUrl) {
+      const transport = nativeResult.isTranscoding ? 'HLS' : 'file';
+      const contentType = nativeResult.isTranscoding ? 'application/x-mpegURL' : 'video/mp4';
+      return HttpResponse.json({ ...nativeResult, transport, contentType });
+    }
+    if (itemId.startsWith('nat-') || !jellyfin.isConfigured()) {
+      return HttpResponse.json({ error: nativeResult.error || 'Media file is not available' }, { status: 404 });
+    }
+  }
+
   if (!jellyfin.isConfigured()) {
     return HttpResponse.json(
       { error: 'Jellyfin is not configured' },

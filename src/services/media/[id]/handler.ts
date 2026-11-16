@@ -8,6 +8,8 @@ import { TmdbClient } from '@/lib/tmdb';
 import { QBittorrentClient } from '@/lib/qbittorrent';
 import { resolveJellyfinUserId } from '@/lib/profiles';
 import { getStreamProgressMap } from '@/lib/stream-progress';
+import { getMediaEngineSettings } from '@/lib/media-settings';
+import { getNativeItemById } from '@/lib/native-media';
 import {
   MOCK_HERO_ITEM,
   MOCK_CONTINUE_WATCHING,
@@ -30,6 +32,16 @@ async function handleGET(
   const profileId =
     request.nextUrl.searchParams.get('userId') ||
     request.cookies.get('homeflix_profile_id')?.value;
+
+  if (id.startsWith('nat-') || getMediaEngineSettings().mediaEngine === 'native') {
+    const nativeItem = getNativeItemById(id, profileId || 'default');
+    if (nativeItem) {
+      return HttpResponse.json({ item: nativeItem });
+    }
+    if (id.startsWith('nat-')) {
+      return HttpResponse.json({ error: 'Native media item not found' }, { status: 404 });
+    }
+  }
 
   const targetUserId = await resolveJellyfinUserId(profileId);
   const jellyfin = new JellyfinClient(undefined, undefined, targetUserId);

@@ -903,3 +903,209 @@ export function getNativeSeasonsForSeries(seriesId: string): Season[] {
     };
   });
 }
+
+export function getNativeItemById(id: string, profileId = 'default'): MediaItem | null {
+  ensureNativeMediaTables();
+  const db = stateDatabase();
+  const epRow = db.prepare('SELECT * FROM native_media_episodes WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+  if (epRow) {
+    const seriesRow = db.prepare('SELECT * FROM native_media_items WHERE id = ?').get(String(epRow.series_id)) as Record<string, unknown> | undefined;
+    const files = db.prepare('SELECT * FROM native_media_files WHERE episode_id = ?').all(id) as unknown as NativeMediaFileRow[];
+    const watch = db.prepare('SELECT * FROM native_watch_history WHERE profile_id = ? AND item_id = ?').get(profileId, id) as Record<string, unknown> | undefined;
+    const firstFile = files[0];
+    let skipSegments: SkipSegment[] = [];
+    try { skipSegments = JSON.parse(String(firstFile?.chapters_json || '[]')); } catch { skipSegments = []; }
+    return {
+      id,
+      title: String(epRow.name),
+      overview: String(epRow.overview || seriesRow?.overview || ''),
+      type: 'Episode',
+      posterUrl: String(epRow.still_path || seriesRow?.poster_path || ''),
+      backdropUrl: String(seriesRow?.backdrop_path || ''),
+      durationMinutes: Math.round(Number(epRow.runtime_seconds || 0) / 60),
+      genres: seriesRow ? JSON.parse(String(seriesRow.genres_json || '[]')) : [],
+      source: 'native',
+      status: 'available',
+      seriesId: String(epRow.series_id),
+      seriesName: seriesRow ? String(seriesRow.title) : undefined,
+      seasonNumber: Number(epRow.season_number),
+      episodeNumber: Number(epRow.episode_number),
+      played: Boolean(watch?.played),
+      playbackPositionTicks: Number(watch?.position_ticks || 0),
+      totalDurationTicks: Number(firstFile?.duration_ticks || watch?.duration_ticks || 0),
+      versions: files.length > 1 ? files.map((f) => ({ id: f.id, label: f.version_label, resolution: f.resolution, videoCodec: f.video_codec, audioCodec: f.audio_codec, fileSize: f.file_size })) : undefined,
+      skipSegments: skipSegments.length > 0 ? skipSegments : undefined,
+      trickplayUrl: firstFile?.trickplay_vtt_path ? `/api/native/stream?trickplay=${encodeURIComponent(firstFile.id)}&asset=trickplay.vtt` : undefined,
+    };
+  }
+
+  const row = db.prepare('SELECT * FROM native_media_items WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+  if (!row) return null;
+
+  const isSeries = row.type === 'Series';
+  const seasons = isSeries ? getNativeSeasonsForSeries(id) : undefined;
+  if (seasons) {
+    for (const season of seasons) {
+      for (const ep of season.episodes || []) {
+        const w = db.prepare('SELECT * FROM native_watch_history WHERE profile_id = ? AND item_id = ?').get(profileId, ep.id) as Record<string, unknown> | undefined;
+        const f = db.prepare('SELECT id, duration_ticks, chapters_json, trickplay_vtt_path FROM native_media_files WHERE episode_id = ? LIMIT 1').get(ep.id) as Record<string, unknown> | undefined;
+        if (w) {
+          ep.played = Boolean(w.played);
+          ep.playbackPositionTicks = Number(w.position_ticks || 0);
+          ep.totalDurationTicks = Number(f?.duration_ticks || w.duration_ticks || 0);
+          if (ep.totalDurationTicks && ep.playbackPositionTicks) {
+            ep.progressPercent = Math.min(100, Math.round((ep.playbackPositionTicks / ep.totalDurationTicks) * 100));
+          }
+        }
+        if (f?.trickplay_vtt_path) {
+          ep.trickplayUrl = `/api/native/stream?trickplay=${encodeURIComponent(String(f.id))}&asset=trickplay.vtt`;
+        }
+      }
+    }
+  }
+
+  const files = db.prepare('SELECT * FROM native_media_files WHERE item_id = ?').all(id) as unknown as NativeMediaFileRow[];
+  const firstFile = files[0];
+  let skipSegments: SkipSegment[] = [];
+  try { skipSegments = JSON.parse(String(firstFile?.chapters_json || '[]')); } catch { skipSegments = []; }
+  const watch = db.prepare('SELECT * FROM native_watch_history WHERE profile_id = ? AND item_id = ?').get(profileId, id) as Record<string, unknown> | undefined;
+  const playableEpisodeId = isSeries ? getNativeSeriesFirstPlayableEpisodeId(id, profileId) : undefined;
+
+  return {
+    id,
+    title: String(row.title),
+    originalTitle: row.original_title ? String(row.original_title) : undefined,
+    overview: String(row.overview || ''),
+    type: isSeries ? 'Series' : 'Movie',
+    posterUrl: String(row.poster_path || ''),
+    backdropUrl: String(row.backdrop_path || ''),
+    year: row.year ? Number(row.year) : undefined,
+    releaseDate: row.release_date ? String(row.release_date) : undefined,
+    rating: row.rating ? String(row.rating) : undefined,
+    communityRating: row.community_rating ? Number(row.community_rating) : undefined,
+    genres: JSON.parse(String(row.genres_json || '[]')),
+    seasonsCount: seasons?.length,
+    seasons,
+    source: 'native',
+    tmdbId: row.tmdb_id ? Number(row.tmdb_id) : undefined,
+    playableEpisodeId,
+    status: 'available',
+    played: Boolean(watch?.played),
+    playbackPositionTicks: Number(watch?.position_ticks || 0),
+    totalDurationTicks: Number(firstFile?.duration_ticks || watch?.duration_ticks || 0),
+    resolution: firstFile?.resolution || undefined,
+    hasHdr: Boolean(firstFile?.has_hdr),
+    versions: !isSeries && files.length > 1 ? files.map((f) => ({ id: f.id, label: f.version_label, resolution: f.resolution, videoCodec: f.video_codec, audioCodec: f.audio_codec, fileSize: f.file_size })) : undefined,
+    skipSegments: skipSegments.length > 0 ? skipSegments : undefined,
+    trickplayUrl: firstFile?.trickplay_vtt_path ? `/api/native/stream?trickplay=${encodeURIComponent(firstFile.id)}&asset=trickplay.vtt` : undefined,
+  };
+}
+
+export function getNativeSeriesFirstPlayableEpisodeId(seriesId: string, profileId = 'default'): string | undefined {
+  ensureNativeMediaTables();
+  const db = stateDatabase();
+  const eps = db
+    .prepare('SELECT id FROM native_media_episodes WHERE series_id = ? ORDER BY season_number ASC, episode_number ASC')
+    .all(seriesId) as Array<{ id: string }>;
+  for (const ep of eps) {
+    const w = db.prepare('SELECT played FROM native_watch_history WHERE profile_id = ? AND item_id = ?').get(profileId, ep.id) as { played?: number } | undefined;
+    if (!w?.played) return ep.id;
+  }
+  return eps[0]?.id;
+}
+
+export function getNativeResumeItems(profileId = 'default', limit = 15): MediaItem[] {
+  ensureNativeMediaTables();
+  const db = stateDatabase();
+  const rows = db
+    .prepare('SELECT * FROM native_watch_history WHERE profile_id = ? AND played = 0 AND position_ticks > 0 ORDER BY last_played_at DESC LIMIT ?')
+    .all(profileId, limit) as Array<Record<string, unknown>>;
+  const items: MediaItem[] = [];
+  for (const r of rows) {
+    const item = getNativeItemById(String(r.item_id), profileId);
+    if (!item) continue;
+    const dur = Number(r.duration_ticks || item.totalDurationTicks || 0);
+    const pos = Number(r.position_ticks || 0);
+    item.playbackPositionTicks = pos;
+    item.totalDurationTicks = dur;
+    item.progressPercent = dur > 0 ? Math.min(99, Math.max(1, Math.round((pos / dur) * 100))) : 5;
+    items.push(item);
+  }
+  return items;
+}
+
+export function searchNativeMedia(query: string, limit = 30): MediaItem[] {
+  ensureNativeMediaTables();
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  const all = listNativeLibraryItems();
+  return all
+    .filter(
+      (i) =>
+        i.title.toLowerCase().includes(q) ||
+        (i.originalTitle || '').toLowerCase().includes(q) ||
+        i.overview.toLowerCase().includes(q) ||
+        i.genres.some((g) => g.toLowerCase().includes(q))
+    )
+    .slice(0, limit);
+}
+
+export function getNativeEpisodeQueue(itemId: string, profileId = 'default'): MediaItem[] {
+  ensureNativeMediaTables();
+  const db = stateDatabase();
+  const ep = db.prepare('SELECT series_id, season_number, episode_number FROM native_media_episodes WHERE id = ?').get(itemId) as { series_id: string; season_number: number; episode_number: number } | undefined;
+  const seriesId = ep?.series_id || itemId;
+  const eps = db
+    .prepare('SELECT id FROM native_media_episodes WHERE series_id = ? ORDER BY season_number ASC, episode_number ASC')
+    .all(seriesId) as Array<{ id: string }>;
+  const startIdx = ep ? Math.max(0, eps.findIndex((e) => e.id === itemId)) : 0;
+  return eps.slice(startIdx).map((e) => getNativeItemById(e.id, profileId)).filter((x): x is MediaItem => Boolean(x));
+}
+
+export function getNativeSimilarItems(itemId: string, limit = 12): MediaItem[] {
+  const target = getNativeItemById(itemId);
+  if (!target) return [];
+  const targetGenres = new Set(target.genres.map((g) => g.toLowerCase()));
+  const candidates = listNativeLibraryItems({ type: target.type === 'Series' ? 'Series' : 'Movie' }).filter((i) => i.id !== itemId);
+  return candidates
+    .map((item) => ({
+      item,
+      score: item.genres.reduce((acc, g) => acc + (targetGenres.has(g.toLowerCase()) ? 1 : 0), 0),
+    }))
+    .sort((a, b) => b.score - a.score || (b.item.communityRating || 0) - (a.item.communityRating || 0))
+    .slice(0, limit)
+    .map((x) => x.item);
+}
+
+export function getNativeCategoryRows(type: 'movies' | 'series'): Array<{ id: string; title: string; items: MediaItem[] }> {
+  const items = listNativeLibraryItems({ type: type === 'movies' ? 'Movie' : 'Series' });
+  const byGenre = new Map<string, MediaItem[]>();
+  for (const item of items) {
+    for (const g of item.genres.slice(0, 2)) {
+      const list = byGenre.get(g) || [];
+      list.push(item);
+      byGenre.set(g, list);
+    }
+  }
+  return Array.from(byGenre.entries())
+    .filter(([, list]) => list.length > 0)
+    .sort((a, b) => b[1].length - a[1].length)
+    .slice(0, 12)
+    .map(([genre, list]) => ({
+      id: `native-genre-${genre.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+      title: genre,
+      items: list,
+    }));
+}
+
+export function getNativeTmdbIdMap(): Map<number, string> {
+  ensureNativeMediaTables();
+  const rows = stateDatabase()
+    .prepare('SELECT id, tmdb_id FROM native_media_items WHERE tmdb_id IS NOT NULL')
+    .all() as Array<{ id: string; tmdb_id: number }>;
+  const map = new Map<number, string>();
+  for (const r of rows) {
+    map.set(Number(r.tmdb_id), String(r.id));
+  }
+  return map;
+}

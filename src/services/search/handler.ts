@@ -7,6 +7,8 @@ import { SeerrClient } from '@/lib/seerr';
 import { TmdbClient } from '@/lib/tmdb';
 import { QBittorrentClient } from '@/lib/qbittorrent';
 import { MOCK_SEERR_SEARCH_RESULTS, MOCK_RECENT_MOVIES, MOCK_RECENT_SERIES, MOCK_CONTINUE_WATCHING } from '@/lib/mock-data';
+import { getMediaEngineSettings } from '@/lib/media-settings';
+import { searchNativeMedia } from '@/lib/native-media';
 import { MediaItem } from '@/types';
 
 
@@ -23,7 +25,10 @@ async function handleGET(request: HttpRequest) {
   const seerr = new SeerrClient();
   const qb = new QBittorrentClient();
   const jellyfin = new JellyfinClient();
-  const localSearch = jellyfin.searchMedia(query);
+  const useNative = getMediaEngineSettings().mediaEngine === 'native';
+  const localSearch = useNative
+    ? Promise.resolve(searchNativeMedia(query))
+    : jellyfin.searchMedia(query);
   const deduplicate = (items: MediaItem[]) => {
     const seen = new Set<string>();
     return items.filter(item => { const key = `${item.type}:${item.tmdbId || `${item.title.toLowerCase().trim()}|${item.year || ''}`}`; if (seen.has(key)) return false; seen.add(key); return true; });
@@ -32,7 +37,7 @@ async function handleGET(request: HttpRequest) {
   const hasDiscovery = tmdb.isConfigured() || seerr.isConfigured();
 
   if (!hasDiscovery) {
-    if (jellyfin.isConfigured()) return HttpResponse.json({ results: await localSearch, isDemoMode: false });
+    if (useNative || jellyfin.isConfigured()) return HttpResponse.json({ results: await localSearch, isDemoMode: false });
     if (process.env.HOMESTREAM_DEMO_MODE !== 'true') return HttpResponse.json({ error: 'Configure a media server to search.' }, { status: 503 });
     // Search mock database
     const allMock: MediaItem[] = [

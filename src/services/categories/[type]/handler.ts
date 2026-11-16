@@ -6,6 +6,8 @@ import { HttpRequest, HttpResponse } from '@/http';
 import { JellyfinClient, isYouTubeItem } from '@/lib/jellyfin';
 import { SeerrClient } from '@/lib/seerr';
 import { resolveJellyfinUserId } from '@/lib/profiles';
+import { getMediaEngineSettings } from '@/lib/media-settings';
+import { getNativeCategoryRows } from '@/lib/native-media';
 import { MediaItem, MediaRowSection } from '@/types';
 
 
@@ -126,6 +128,13 @@ async function handleGET(
   }
 
   const categories = isMovies ? MOVIE_CATEGORIES : TV_CATEGORIES;
+
+  if (getMediaEngineSettings().mediaEngine === 'native') {
+    return HttpResponse.json({
+      type: isMovies ? 'movies' : 'series',
+      sections: getNativeCategoryRows(isMovies ? 'movies' : 'series'),
+    });
+  }
 
   try {
     const uid = targetUserId || (await jellyfin.getFirstUserId());

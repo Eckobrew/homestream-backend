@@ -5,6 +5,7 @@ import { withJellyfinSession } from '@/lib/jellyfin-session';
 import { HttpRequest, HttpResponse } from '@/http';
 import { JellyfinClient } from '@/lib/jellyfin';
 import { readSession } from '@/lib/session';
+import { extractNativeSubtitleVtt, listNativeSubtitlesForFile, resolveNativeFileByItemOrFileId } from '@/lib/native-transcode';
 
 
 
@@ -23,6 +24,17 @@ async function handleGET(request: HttpRequest) {
 
   if (!itemId || !/^[a-zA-Z0-9_-]{1,128}$/.test(itemId) || !/^[a-zA-Z0-9_-]{1,128}$/.test(mediaSourceId) || (indexStr !== null && (!/^\d+$/.test(indexStr) || !Number.isSafeInteger(Number(indexStr))))) {
     return HttpResponse.json({ error: 'Valid itemId, mediaSourceId and subtitle index required' }, { status: 400 });
+  }
+
+  if (itemId.startsWith('nat-')) {
+    const fileRow = resolveNativeFileByItemOrFileId(itemId);
+    if (!fileRow) return HttpResponse.json({ subtitles: [] });
+    if (indexStr !== null && indexStr !== undefined) {
+      const vtt = await extractNativeSubtitleVtt(fileRow, parseInt(indexStr, 10));
+      if (!vtt) return HttpResponse.json({ error: 'Subtitle not found' }, { status: 404 });
+      return new HttpResponse(vtt, { status: 200, headers: { 'Content-Type': 'text/vtt; charset=utf-8' } });
+    }
+    return HttpResponse.json({ subtitles: listNativeSubtitlesForFile(fileRow) });
   }
 
   const jellyfin = new JellyfinClient();

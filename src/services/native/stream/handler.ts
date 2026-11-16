@@ -3,7 +3,11 @@ import path from 'path';
 import { Readable } from 'stream';
 import { HttpRequest, HttpResponse } from '@/http';
 import { getMediaEngineSettings } from '@/lib/media-settings';
-import { getNativeTranscodeSession, resolveNativeFileByItemOrFileId } from '@/lib/native-transcode';
+import {
+  extractNativeSubtitleVtt,
+  getNativeTranscodeSession,
+  resolveNativeFileByItemOrFileId,
+} from '@/lib/native-transcode';
 
 function mimeForFile(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
@@ -45,6 +49,21 @@ export async function GET(request: HttpRequest) {
     return new HttpResponse(buf, {
       status: 200,
       headers: { 'Content-Type': mimeForFile(full), 'Cache-Control': 'public, max-age=3600' },
+    });
+  }
+
+  // 2b. Extracted or sidecar WebVTT subtitles
+  const subtitleFileId = searchParams.get('subtitle');
+  if (subtitleFileId) {
+    const fileRow = resolveNativeFileByItemOrFileId(subtitleFileId);
+    if (!fileRow) return HttpResponse.json({ error: 'Subtitle source not found' }, { status: 404 });
+    const idxParam = searchParams.get('index');
+    const sidecar = searchParams.get('sidecar') || undefined;
+    const vtt = await extractNativeSubtitleVtt(fileRow, idxParam !== null ? Number(idxParam) : undefined, sidecar);
+    if (!vtt) return HttpResponse.json({ error: 'Subtitle track not found' }, { status: 404 });
+    return new HttpResponse(vtt, {
+      status: 200,
+      headers: { 'Content-Type': 'text/vtt; charset=utf-8', 'Cache-Control': 'public, max-age=3600' },
     });
   }
 

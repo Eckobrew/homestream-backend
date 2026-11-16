@@ -11,6 +11,8 @@ import { SmartRecommendationEngine } from '@/lib/recommendations';
 import { getNativeUserRequests } from '@/lib/user-requests';
 import { QBittorrentClient } from '@/lib/qbittorrent';
 import { resolveJellyfinUserId } from '@/lib/profiles';
+import { getMediaEngineSettings } from '@/lib/media-settings';
+import { getNativeResumeItems, listNativeLibraryItems } from '@/lib/native-media';
 import {
   MOCK_HERO_ITEM,
   MOCK_CONTINUE_WATCHING,
@@ -43,7 +45,8 @@ async function handleGET(request: HttpRequest) {
   const seerr = new SeerrClient();
   const tmdb = new TmdbClient();
 
-  const isJellyfinActive = jellyfin.isConfigured();
+  const useNative = getMediaEngineSettings().mediaEngine === 'native';
+  const isJellyfinActive = useNative || jellyfin.isConfigured();
 
   if (!isJellyfinActive) {
     if (process.env.HOMESTREAM_DEMO_MODE !== 'true') return HttpResponse.json({ error: 'Connect Jellyfin to browse your library.', setupRequired: true, isDemoMode: false }, { status: 503 });
@@ -120,12 +123,21 @@ async function handleGET(request: HttpRequest) {
   }
 
   try {
-    const [resumeItems, latestMovies, latestSeries, topRated] = await Promise.all([
-      jellyfin.getResumeItems(),
-      jellyfin.getLatestMedia('Movie', 15),
-      jellyfin.getLatestMedia('Series', 15),
-      jellyfin.getTopRated(15),
-    ]);
+    const [resumeItems, latestMovies, latestSeries, topRated] = useNative
+      ? [
+          getNativeResumeItems(profileId || 'default', 15),
+          listNativeLibraryItems({ type: 'Movie' }).slice(0, 15),
+          listNativeLibraryItems({ type: 'Series' }).slice(0, 15),
+          [...listNativeLibraryItems({ type: 'Movie' }), ...listNativeLibraryItems({ type: 'Series' })]
+            .sort((a, b) => (b.communityRating || 0) - (a.communityRating || 0))
+            .slice(0, 15),
+        ]
+      : await Promise.all([
+          jellyfin.getResumeItems(),
+          jellyfin.getLatestMedia('Movie', 15),
+          jellyfin.getLatestMedia('Series', 15),
+          jellyfin.getTopRated(15),
+        ]);
 
     if (upstreamFailures()) return HttpResponse.json({ error: 'A media server is temporarily unavailable. Please try again.', isDemoMode: false }, { status: 503 });
 

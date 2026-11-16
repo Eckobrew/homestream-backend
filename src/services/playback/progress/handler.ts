@@ -7,6 +7,8 @@ import { resolveJellyfinUserId } from '@/lib/profiles';
 import { readSession } from '@/lib/session';
 import { isRequestLocalOrTailscale } from '@/lib/network';
 import { saveStreamProgress } from '@/lib/stream-progress';
+import { recordNativeWatchProgress } from '@/lib/native-media';
+import { getMediaEngineSettings } from '@/lib/media-settings';
 
 
 
@@ -29,8 +31,14 @@ async function handlePOST(request: HttpRequest) {
     const profileId = session && !(await isRequestLocalOrTailscale(request)).isLocalOrTailscale ? session.id : userId || request.cookies.get('homeflix_profile_id')?.value;
     const effectiveProfileId = profileId || 'default';
 
-    const isNonJellyfinId = /^(?:seerr|tmdb|dl|yt)-/i.test(itemId);
+    const isNonJellyfinId = /^(?:seerr|tmdb|dl|yt|nat)-/i.test(itemId);
     saveStreamProgress(effectiveProfileId, itemId, positionTicks);
+    if (itemId.startsWith('nat-') || getMediaEngineSettings().mediaEngine === 'native') {
+      recordNativeWatchProgress(effectiveProfileId, itemId, positionTicks, 0, undefined, undefined, isPaused ? 0 : 10);
+      if (itemId.startsWith('nat-')) {
+        return HttpResponse.json({ success: true });
+      }
+    }
 
     const targetUserId = await resolveJellyfinUserId(profileId);
     const jellyfin = new JellyfinClient(undefined, undefined, targetUserId);

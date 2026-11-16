@@ -5,6 +5,8 @@ import { withJellyfinSession } from '@/lib/jellyfin-session';
 import { HttpRequest, HttpResponse } from '@/http';
 import { JellyfinClient, isYouTubeItem } from '@/lib/jellyfin';
 import { resolveJellyfinUserId } from '@/lib/profiles';
+import { getMediaEngineSettings } from '@/lib/media-settings';
+import { listNativeLibraryItems } from '@/lib/native-media';
 import { MediaItem } from '@/types';
 
 
@@ -50,6 +52,36 @@ async function handleGET(
   const profileId =
     searchParams.get('userId') ||
     request.cookies.get('homeflix_profile_id')?.value;
+
+  if (getMediaEngineSettings().mediaEngine === 'native' && libraryType !== 'youtube') {
+    const nativeItems = listNativeLibraryItems({ type: libraryType === 'tv' ? 'Series' : 'Movie' });
+    const letterSet = new Set<string>();
+    for (const item of nativeItems) {
+      const first = (item.title || '').trim()[0]?.toUpperCase() || '';
+      if (/[A-Z]/.test(first)) letterSet.add(first);
+      else if (first) letterSet.add('#');
+    }
+    const filtered = nativeItems.filter((item) => {
+      if (letter) {
+        const first = (item.title || '').trim()[0]?.toUpperCase() || '';
+        if (letter === '#' ? /[A-Z]/.test(first) : first !== letter) return false;
+      }
+      if (search) {
+        const hay = `${item.title} ${item.overview} ${item.genres.join(' ')}`.toLowerCase();
+        if (!hay.includes(search)) return false;
+      }
+      return true;
+    });
+    return HttpResponse.json({
+      type: libraryType,
+      title: libraryType === 'tv' ? 'TV Shows' : 'Movies',
+      items: filtered,
+      totalCount: nativeItems.length,
+      filteredCount: filtered.length,
+      availableLetters: Array.from(letterSet).sort(),
+    });
+  }
+
   const targetUserId = await resolveJellyfinUserId(profileId);
   const jellyfin = new JellyfinClient(undefined, undefined, targetUserId);
 

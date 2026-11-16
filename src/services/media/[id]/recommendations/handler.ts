@@ -6,6 +6,7 @@ import { TmdbClient } from '@/lib/tmdb';
 import { JellyfinClient } from '@/lib/jellyfin';
 import { MediaItem } from '@/types';
 import { resolveJellyfinUserId } from '@/lib/profiles';
+import { getNativeItemById, getNativeSimilarItems } from '@/lib/native-media';
 
 
 const normalize = (text: string) => text.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -22,7 +23,20 @@ async function handleGET(request: HttpRequest, { params }: { params: Promise<{ i
   const jellyfin = new JellyfinClient(undefined, undefined, userId);
   let seed: MediaItem | null = null;
   let sourceId = id;
-  if (!id.startsWith('seerr-') && !id.startsWith('tmdb-') && !/^\d+$/.test(id) && jellyfin.isConfigured()) {
+  if (id.startsWith('nat-')) {
+    seed = getNativeItemById(id);
+    if (seed?.type === 'Episode' && seed.seriesId) {
+      sourceId = seed.seriesId;
+      seed = getNativeItemById(sourceId);
+    }
+    if (seed) {
+      type = seed.type === 'Movie' ? 'movie' : 'tv';
+      tmdb = seed.tmdbId || tmdb;
+    }
+    if (!tmdb) {
+      return HttpResponse.json({ success: true, source: 'native', recommendations: getNativeSimilarItems(sourceId) });
+    }
+  } else if (!id.startsWith('seerr-') && !id.startsWith('tmdb-') && !/^\d+$/.test(id) && jellyfin.isConfigured()) {
     seed = await jellyfin.getRecommendationSeed(id);
     // Episode TMDB IDs belong to episodes; TV recommendations require the series ID.
     if (seed?.type === 'Episode' && seed.seriesId) {

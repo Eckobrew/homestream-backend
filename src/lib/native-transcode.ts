@@ -1,11 +1,15 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { spawn, ChildProcess } from 'child_process';
+import { spawn, ChildProcess, execFile } from 'child_process';
+import { promisify } from 'util';
 import { stateDatabase } from '@/state/database';
 import { getMediaEngineSettings } from '@/lib/media-settings';
 import { ensureNativeMediaTables, NativeMediaFileRow } from '@/lib/native-media';
+import { MediaVersion, SkipSegment, SubtitleTrack } from '@/types';
 import { log } from '@/log';
+
+const execFileAsync = promisify(execFile);
 
 export interface ActiveStreamSession {
   id: string;
@@ -174,4 +178,177 @@ export function getNativeTranscodeSession(sessionId: string): ActiveStreamSessio
   const sess = activeSessions.get(sessionId);
   if (sess) sess.lastAccessAt = Date.now();
   return sess || null;
+}
+
+export function listNativeSubtitlesForFile(file: NativeMediaFileRow): SubtitleTrack[] {
+  const tracks: SubtitleTrack[] = [];
+  try {
+    const streams = JSON.parse(file.streams_json || '[]') as Array<Record<string, unknown>>;
+    for (const s of streams) {
+      if (s.codec_type !== 'subtitle') continue;
+      const index = Number(s.index);
+      const codec = String(s.codec_name || '').toLowerCase();
+      // Text-based subtitles can be extracted to WebVTT directly
+      if (['subrip', 'srt', 'ass', 'ssa', 'webvtt', 'mov_text'].includes(codec)) {
+        const tags = (s.tags || {}) as Record<string, unknown>;
+        const disp = (s.disposition || {}) as Record<string, unknown>;
+        tracks.push({
+          id: `${file.id}-${index}`,
+          index,
+          title: String(tags.title || tags.language || `Track ${index}`),
+          language: String(tags.language || 'und'),
+          isDefault: Boolean(disp.default),
+          isForced: Boolean(disp.forced),
+          src: `/api/native/stream?subtitle=${encodeURIComponent(file.id)}&index=${index}`,
+        });
+      }
+    }
+  } catch {
+    // Ignore malformed stream JSON
+  }
+
+  // Also check sidecar .srt / .vtt files next to the video
+  const dir = path.dirname(file.file_path);
+  const base = path.basename(file.file_path, path.extname(file.file_path));
+  try {
+    if (fs.existsSync(dir)) {
+      const sidecars = fs.readdirSync(dir).filter((name) => name.startsWith(base) && /\.(vtt|srt)$/i.test(name));
+      sidecars.forEach((name, idx) => {
+        const langMatch = /\.([a-z]{2,3})\.(vtt|srt)$/i.exec(name);
+        tracks.push({
+          id: `${file.id}-sidecar-${idx}`,
+          index: 1000 + idx,
+          title: langMatch ? `${langMatch[1].toUpperCase()} (Sidecar)` : 'External Subtitles',
+          language: langMatch?.[1] || 'und',
+          src: `/api/native/stream?subtitle=${encodeURIComponent(file.id)}&sidecar=${encodeURIComponent(name)}`,
+        });
+      });
+    }
+  } catch {
+    // Ignore sidecar errors
+  }
+
+  return tracks;
+}
+
+export async function extractNativeSubtitleVtt(file: NativeMediaFileRow, index?: number, sidecar?: string): Promise<string | null> {
+  const settings = getMediaEngineSettings();
+  const cacheDir = path.join(settings.artworkCacheDir || '/app/data/artwork', 'subtitles');
+  fs.mkdirSync(cacheDir, { recursive: true });
+
+  if (sidecar) {
+    const safeName = path.basename(sidecar);
+    const full = path.join(path.dirname(file.file_path), safeName);
+    if (!fs.existsSync(full)) return null;
+    if (full.toLowerCase().endsWith('.vtt')) return fs.readFileSync(full, 'utf8');
+    const cached = path.join(cacheDir, `${file.id}-${safeName}.vtt`);
+    if (fs.existsSync(cached)) return fs.readFileSync(cached, 'utf8');
+    await execFileAsync('ffmpeg', ['-y', '-i', full, '-f', 'webvtt', cached], { timeout: 15000 });
+    return fs.existsSync(cached) ? fs.readFileSync(cached, 'utf8') : null;
+  }
+
+  if (index === undefined || Number.isNaN(index)) return null;
+  const cached = path.join(cacheDir, `${file.id}-${index}.vtt`);
+  if (fs.existsSync(cached)) return fs.readFileSync(cached, 'utf8');
+  await execFileAsync('ffmpeg', ['-y', '-i', file.file_path, '-map', `0:${index}`, '-f', 'webvtt', cached], { timeout: 30000 });
+  return fs.existsSync(cached) ? fs.readFileSync(cached, 'utf8') : null;
+}
+
+export function negotiateNativePlayback(
+  itemId: string,
+  profileId: string,
+  options?: {
+    versionId?: string;
+    forceTranscode?: boolean;
+    videoCodecs?: string[];
+    audioCodecs?: string[];
+    audioIndex?: number;
+    burnSubtitleIndex?: number;
+  }
+): {
+  streamUrl: string;
+  isTranscoding: boolean;
+  versions?: MediaVersion[];
+  skipSegments?: SkipSegment[];
+  trickplayUrl?: string;
+  subtitles: SubtitleTrack[];
+  error?: string;
+} {
+  ensureNativeMediaTables();
+  const file = resolveNativeFileByItemOrFileId(itemId, options?.versionId);
+  if (!file || !fs.existsSync(file.file_path)) {
+    return { streamUrl: '', isTranscoding: false, subtitles: [], error: 'Native media file not found' };
+  }
+
+  const settings = getMediaEngineSettings();
+  const db = stateDatabase();
+  const siblingFiles = db.prepare('SELECT id, version_label, resolution, video_codec, audio_codec, file_size FROM native_media_files WHERE item_id = ? AND COALESCE(episode_id, \'\') = COALESCE(?, \'\')').all(file.item_id, file.episode_id) as unknown as NativeMediaFileRow[];
+  const versions: MediaVersion[] | undefined = siblingFiles.length > 1
+    ? siblingFiles.map((f) => ({
+        id: f.id,
+        label: f.version_label,
+        resolution: f.resolution,
+        videoCodec: f.video_codec,
+        audioCodec: f.audio_codec,
+        fileSize: f.file_size,
+      }))
+    : undefined;
+
+  let skipSegments: SkipSegment[] | undefined;
+  if (settings.enableSkipIntroCredits) {
+    try {
+      const parsed = JSON.parse(file.chapters_json || '[]') as SkipSegment[];
+      if (parsed.length > 0) skipSegments = parsed;
+    } catch {}
+  }
+
+  const trickplayUrl = file.trickplay_vtt_path
+    ? `/api/native/stream?trickplay=${encodeURIComponent(file.id)}&asset=trickplay.vtt`
+    : undefined;
+  const subtitles = listNativeSubtitlesForFile(file);
+
+  const ext = path.extname(file.file_path).toLowerCase();
+  const vCodec = (file.video_codec || '').toLowerCase();
+  const aCodec = (file.audio_codec || '').toLowerCase();
+  const supportedVideo = !options?.videoCodecs?.length || options.videoCodecs.some((c) => vCodec.includes(c.toLowerCase()));
+  const supportedAudio = !options?.audioCodecs?.length || options.audioCodecs.some((c) => aCodec.includes(c.toLowerCase()));
+  const browserContainerOk = ext === '.mp4' || ext === '.m4v' || ext === '.webm' || (ext === '.mkv' && vCodec === 'h264');
+
+  const canDirectPlay =
+    settings.allowDirectPlay &&
+    !options?.forceTranscode &&
+    options?.burnSubtitleIndex === undefined &&
+    options?.audioIndex === undefined &&
+    browserContainerOk &&
+    supportedVideo &&
+    supportedAudio;
+
+  if (canDirectPlay) {
+    return {
+      streamUrl: `/api/native/stream?fileId=${encodeURIComponent(file.id)}`,
+      isTranscoding: false,
+      versions,
+      skipSegments,
+      trickplayUrl,
+      subtitles,
+    };
+  }
+
+  const itemRow = db.prepare('SELECT title FROM native_media_items WHERE id = ?').get(file.item_id) as { title?: string } | undefined;
+  const session = startNativeHlsTranscode({
+    file,
+    title: itemRow?.title || path.basename(file.file_path),
+    profileId,
+    audioIndex: options?.audioIndex,
+    burnSubtitleIndex: options?.burnSubtitleIndex,
+  });
+
+  return {
+    streamUrl: `/api/native/stream?hls=${encodeURIComponent(session.id)}&segment=master.m3u8`,
+    isTranscoding: true,
+    versions,
+    skipSegments,
+    trickplayUrl,
+    subtitles,
+  };
 }
