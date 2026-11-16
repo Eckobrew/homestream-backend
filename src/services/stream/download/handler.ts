@@ -70,7 +70,8 @@ async function handleGET(request: HttpRequest) {
   const seasonParam = searchParams.get('season');
   const episodeParam = searchParams.get('episode');
   const startSec = parseFloat(searchParams.get('start') || '0');
-  const forceTranscode = searchParams.get('transcode') === '1';
+  const receiver = searchParams.get('receiver');
+  const forceTranscode = searchParams.get('forceTranscode') === 'true' || searchParams.get('transcode') === '1';
 
   if (!Number.isFinite(startSec) || startSec < 0 ||
       (fileIndexParam !== null && (!/^\d+$/.test(fileIndexParam) || !Number.isSafeInteger(fileIndex))) ||
@@ -264,6 +265,8 @@ async function handleGET(request: HttpRequest) {
   const isDirectWebPlayable =
     !isActivelyDownloading &&
     !forceTranscode &&
+    receiver !== 'cast' &&
+    receiver !== 'native-tv' &&
     (ext === '.mp4' || ext === '.m4v' || ext === '.webm');
 
   const sourceRequest = searchParams.get('source') === '1';
