@@ -27,7 +27,7 @@ async function handleGET(request: HttpRequest) {
   }
 
   if (itemId.startsWith('nat-')) {
-    const fileRow = resolveNativeFileByItemOrFileId(itemId);
+    const fileRow = resolveNativeFileByItemOrFileId(itemId, searchParams.get('versionId') || undefined);
     if (!fileRow) return HttpResponse.json({ subtitles: [] });
     if (indexStr !== null && indexStr !== undefined) {
       const vtt = await extractNativeSubtitleVtt(fileRow, parseInt(indexStr, 10));

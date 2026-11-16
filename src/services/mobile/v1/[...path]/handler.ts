@@ -33,9 +33,11 @@ import { GET as recommendations } from '@/services/media/[id]/recommendations/ha
 import { GET as downloadStream } from '@/services/stream/download/handler';
 import { GET as torrentStream } from '@/services/stream/torrent/handler';
 import { GET as nativeStream } from '@/services/native/stream/handler';
+import * as nativeLibrary from '@/services/native/library/handler';
+import * as accounts from '@/services/accounts/handler';
 import { getServerConfig } from '@/lib/config';
 import { JellyfinClient } from '@/lib/jellyfin';
-import { getNativeEpisodeQueue, getNativeItemById, getNativeResumeItems, recordNativeWatchProgress } from '@/lib/native-media';
+import { getNativeEpisodeQueue, getNativeItemById, getNativeMovieCollection, getNativeResumeItems, recordNativeWatchProgress } from '@/lib/native-media';
 import { getMediaEngineSettings } from '@/lib/media-settings';
 import * as syncplayService from '@/services/syncplay/handler';
 import { resolveJellyfinUserId } from '@/lib/profiles';
@@ -173,7 +175,7 @@ async function dispatchContent(request: HttpRequest, context: Context) {
     const headers = new Headers(request.headers);
     headers.delete('cookie');
     let body: string | undefined;
-    if (!get) {
+    if (!get && request.method !== 'HEAD' && request.body) {
       const payload = await request.json().catch(() => null);
       if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return HttpResponse.json({ error: 'JSON object required' }, { status: 400 });
       body = JSON.stringify({ ...payload, userId: session.id });
@@ -202,22 +204,26 @@ async function dispatchContent(request: HttpRequest, context: Context) {
     if (request.method === 'DELETE') return youtubeService.DELETE(request);
   }
   if (get && route === 'trailer') return trailer(request);
-  if (get && route === 'capabilities') {
-    const active = await activeProfile(request);
-    const localPaired = isLocallyPairedDeviceToken(request.headers.get('authorization')?.replace(/^Bearer /i, '') || '');
-    const isAdmin = session ? session.admin === true : Boolean(localPaired && active && !isKids(active) && active.isAdministrator !== false);
-    return HttpResponse.json({ apiVersion: 1, appName: getServerConfig().appName || 'HomeStream', cast: true, jellyfinLogin: true, canManageIntegrations: isAdmin });
-  }
-  if (get && route === 'session/status') {
+  const adminService = route === 'native/library' ? nativeLibrary : route === 'accounts' ? accounts : null;
+  if (adminService || (get && (route === 'capabilities' || route === 'session/status'))) {
     const profile = await activeProfile(request);
     const localPaired = isLocallyPairedDeviceToken(request.headers.get('authorization')?.replace(/^Bearer /i, '') || '');
     const isAdmin = session ? session.admin === true : Boolean(localPaired && profile && !isKids(profile) && profile.isAdministrator !== false);
+    if (adminService) {
+      if (!isAdmin) return HttpResponse.json({ error: 'Administrator access required' }, { status: 403 });
+      if (get) return adminService.GET(request);
+      if (request.method === 'POST') return adminService.POST(request);
+      return HttpResponse.json({ error: 'Method not allowed' }, { status: 405 });
+    }
+    if (route === 'capabilities') {
+      return HttpResponse.json({ apiVersion: 1, appName: getServerConfig().appName || 'HomeStream', cast: true, jellyfinLogin: true, canManageIntegrations: isAdmin });
+    }
     return HttpResponse.json({ profile, revision: profile ? kidsPolicyRevision(profile) : '', canManageIntegrations: isAdmin });
   }
   if (get && route === 'continue-watching') {
     const profileId = session?.id || request.nextUrl.searchParams.get('userId') || 'default';
     if (getMediaEngineSettings().mediaEngine === 'native') {
-      return HttpResponse.json({ items: getNativeResumeItems(profileId) });
+      return HttpResponse.json({ items: getNativeResumeItems(await resolveJellyfinUserId(profileId)) });
     }
     const uid = await resolveJellyfinUserId(session?.id || request.nextUrl.searchParams.get('userId') || undefined);
     const jellyfin = new JellyfinClient(undefined, undefined, uid);
@@ -252,7 +258,13 @@ async function dispatchContent(request: HttpRequest, context: Context) {
   if (route === 'profiles/users') {
     try { await requireParentPin(get ? undefined : (await request.json().catch(() => null))?.parentPin); }
     catch (error) { return HttpResponse.json({ error: error instanceof Error ? error.message : 'Parent PIN required' }, { status: 403 }); }
-    return HttpResponse.json({ users: (await new JellyfinClient().getUsers()).map(user => ({ id: user.id, name: user.name, isAdministrator: user.isAdministrator })) });
+    const mediaEngine = getMediaEngineSettings().mediaEngine;
+    const jellyfin = new JellyfinClient();
+    const users = jellyfin.isConfigured() && mediaEngine === 'jellyfin' ? await jellyfin.getUsers() : [];
+    return HttpResponse.json({
+      mediaEngine,
+      users: users.map(user => ({ id: user.id, name: user.name, isAdministrator: user.isAdministrator })),
+    });
   }
   if (!get && route === 'profiles') {
     const body = await request.json().catch(() => null);
@@ -270,7 +282,7 @@ async function dispatchContent(request: HttpRequest, context: Context) {
     const body = await request.json().catch(() => null);
     if (!body || typeof body.itemId !== 'string' || !body.itemId || typeof body.played !== 'boolean') return HttpResponse.json({ error: 'itemId and played required' }, { status: 400 });
     if (body.itemId.startsWith('nat-')) {
-      recordNativeWatchProgress(session?.id || body.userId || 'default', body.itemId, 0, 0, body.played);
+      recordNativeWatchProgress(await resolveJellyfinUserId(session?.id || body.userId || 'default'), body.itemId, 0, 0, body.played);
       return HttpResponse.json({ success: true });
     }
     const uid = await resolveJellyfinUserId(session?.id || body.userId || undefined);
@@ -284,7 +296,7 @@ async function dispatchContent(request: HttpRequest, context: Context) {
     if (!itemId) return HttpResponse.json({ error: 'itemId required' }, { status: 400 });
     if (itemId.startsWith('nat-')) {
       const profileId = session?.id || request.nextUrl.searchParams.get('userId') || 'default';
-      return HttpResponse.json({ items: getNativeEpisodeQueue(itemId, profileId) });
+      return HttpResponse.json({ items: getNativeEpisodeQueue(itemId, await resolveJellyfinUserId(profileId)) });
     }
     const uid = await resolveJellyfinUserId(request.nextUrl.searchParams.get('userId') || undefined);
     const jellyfin = new JellyfinClient(undefined, undefined, uid);
@@ -337,6 +349,8 @@ async function dispatchContent(request: HttpRequest, context: Context) {
     const jellyfin = new JellyfinClient(undefined, undefined, uid);
     let tmdbId = /^(?:seerr|tmdb)-(?:movie-)?(\d+)$/.exec(id)?.[1] || (/^\d+$/.test(id) ? id : '');
     if (!tmdbId && id.startsWith('nat-')) {
+      const collection = getNativeMovieCollection(id, uid);
+      if (collection) return HttpResponse.json({ collection });
       const natItem = getNativeItemById(id, session?.id || request.nextUrl.searchParams.get('userId') || undefined);
       tmdbId = natItem?.tmdbId ? String(natItem.tmdbId) : '';
     }

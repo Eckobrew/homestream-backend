@@ -110,7 +110,7 @@ async function start(secret) {
     env: { ...process.env, PORT: String(port), HOSTNAME: '127.0.0.1', DATA_DIR: dir, HOMESTREAM_MOBILE_TOKEN: secret, HOMESTREAM_SESSION_SECRET: token, HOMESTREAM_TRUST_PROXY: 'false', HOMESTREAM_DEMO_MODE: 'true', HOMESTREAM_SETUP_TOKEN: '', HOMESTREAM_DIST_DIR: process.env.MOBILE_TEST_PRODUCTION === '1' ? '.next' : '.next-mobile-test',
       JELLYFIN_URL: '', NEXT_PUBLIC_JELLYFIN_URL: '', JELLYFIN_API_KEY: '',
       SEERR_URL: '', NEXT_PUBLIC_SEERR_URL: '', SEERR_API_KEY: '',
-      QBITTORRENT_URL: '', NEXT_PUBLIC_QBITTORRENT_URL: '', NEXT_TELEMETRY_DISABLED: '1' },
+      QBITTORRENT_URL: '', NEXT_PUBLIC_QBITTORRENT_URL: '', YOUTUBE_PATH: join(dir, 'downloads'), NEXT_TELEMETRY_DISABLED: '1' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   server.stdout.on('data', chunk => { output += chunk; });
@@ -290,11 +290,17 @@ try {
   rejectProgress = true;
   await api('progress', 502, { itemId: 'episode', positionTicks: 100 }, login.token);
   rejectProgress = false;
-  for (const [range, expected, content] of [['bytes=2-5', 206, '2345'], ['bytes=-4', 206, 'cdef'], ['bytes=12-999', 206, 'cdef'], ['bytes=99-', 416, null], ['bytes=4-2', 416, null], ['bytes=0-1,4-5', 416, null]]) {
-    const response = await fetch(`${origin}/api/mobile/v1/stream/download?path=clip.mp4`, { headers: { Authorization: `Bearer ${token}`, Range: range } });
-    assert.equal(response.status, expected, range);
-    if (content) assert.equal(await response.text(), content);
-    else await response.arrayBuffer();
+  for (const route of ['stream/download', 'youtube/stream-local']) {
+    const url = `${origin}/api/mobile/v1/${route}?path=clip.mp4`;
+    for (const [range, expected, content] of [['bytes=2-5', 206, '2345'], ['bytes=-4', 206, 'cdef'], ['bytes=12-999', 206, 'cdef'], ['bytes=99-', 416, null], ['bytes=4-2', 416, null], ['bytes=0-1,4-5', 416, null]]) {
+      const response = await fetch(url, { headers: { Authorization: `Bearer ${token}`, Range: range } });
+      assert.equal(response.status, expected, `${route} ${range}`);
+      if (content) assert.equal(await response.text(), content);
+      else await response.arrayBuffer();
+    }
+    const head = await fetch(url, { method: 'HEAD', headers: { Authorization: `Bearer ${login.token}`, Range: 'bytes=-4' } });
+    assert.equal(head.status, 206, route);
+    assert.equal(head.headers.get('content-length'), '4');
   }
   await api('stream/download?path=../outside.mp4', 403);
   await api('stream/download?path=escape.mp4', 403);

@@ -6,7 +6,8 @@ import { getServerConfig } from './config';
 import { UserProfile } from '@/types';
 import { JellyfinClient } from './jellyfin';
 import { PROFILE_PALETTES, getInitials } from './profile-constants';
-import { ensureAccountTables, getPrimaryAccount } from './accounts';
+import { ensureAccountTables, getAccountById, getPrimaryAccount } from './accounts';
+import { getMediaEngineSettings } from './media-settings';
 
 export { PROFILE_PALETTES, getInitials };
 
@@ -30,7 +31,10 @@ async function getHomeflixProfilesInternal(): Promise<UserProfile[]> {
             const jellyfin = new JellyfinClient(config.jellyfinUrl, config.jellyfinApiKey);
             for (const profile of changed) {
               const ceiling = ratingForBirthDate(profile.kidsDateOfBirth) || 'U';
-              await jellyfin.applyKidsPolicy(profile.jellyfinUserId || profile.id, ceiling);
+              const linkedUserId = profile.jellyfinUserId || (getMediaEngineSettings().mediaEngine === 'native' ? '' : profile.id);
+              if (jellyfin.isConfigured() && linkedUserId) {
+                await jellyfin.applyKidsPolicy(linkedUserId, ceiling);
+              }
               profile.kidsRating = ceiling;
             }
             await saveHomeflixProfiles(parsed);
@@ -135,7 +139,7 @@ async function addHomeflixProfileInternal(
   const jellyfin = new JellyfinClient();
   let jellyfinUserId = '';
 
-  if (jellyfin.isConfigured()) {
+  if (jellyfin.isConfigured() && getMediaEngineSettings().mediaEngine !== 'native') {
     try {
       const existingJellyfinUser = await jellyfin.findUserByName(trimmed);
       if (existingJellyfinUser?.id) {
@@ -166,8 +170,8 @@ async function addHomeflixProfileInternal(
     avatarColor: chosenPalette.avatarColor,
     avatarBg: chosenPalette.avatarBg,
     initials: getInitials(trimmed),
-    isAdministrator: false,
-    jellyfinUserId: jellyfinUserId || profileId,
+    isAdministrator: !jellyfinUserId && Boolean(targetAccountId && getAccountById(targetAccountId)?.isAdmin),
+    jellyfinUserId: jellyfinUserId || undefined,
     ...(targetAccountId ? { accountId: targetAccountId } : {}),
   };
 

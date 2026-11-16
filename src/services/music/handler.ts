@@ -1,3 +1,4 @@
+import { streamLocalFile } from '@/media/local-file';
 import fs from 'node:fs';
 import { downloadMusic, musicImportStatus } from './downloads';
 import { HttpRequest, HttpResponse } from '@/http';
@@ -136,57 +137,7 @@ async function get(request: HttpRequest) {
         return HttpResponse.json({ error: 'Track not found' }, { status: 404 });
       }
 
-      const totalSize = info.size;
-      const rangeHeader = request.headers.get('range');
-
-      if (request.method === 'HEAD') {
-        return new HttpResponse(null, {
-          status: 200,
-          headers: {
-            'Content-Type': info.contentType,
-            'Content-Length': String(totalSize),
-            'Accept-Ranges': 'bytes',
-          },
-        });
-      }
-
-      if (rangeHeader) {
-        const parts = rangeHeader.replace(/bytes=/, '').split('-');
-        const start = parseInt(parts[0], 10);
-        const end = parts[1] ? parseInt(parts[1], 10) : totalSize - 1;
-
-        if (start >= totalSize || end >= totalSize || start > end) {
-          return new HttpResponse(null, {
-            status: 416,
-            headers: { 'Content-Range': `bytes */${totalSize}` },
-          });
-        }
-
-        const chunksize = end - start + 1;
-        const stream = fs.createReadStream(info.filePath, { start, end });
-
-        return new HttpResponse(stream as any, {
-          status: 206,
-          headers: {
-            'Content-Range': `bytes ${start}-${end}/${totalSize}`,
-            'Accept-Ranges': 'bytes',
-            'Content-Length': String(chunksize),
-            'Content-Type': info.contentType,
-            'Cache-Control': 'private,no-cache',
-          },
-        });
-      }
-
-      const stream = fs.createReadStream(info.filePath);
-      return new HttpResponse(stream as any, {
-        status: 200,
-        headers: {
-          'Content-Length': String(totalSize),
-          'Content-Type': info.contentType,
-          'Accept-Ranges': 'bytes',
-          'Cache-Control': 'private,no-cache',
-        },
-      });
+      return streamLocalFile(request, info.filePath, info.size, info.contentType);
     }
 
     return HttpResponse.json({ error: 'Not found' }, { status: 404 });

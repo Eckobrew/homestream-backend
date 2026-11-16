@@ -17,7 +17,7 @@ export async function activeProfile(request: HttpRequest): Promise<UserProfile |
   const profiles = await getHomeflixProfiles();
   const bearer = request.headers.get('authorization')?.replace(/^Bearer /i, '') || '';
   const session = await readSession(bearer || request.cookies.get('homeflix_session')?.value, bearer ? 'mobile' : 'web');
-  if (session) return profiles.find(p => (p.jellyfinUserId || p.id) === session.id) || { id: session.id, name: session.name, jellyfinUserId: session.id, avatarColor: '', avatarBg: '', initials: session.name.slice(0, 2) };
+  if (session) return profiles.find(p => p.id === session.id || p.jellyfinUserId === session.id) || { id: session.id, name: session.name, jellyfinUserId: session.id, avatarColor: '', avatarBg: '', initials: session.name.slice(0, 2) };
   const device = registeredDevice(bearer);
   const kids = profiles.filter(isKids).sort((a, b) => KIDS_LIMITS[a.kidsRating] - KIDS_LIMITS[b.kidsRating]);
   if (device) {

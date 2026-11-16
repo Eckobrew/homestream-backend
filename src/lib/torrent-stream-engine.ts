@@ -2,7 +2,7 @@ import torrentStream from 'torrent-stream';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
-import { getServerConfig } from './config';
+import { dataDirectory } from '@/state/database';
 
 export interface TorrentStreamFile {
   name: string;
@@ -89,15 +89,17 @@ export async function resolveTorrentSource(release: {
 
 export function getOrCreateTorrentEngine(source: string | Buffer): ActiveStreamEngine {
   const normalizedKey = typeof source === 'string'
-    ? source.toLowerCase()
+    ? source
     : crypto.createHash('sha1').update(source).digest('hex');
 
-  const existing = engines.get(normalizedKey);
-  if (existing) {
+  const key = engines.has(normalizedKey) ? normalizedKey
+    : [...engines].find(([, entry]) => entry.magnet === normalizedKey)?.[0];
+  const existing = key === undefined ? undefined : engines.get(key);
+  if (key !== undefined && existing) {
     existing.lastAccess = Date.now();
     // Refresh LRU order
-    engines.delete(normalizedKey);
-    engines.set(normalizedKey, existing);
+    engines.delete(key);
+    engines.set(key, existing);
     return existing;
   }
 
@@ -110,8 +112,8 @@ export function getOrCreateTorrentEngine(source: string | Buffer): ActiveStreamE
     oldest.destroy();
   }
 
-  const config = getServerConfig();
-  const cachePath = path.join(config.downloadsPath || '/tmp', '.stream-cache', normalizedKey.slice(0, 16));
+  const cacheKey = crypto.createHash('sha256').update(normalizedKey).digest('hex');
+  const cachePath = path.join(dataDirectory(), '.stream-cache', cacheKey);
   if (!fs.existsSync(cachePath)) {
     fs.mkdirSync(cachePath, { recursive: true });
   }
@@ -131,7 +133,7 @@ export function getOrCreateTorrentEngine(source: string | Buffer): ActiveStreamE
 
   const entry: ActiveStreamEngine = {
     engine,
-    magnet: typeof source === 'string' ? source : normalizedKey,
+    magnet: typeof source === 'string' ? source : `magnet:?xt=urn:btih:${engine.infoHash}`,
     files: [],
     ready: readyPromise,
     lastAccess: Date.now(),
@@ -149,9 +151,6 @@ export function getOrCreateTorrentEngine(source: string | Buffer): ActiveStreamE
     },
     destroy: () => {
       engines.delete(normalizedKey);
-      try {
-        engine.remove(() => {});
-      } catch {}
       try {
         engine.destroy(() => {
           try { fs.rmSync(cachePath, { recursive: true, force: true }); } catch {}

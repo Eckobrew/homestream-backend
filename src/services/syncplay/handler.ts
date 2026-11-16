@@ -43,6 +43,7 @@ export async function POST(request: HttpRequest) {
       episodeId: typeof body.episodeId === 'string' ? body.episodeId : undefined,
       title: String(body.title || 'Watch Together'),
       positionTicks: Number(body.positionTicks || 0),
+      isPaused: typeof body.isPaused === 'boolean' ? body.isPaused : undefined,
     });
     return HttpResponse.json({ success: true, room });
   }

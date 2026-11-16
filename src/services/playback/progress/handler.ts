@@ -36,7 +36,8 @@ async function handlePOST(request: HttpRequest) {
     saveStreamProgress(effectiveProfileId, itemId, positionTicks);
     if (itemId.startsWith('nat-') || getMediaEngineSettings().mediaEngine === 'native') {
       const fileDurationTicks = resolveNativeFileByItemOrFileId(itemId)?.duration_ticks || 0;
-      recordNativeWatchProgress(effectiveProfileId, itemId, positionTicks, fileDurationTicks, undefined, undefined, isPaused ? 0 : 10);
+      const nativeProfileId = await resolveJellyfinUserId(effectiveProfileId);
+      recordNativeWatchProgress(nativeProfileId, itemId, positionTicks, fileDurationTicks, undefined, undefined, isPaused || isStarted || isStopped ? 0 : 10);
       if (itemId.startsWith('nat-')) {
         return HttpResponse.json({ success: true });
       }

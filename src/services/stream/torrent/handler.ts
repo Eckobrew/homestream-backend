@@ -95,11 +95,16 @@ async function handleGET(request: HttpRequest) {
     const active = getOrCreateTorrentEngine(torrentSource);
 
     // Wait up to 15s for torrent metadata / file list
-    const timeout = new Promise<void>((_, reject) => setTimeout(() => reject(new Error('Torrent metadata timeout')), 15000));
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<void>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('Torrent metadata timeout')), 15000);
+    });
     try {
       await Promise.race([active.ready, timeout]);
     } catch (err: any) {
       return HttpResponse.json({ error: err?.message || 'Failed connecting to swarm metadata' }, { status: 504 });
+    } finally {
+      clearTimeout(timer);
     }
 
     const files = active.files;
@@ -116,8 +121,10 @@ async function handleGET(request: HttpRequest) {
       const patterns = [
         new RegExp(`s0*${sNum}[._ -]*e0*${epNum}\\b`, 'i'),
         new RegExp(`\\b${sNum}x0*${epNum}\\b`, 'i'),
-        new RegExp(`\\be0*${epNum}\\b`, 'i'),
-        new RegExp(`[._ -]0*${epNum}[._ -]`, 'i'),
+        ...(files.some(file => /s\d+[._ -]*e\d+|\d+x\d+/i.test(file.name)) ? [] : [
+          new RegExp(`\\be0*${epNum}\\b`, 'i'),
+          new RegExp(`[._ -]0*${epNum}[._ -]`, 'i'),
+        ]),
       ];
       for (const pattern of patterns) {
         const found = files.find(f => isVideoFile(f.name) && pattern.test(f.path || f.name));
@@ -126,6 +133,7 @@ async function handleGET(request: HttpRequest) {
           break;
         }
       }
+      if (!targetFile) return HttpResponse.json({ error: 'Requested episode not found in torrent' }, { status: 404 });
     }
 
     // Default to largest video file if no specific episode match
@@ -163,7 +171,7 @@ async function handleGET(request: HttpRequest) {
     const isDirectWebPlayable = !forceTranscode && receiver !== 'cast' && receiver !== 'native-tv' && (ext === '.mp4' || ext === '.webm');
     const nativeRequest = searchParams.get('native') === '1' && !forceTranscode;
 
-    if (isDirectWebPlayable || nativeRequest) {
+    if (!probeParam && (isDirectWebPlayable || nativeRequest)) {
       return torrentStreamFileResponse(
         request,
         targetFile,
@@ -175,7 +183,10 @@ async function handleGET(request: HttpRequest) {
 
     const port = process.env.PORT || '3001';
     const internalHost = process.env.HOMESTREAM_INTERNAL_URL || `http://127.0.0.1:${port}`;
-    const sourceUrl = `${internalHost}/api/stream/torrent?magnet=${encodeURIComponent(active.magnet)}&source=1${seasonParam ? `&season=${seasonParam}` : ''}${episodeParam ? `&episode=${episodeParam}` : ''}`;
+    const sourceQuery = new URLSearchParams({ magnet: active.magnet, source: '1', type: typeParam });
+    if (seasonParam) sourceQuery.set('season', seasonParam);
+    if (episodeParam) sourceQuery.set('episode', episodeParam);
+    const sourceUrl = `${internalHost}/api/stream/torrent?${sourceQuery}`;
 
     if (probeParam) {
       return HttpResponse.json({ durationSeconds: await probeDuration(sourceUrl) });

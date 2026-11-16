@@ -94,9 +94,17 @@ async function handleGET(request: HttpRequest) {
   const profileId = searchParams.get('userId') || request.cookies.get('homeflix_profile_id')?.value;
   const targetUserId = await resolveJellyfinUserId(profileId);
   const jellyfin = new JellyfinClient(undefined, undefined, targetUserId);
+  const receiver = nativeTv ? 'native-tv' : cast ? 'cast' : searchParams.get('receiver') === 'browser' ? 'browser' : undefined;
+  const tvCapabilities = nativeTv || cast ? parseTvCapabilities(searchParams.get('videoCapabilities')) : [];
+  if ((cast || nativeTv) && !tvCapabilities.some(capability => capability.codec === 'h264')) {
+    tvCapabilities.push({ codec: 'h264', width: 1920, height: 1080, profiles: ['baseline', 'main', 'high'] });
+  }
+  if ((cast || nativeTv) && canPlayHevc && !tvCapabilities.some(capability => capability.codec === 'hevc')) {
+    tvCapabilities.push({ codec: 'hevc', width: 1920, height: 1080, profiles: ['main', 'main 10'] });
+  }
   const videoCodecs = nativeTv || cast
-    ? []
-    : (searchParams.get('videoCodecs') || '').split(',').filter(codec => ['h264', 'hevc', 'vp8', 'vp9', 'av1'].includes(codec));
+    ? tvCapabilities.map(capability => capability.codec)
+    : searchParams.get('videoCodecs')?.split(',').filter(codec => ['h264', 'hevc', 'vp8', 'vp9', 'av1'].includes(codec));
   const audioCodecs = (searchParams.get('audioCodecs') || 'aac,mp3').split(',').filter(codec => ['aac', 'mp3', 'opus', 'flac', 'vorbis', 'ac3', 'eac3', 'dts'].includes(codec));
 
   if (itemId.startsWith('nat-') || getMediaEngineSettings().mediaEngine === 'native') {
@@ -105,9 +113,10 @@ async function handleGET(request: HttpRequest) {
     const rawBurn = searchParams.get('burnSubtitleIndex');
     const parsedAudio = rawAudio !== null && /^\d+$/.test(rawAudio) ? Number(rawAudio) : undefined;
     const parsedBurn = rawBurn !== null && /^\d+$/.test(rawBurn) ? Number(rawBurn) : undefined;
-    const nativeResult = negotiateNativePlayback(itemId, profileId, {
+    const nativeResult = await negotiateNativePlayback(itemId, profileId, {
       versionId: searchParams.get('versionId') || undefined,
       forceTranscode,
+      receiver,
       videoCodecs,
       audioCodecs,
       audioIndex: parsedAudio,
@@ -131,22 +140,15 @@ async function handleGET(request: HttpRequest) {
     );
   }
 
-  const tvCapabilities = nativeTv || cast ? parseTvCapabilities(searchParams.get('videoCapabilities')) : [];
-  if ((cast || nativeTv) && !tvCapabilities.some(capability => capability.codec === 'h264')) {
-    tvCapabilities.push({ codec: 'h264', width: 1920, height: 1080, profiles: ['baseline', 'main', 'high'] });
-    if (canPlayHevc && !tvCapabilities.some(capability => capability.codec === 'hevc')) {
-      tvCapabilities.push({ codec: 'hevc', width: 1920, height: 1080, profiles: ['main', 'main 10'] });
-    }
-  }
   try {
     const result = await jellyfin.getPlaybackStream(itemId, {
       canPlayHevc,
-      receiver: nativeTv ? 'native-tv' : cast ? 'cast' : searchParams.get('receiver') === 'browser' ? 'browser' : undefined,
+      receiver,
       tvCapabilities,
-      videoCodecs: nativeTv || cast ? tvCapabilities.map(capability => capability.codec) : (searchParams.get('videoCodecs') || '').split(',').filter(codec => ['h264', 'hevc', 'vp8', 'vp9', 'av1'].includes(codec)),
+      videoCodecs: videoCodecs ?? [],
       maxWidth: searchParams.get('maxWidth') === '3840' ? 3840 : 1920,
       maxHeight: searchParams.get('maxHeight') === '2160' ? 2160 : 1080,
-      audioCodecs: (searchParams.get('audioCodecs') || 'aac,mp3').split(',').filter(codec => ['aac', 'mp3', 'opus', 'flac', 'vorbis', 'ac3', 'eac3', 'dts'].includes(codec)),
+      audioCodecs,
       forceTranscode,
       startTimeTicks,
     });

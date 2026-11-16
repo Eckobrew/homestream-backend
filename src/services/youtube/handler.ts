@@ -1,3 +1,4 @@
+import { streamLocalFile } from '@/media/local-file';
 import { HttpRequest, HttpResponse } from '@/http';
 import { withParentalControls } from '@/lib/parental-controls';
 import {
@@ -152,53 +153,11 @@ async function handleGET(request: HttpRequest) {
     const filePath = confinedYouTubeFile(storagePath, rawPath);
     if (!filePath) return HttpResponse.json({ error: 'File not found or inaccessible' }, { status: 404 });
 
-    const stat = fs.statSync(filePath);
-    const totalSize = stat.size;
-    const rangeHeader = request.headers.get('range');
-
     let contentType = 'video/mp4';
     if (filePath.endsWith('.webm')) contentType = 'video/webm';
     else if (filePath.endsWith('.mkv')) contentType = 'video/x-matroska';
 
-    if (rangeHeader) {
-      const parts = rangeHeader.replace(/bytes=/, '').split('-');
-      const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : totalSize - 1;
-
-      if (start >= totalSize || end >= totalSize || start > end) {
-        return new HttpResponse(null, {
-          status: 416,
-          headers: { 'Content-Range': `bytes */${totalSize}` },
-        });
-      }
-
-      const chunkSize = end - start + 1;
-      const fileStream = fs.createReadStream(filePath, { start, end });
-      const webStream = Readable.toWeb(fileStream) as unknown as BodyInit;
-
-      return new HttpResponse(webStream, {
-        status: 206,
-        headers: {
-          'Content-Range': `bytes ${start}-${end}/${totalSize}`,
-          'Accept-Ranges': 'bytes',
-          'Content-Length': String(chunkSize),
-          'Content-Type': contentType,
-          'Cache-Control': 'private, no-cache',
-        },
-      });
-    }
-
-    const fileStream = fs.createReadStream(filePath);
-    const webStream = Readable.toWeb(fileStream) as unknown as BodyInit;
-    return new HttpResponse(webStream, {
-      status: 200,
-      headers: {
-        'Accept-Ranges': 'bytes',
-        'Content-Length': String(totalSize),
-        'Content-Type': contentType,
-        'Cache-Control': 'private, no-cache',
-      },
-    });
+    return streamLocalFile(request, filePath, fs.statSync(filePath).size, contentType);
   }
 
   if (route === 'youtube/thumbnail') {

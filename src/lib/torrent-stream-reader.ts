@@ -31,9 +31,18 @@ export function torrentStreamFileResponse(
     }
   }
 
-  // Request the stream from torrent-stream with on-demand piece deadline priority
+  const status = range ? 206 : 200;
+  const headers = {
+    ...(range ? { 'Content-Range': `bytes ${start}-${end}/${size}` } : {}),
+    'Accept-Ranges': 'bytes',
+    'Content-Length': String(size ? end - start + 1 : 0),
+    'Content-Type': contentType,
+    'Cache-Control': 'no-store',
+  };
+  if (request.method === 'HEAD' || size === 0) return new HttpResponse(null, { status, headers });
+
+  // createReadStream prioritizes only the requested pieces.
   onReaderAcquire?.();
-  file.select();
   const nodeStream = file.createReadStream({ start, end }) as NodeJS.ReadableStream & {
     pause?: () => void;
     resume?: () => void;
@@ -86,14 +95,5 @@ export function torrentStreamFileResponse(
     cancel: cleanup,
   });
 
-  return new HttpResponse(webStream, {
-    status: range ? 206 : 200,
-    headers: {
-      ...(range ? { 'Content-Range': `bytes ${start}-${end}/${size}` } : {}),
-      'Accept-Ranges': 'bytes',
-      'Content-Length': String(size ? end - start + 1 : 0),
-      'Content-Type': contentType,
-      'Cache-Control': 'no-store',
-    },
-  });
+  return new HttpResponse(webStream, { status, headers });
 }

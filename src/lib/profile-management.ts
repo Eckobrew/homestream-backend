@@ -5,6 +5,8 @@ import crypto from 'crypto';
 import { JellyfinClient } from './jellyfin';
 import { getHomeflixProfiles, saveHomeflixProfiles, PROFILE_PALETTES, getInitials } from './profiles';
 import { UserProfile } from '@/types';
+import { getMediaEngineSettings } from './media-settings';
+import { getPrimaryAccount } from './accounts';
 
 export const STOCK_AVATARS = ['fox', 'owl', 'panda', 'cat', 'bear', 'penguin', 'robot', 'astronaut'];
 export class ProfileError extends Error {
@@ -24,6 +26,8 @@ export function manageProfile(body: Record<string, unknown>, ownUserId?: string,
     const avatarId = body.avatarId;
     if (typeof avatarId !== 'string' || !STOCK_AVATARS.includes(avatarId)) throw new ProfileError('Choose a profile picture');
     const action = body.action;
+    const jellyfin = new JellyfinClient();
+    const nativeEngine = getMediaEngineSettings().mediaEngine === 'native';
     if (ownUserId && action !== 'update') throw new ProfileError('Household pairing is required to add or link profiles', 403);
     if (action === 'update') {
       let profile = profiles.find(p => p.id === body.profileId);
@@ -37,25 +41,30 @@ export function manageProfile(body: Record<string, unknown>, ownUserId?: string,
       const name = typeof body.name === 'string' ? body.name.trim() : profile.name;
       if (!name || name.length > 64) throw new ProfileError('Profile name must contain 1–64 characters');
       if (!ownUserId && profiles.some(p => p.id !== profile!.id && p.name.toLowerCase() === name.toLowerCase())) throw new ProfileError('That profile name already exists', 409);
-      const oldUserId = profile.jellyfinUserId || profile.id;
+      const oldUserId = profile.jellyfinUserId || (nativeEngine ? '' : profile.id);
       const wasKids = isKids(profile);
       profile.name = ownUserId ? profile.name : name;
       profile.initials = getInitials(profile.name);
       profile.avatarId = avatarId;
       profile.avatarUrl = `/profile-avatars/${avatarId}.png`;
       if (!ownUserId && typeof body.jellyfinUserId === 'string' && body.jellyfinUserId !== profile.jellyfinUserId) {
-        const user = (await new JellyfinClient().getUsers()).find(user => user.id === body.jellyfinUserId);
+        const user = (await jellyfin.getUsers()).find(user => user.id === body.jellyfinUserId);
         if (!user) throw new ProfileError('Choose an existing Jellyfin account');
         if (profiles.some(p => p.id !== profile.id && (p.jellyfinUserId || p.id) === user.id)) throw new ProfileError('That Jellyfin account already has a profile', 409);
         profile.jellyfinUserId = user.id;
         profile.isAdministrator = Boolean(user.isAdministrator);
       }
       if (requestedKids && profile.isAdministrator) throw new ProfileError('Kids profiles must use a non-administrator Jellyfin account', 403);
-      if (requestedKids) await new JellyfinClient().applyKidsPolicy(profile.jellyfinUserId || profile.id, requestedRating as KidsRating);
-      else if (wasKids) await new JellyfinClient().applyKidsPolicy(oldUserId, null);
-      if (wasKids && requestedKids && oldUserId !== profile.jellyfinUserId) await new JellyfinClient().applyKidsPolicy(oldUserId, null);
+      if (jellyfin.isConfigured()) {
+        const linkedUserId = profile.jellyfinUserId || (nativeEngine ? '' : profile.id);
+        if (requestedKids && linkedUserId) await jellyfin.applyKidsPolicy(linkedUserId, requestedRating as KidsRating);
+        if (wasKids && oldUserId && (!requestedKids || oldUserId !== linkedUserId)) {
+          await jellyfin.applyKidsPolicy(oldUserId, null);
+        }
+      }
       profile.kidsDateOfBirth = requestedKids ? String(body.kidsDateOfBirth) : undefined;
-    profile.isKids = requestedKids; profile.kidsRating = requestedKids ? requestedRating as KidsRating : undefined;
+      profile.isKids = requestedKids;
+      profile.kidsRating = requestedKids ? requestedRating as KidsRating : undefined;
       await saveHomeflixProfiles(profiles);
       return { profile };
     }
@@ -64,7 +73,17 @@ export function manageProfile(body: Record<string, unknown>, ownUserId?: string,
     const name = typeof body.name === 'string' ? body.name.trim() : '';
     if (!name || name.length > 64) throw new ProfileError('Profile name must contain 1–64 characters');
     if (profiles.some(profile => profile.name.toLowerCase() === name.toLowerCase())) throw new ProfileError('That profile name already exists', 409);
-    const jellyfin = new JellyfinClient();
+    if (body.mode === 'native' && nativeEngine) {
+      const palette = PROFILE_PALETTES[profiles.length % PROFILE_PALETTES.length];
+      const profile: UserProfile = {
+        id: `hf-${crypto.randomUUID()}`, name, avatarId, avatarUrl: `/profile-avatars/${avatarId}.png`,
+        ...palette, initials: getInitials(name), accountId: getPrimaryAccount()?.id, isAdministrator: false,
+        isKids: requestedKids, kidsDateOfBirth: requestedKids ? String(body.kidsDateOfBirth) : undefined,
+        kidsRating: requestedKids ? requestedRating as KidsRating : undefined,
+      };
+      await saveHomeflixProfiles([...profiles, profile]);
+      return { profile };
+    }
     if (!jellyfin.isConfigured()) throw new ProfileError('Configure Jellyfin before adding profiles', 503);
     let user: { id: string; name: string; isAdministrator?: boolean } | undefined;
     let passwordMode: string | undefined;

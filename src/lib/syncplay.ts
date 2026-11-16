@@ -23,6 +23,11 @@ export interface SyncPlayRoom {
 const rooms = new Map<string, SyncPlayRoom>();
 const ROOM_TTL_MS = 6 * 60 * 60 * 1000;
 
+function positionAt(room: SyncPlayRoom, now: number): number {
+  if (room.isPaused) return room.positionTicks;
+  return room.positionTicks + Math.round(Math.max(0, now - room.updatedAt) * 10_000 * room.playbackRate);
+}
+
 function cleanupStaleRooms() {
   const now = Date.now();
   for (const [code, room] of rooms.entries()) {
@@ -39,6 +44,7 @@ export function createSyncPlayRoom(input: {
   episodeId?: string;
   title: string;
   positionTicks?: number;
+  isPaused?: boolean;
 }): SyncPlayRoom {
   cleanupStaleRooms();
   const code = crypto.randomBytes(3).toString('hex').toUpperCase();
@@ -50,7 +56,7 @@ export function createSyncPlayRoom(input: {
     episodeId: input.episodeId,
     title: input.title,
     positionTicks: input.positionTicks || 0,
-    isPaused: true,
+    isPaused: input.isPaused ?? true,
     playbackRate: 1,
     updatedAt: Date.now(),
     participants: [
@@ -66,13 +72,23 @@ export function createSyncPlayRoom(input: {
   return room;
 }
 
-export function getSyncPlayRoom(code: string): SyncPlayRoom | null {
+function findRoom(code: string): SyncPlayRoom | null {
   cleanupStaleRooms();
   return rooms.get(code.trim().toUpperCase()) || null;
 }
 
+function snapshot(room: SyncPlayRoom): SyncPlayRoom {
+  const now = Date.now();
+  return { ...room, positionTicks: positionAt(room, now), updatedAt: now };
+}
+
+export function getSyncPlayRoom(code: string): SyncPlayRoom | null {
+  const room = findRoom(code);
+  return room ? snapshot(room) : null;
+}
+
 export function joinSyncPlayRoom(code: string, profileId: string, name: string): SyncPlayRoom | null {
-  const room = getSyncPlayRoom(code);
+  const room = findRoom(code);
   if (!room) return null;
   const nowIso = new Date().toISOString();
   const existing = room.participants.find((p) => p.profileId === profileId);
@@ -87,11 +103,11 @@ export function joinSyncPlayRoom(code: string, profileId: string, name: string):
       lastSeenAt: nowIso,
     });
   }
-  return room;
+  return snapshot(room);
 }
 
 export function leaveSyncPlayRoom(code: string, profileId: string): boolean {
-  const room = getSyncPlayRoom(code);
+  const room = findRoom(code);
   if (!room) return false;
   room.participants = room.participants.filter((p) => p.profileId !== profileId);
   if (room.participants.length === 0) {
@@ -112,18 +128,19 @@ export function updateSyncPlayRoom(
     title?: string;
   }
 ): SyncPlayRoom | null {
-  const room = getSyncPlayRoom(code);
+  const room = findRoom(code);
   if (!room) return null;
-  const nowIso = new Date().toISOString();
+  const now = Date.now();
+  const nowIso = new Date(now).toISOString();
   const participant = room.participants.find((p) => p.profileId === profileId);
   if (participant) participant.lastSeenAt = nowIso;
 
-  if (typeof patch.positionTicks === 'number') room.positionTicks = Math.max(0, patch.positionTicks);
+  room.positionTicks = typeof patch.positionTicks === 'number' ? Math.max(0, patch.positionTicks) : positionAt(room, now);
   if (typeof patch.isPaused === 'boolean') room.isPaused = patch.isPaused;
   if (typeof patch.playbackRate === 'number') room.playbackRate = Math.max(0.5, Math.min(2, patch.playbackRate));
   if (patch.itemId) room.itemId = patch.itemId;
   if (patch.episodeId !== undefined) room.episodeId = patch.episodeId;
   if (patch.title) room.title = patch.title;
-  room.updatedAt = Date.now();
+  room.updatedAt = now;
   return room;
 }
