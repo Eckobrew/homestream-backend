@@ -156,6 +156,7 @@ export interface UserProfile {
   avatarUrl?: string;  // Jellyfin avatar image URL if available
   isAdministrator?: boolean;
   jellyfinUserId?: string;
+  accountId?: string;
 }
 
 export interface RequestMediaPayload {

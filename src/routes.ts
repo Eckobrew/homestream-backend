@@ -16,6 +16,7 @@ import * as service9 from './services/playback/handler';
 import * as service10 from './services/playback/progress/handler';
 import * as service11 from './services/preview-stream/handler';
 import * as service12 from './services/profiles/handler';
+import * as serviceAccounts from './services/accounts/handler';
 import * as service13 from './services/request/handler';
 import * as service14 from './services/search/handler';
 import * as service15 from './services/stream/download/handler';
@@ -78,6 +79,7 @@ export const routes = [
   { path: "/api/playback/progress", methods: ["POST"], service: service10 },
   { path: "/api/preview-stream", methods: ["GET"], service: service11 },
   { path: "/api/profiles", methods: ["GET", "POST"], service: service12 },
+  { path: "/api/accounts", methods: ["GET", "POST"], service: serviceAccounts },
   { path: "/api/request", methods: ["GET", "POST"], service: service13 },
   { path: "/api/search", methods: ["GET"], service: service14 },
   { path: "/api/stream/download", methods: ["GET"], service: service15 },

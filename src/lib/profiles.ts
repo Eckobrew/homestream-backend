@@ -6,6 +6,7 @@ import { getServerConfig } from './config';
 import { UserProfile } from '@/types';
 import { JellyfinClient } from './jellyfin';
 import { PROFILE_PALETTES, getInitials } from './profile-constants';
+import { ensureAccountTables, getPrimaryAccount } from './accounts';
 
 export { PROFILE_PALETTES, getInitials };
 
@@ -15,7 +16,7 @@ export { PROFILE_PALETTES, getInitials };
  */
 let birthdayUpdate: Promise<void> | undefined;
 async function getHomeflixProfilesInternal(): Promise<UserProfile[]> {
-
+  ensureAccountTables();
   try {
     {
       const parsed = readState<UserProfile[]>('profiles', []);
@@ -111,7 +112,8 @@ async function importProfilesFromJellyfinInternal(userIds: string[]): Promise<Us
  */
 async function addHomeflixProfileInternal(
   name: string,
-  paletteIndex?: number
+  paletteIndex?: number,
+  accountId?: string
 ): Promise<UserProfile> {
   const trimmed = (name || '').trim();
   if (!trimmed) {
@@ -119,10 +121,11 @@ async function addHomeflixProfileInternal(
   }
 
   const currentProfiles = await getHomeflixProfiles();
+  const targetAccountId = accountId || getPrimaryAccount()?.id;
 
-  // Check if profile with this name already exists in HomeFlix
+  // Check if profile with this name already exists in HomeFlix for this account
   const existingProfile = currentProfiles.find(
-    (p) => p.name.toLowerCase() === trimmed.toLowerCase()
+    (p) => p.name.toLowerCase() === trimmed.toLowerCase() && (!targetAccountId || p.accountId === targetAccountId)
   );
   if (existingProfile) {
     return existingProfile;
@@ -158,13 +161,14 @@ async function addHomeflixProfileInternal(
       : PROFILE_PALETTES[currentProfiles.length % PROFILE_PALETTES.length];
 
   const newProfile: UserProfile = {
-    id: profileId,
+    id: currentProfiles.some(p => p.id === profileId) ? `hf-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}` : profileId,
     name: trimmed,
     avatarColor: chosenPalette.avatarColor,
     avatarBg: chosenPalette.avatarBg,
     initials: getInitials(trimmed),
     isAdministrator: false,
     jellyfinUserId: jellyfinUserId || profileId,
+    ...(targetAccountId ? { accountId: targetAccountId } : {}),
   };
 
   const updatedList = [...currentProfiles, newProfile];
@@ -206,6 +210,6 @@ export function getHomeflixProfiles(): Promise<UserProfile[]> { return withProfi
 
 export function importProfilesFromJellyfin(userIds: string[]): Promise<UserProfile[]> { return withProfileTransaction(() => importProfilesFromJellyfinInternal(userIds)); }
 
-export function addHomeflixProfile(name: string, paletteIndex?: number): Promise<UserProfile> { return withProfileTransaction(() => addHomeflixProfileInternal(name, paletteIndex)); }
+export function addHomeflixProfile(name: string, paletteIndex?: number, accountId?: string): Promise<UserProfile> { return withProfileTransaction(() => addHomeflixProfileInternal(name, paletteIndex, accountId)); }
 
 export function deleteHomeflixProfile(profileId: string): Promise<boolean> { return withProfileTransaction(() => deleteHomeflixProfileInternal(profileId)); }

@@ -1,5 +1,5 @@
 /** Signed, expiring sessions shared by the web and native clients. */
-export type Session = { id: string; name: string; admin: boolean; expiresAt: number; audience: 'web' | 'mobile'; accessToken?: string };
+export type Session = { id: string; name: string; admin: boolean; accountId?: string; expiresAt: number; audience: 'web' | 'mobile'; accessToken?: string };
 const encoder = new TextEncoder();
 function secret(): string {
   const value = process.env.HOMESTREAM_SESSION_SECRET || process.env.HOMESTREAM_MOBILE_TOKEN || '';
@@ -15,7 +15,7 @@ function decode(value: string): Uint8Array<ArrayBuffer> {
 async function key() {
   return crypto.subtle.importKey('raw', encoder.encode(secret()), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
 }
-export async function createSession(user: { id: string; name: string; admin?: boolean; accessToken?: string }, audience: Session['audience']): Promise<string> {
+export async function createSession(user: { id: string; name: string; admin?: boolean; accountId?: string; accessToken?: string }, audience: Session['audience']): Promise<string> {
   const payload = encode(encoder.encode(JSON.stringify({ ...user, admin: Boolean(user.admin), audience, expiresAt: Date.now() + 30 * 86400000 })));
   return `${payload}.${encode(new Uint8Array(await crypto.subtle.sign('HMAC', await key(), encoder.encode(payload))))}`;
 }

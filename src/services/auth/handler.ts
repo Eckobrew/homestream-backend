@@ -3,6 +3,7 @@ import { log } from '@/log';
 import { validRequestOrigin, secureSessionCookie } from '@/lib/request-origin';
 import { denyPasswordlessAdultLogin, isKids } from '@/lib/parental-store';
 import { getHomeflixProfiles } from '@/lib/profiles';
+import { authenticateAccount, listAccounts, profilesForAccount } from '@/lib/accounts';
 import { HttpRequest, HttpResponse } from '@/http';
 import { isRequestLocalOrTailscale } from '@/lib/network';
 import { getServerConfig } from '@/lib/config';
@@ -23,17 +24,15 @@ export async function GET(request: HttpRequest) {
 
   // If requesting user list for the login picker
   if (action === 'users') {
-    if (!jellyfin.isConfigured()) {
-      return HttpResponse.json({ users: [] });
-    }
-    try {
-      const response = await fetch(`${config.jellyfinUrl}/Users/Public`, { cache: 'no-store', signal: AbortSignal.timeout(10000) });
-      const users = response.ok ? await response.json() : [];
-      return HttpResponse.json({ users: users.map((user: { Id: string; Name: string }) => ({ id: user.Id, name: user.Name, avatarUrl: jellyfin.getUserImageUrl(user.Id) })) });
-    } catch (e) {
-      log.error('Failed fetching Jellyfin users for auth:', e);
-      return HttpResponse.json({ users: [] });
-    }
+    const accounts = listAccounts();
+    return HttpResponse.json({
+      users: accounts.map((a) => ({
+        id: a.id,
+        name: a.displayName,
+        username: a.username,
+        hasPassword: a.hasPassword,
+      })),
+    });
   }
 
   // General auth status check
@@ -41,12 +40,14 @@ export async function GET(request: HttpRequest) {
   const sessionCookie = request.cookies.get(SESSION_COOKIE_NAME)?.value;
 
   const sessionUser = await readSession(sessionCookie, 'web');
+  const needsFirstStart = listAccounts().length === 0;
 
   // If local or over Tailscale -> NO LOGIN REQUIRED!
   if (netCheck.isLocalOrTailscale && !(await getHomeflixProfiles()).some(isKids)) {
     return HttpResponse.json({
       canManageIntegrations: netCheck.isLocalOrTailscale || Boolean(sessionUser?.admin),
       requiresAuth: false,
+      needsFirstStart,
       isLocalOrTailscale: true,
       isAuthenticated: true,
       clientIp: netCheck.clientIp,
@@ -60,6 +61,7 @@ export async function GET(request: HttpRequest) {
     return HttpResponse.json({
       canManageIntegrations: netCheck.isLocalOrTailscale || Boolean(sessionUser?.admin),
       requiresAuth: false,
+      needsFirstStart,
       isLocalOrTailscale: false,
       isAuthenticated: true,
       clientIp: netCheck.clientIp,
@@ -72,6 +74,7 @@ export async function GET(request: HttpRequest) {
   return HttpResponse.json({
     canManageIntegrations: false,
     requiresAuth: true,
+    needsFirstStart,
     isLocalOrTailscale: false,
     isAuthenticated: false,
     clientIp: netCheck.clientIp,
@@ -101,56 +104,32 @@ export async function POST(request: HttpRequest) {
       );
     }
 
-    const config = getServerConfig();
-    const jellyfinUrl = (config.jellyfinUrl || '').replace(/\/+$/, '');
-
-    if (!jellyfinUrl) {
-      return HttpResponse.json(
-        { success: false, error: 'Jellyfin is not configured on the server' },
-        { status: 503 }
-      );
-    }
-
-    // Authenticate credentials against Jellyfin
-    const authRes = await fetch(`${jellyfinUrl}/Users/AuthenticateByName`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'Authorization': `MediaBrowser Client="${config.appName || 'HomeStream'}", Device="Web", DeviceId="homeflix-web", Version="1.0.0"`,
-      },
-      body: JSON.stringify({
-        Username: username.trim(),
-        Pw: password || '',
-      }),
-      signal: AbortSignal.timeout(15000),
-    });
-
-    if (!authRes.ok) {
+    const account = await authenticateAccount(username.trim(), password || '');
+    if (!account) {
       return HttpResponse.json(
         { success: false, error: 'Invalid username or password' },
         { status: 401 }
       );
     }
 
-    const authData = await authRes.json();
-    const user = authData.User;
-    if (await denyPasswordlessAdultLogin(user.Id, password, user.Name)) return HttpResponse.json({ error: 'Adult Jellyfin accounts need a password different from their username when Kids profiles are enabled. Use local pairing and the parent PIN, or set an adult account password.' }, { status: 403 });
-    const encodedSession = await createSession({ id: user.Id, name: user.Name, admin: user.Policy?.IsAdministrator === true, accessToken: authData.AccessToken }, 'web');
-
-    // Ensure profile exists in persistent state for this Jellyfin user
-    try {
-      const { importProfilesFromJellyfin } = await import('@/lib/profiles');
-      await importProfilesFromJellyfin([user.Id]);
-    } catch (e) {
-      log.warn('Failed auto-importing profile on external login:', e);
+    if (await denyPasswordlessAdultLogin(account.id, password, account.username)) {
+      return HttpResponse.json({ error: 'Adult accounts need a password different from their username when Kids profiles are enabled.' }, { status: 403 });
     }
+
+    const allProfiles = await getHomeflixProfiles();
+    const accountProfiles = profilesForAccount(allProfiles, account.id);
+    const defaultProfile = accountProfiles[0];
+    const encodedSession = await createSession(
+      { id: defaultProfile?.id || account.id, accountId: account.id, name: account.displayName, admin: account.isAdmin },
+      'web'
+    );
 
     const response = HttpResponse.json({
       success: true,
+      needsProfileSetup: accountProfiles.length === 0,
       user: {
-        id: user.Id,
-        name: user.Name,
+        id: account.id,
+        name: account.displayName,
       },
     });
 
@@ -163,14 +142,17 @@ export async function POST(request: HttpRequest) {
       maxAge: 30 * 24 * 60 * 60,
     });
 
-    // Automatically lock homeflix_profile_id to the logged-in user
-    response.cookies.set('homeflix_profile_id', user.Id, {
-      httpOnly: false,
-      secure: secureSessionCookie(request),
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 30 * 24 * 60 * 60,
-    });
+    if (defaultProfile?.id) {
+      response.cookies.set('homeflix_profile_id', defaultProfile.id, {
+        httpOnly: false,
+        secure: secureSessionCookie(request),
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 30 * 24 * 60 * 60,
+      });
+    } else {
+      response.cookies.delete('homeflix_profile_id');
+    }
 
     return response;
   } catch (error) {

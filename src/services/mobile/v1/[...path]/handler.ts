@@ -25,6 +25,7 @@ import { POST as progress } from '@/services/playback/progress/handler';
 import { GET as subtitles } from '@/services/subtitles/handler';
 import { GET as requestOptions, POST as requestMedia } from '@/services/request/handler';
 import { getHomeflixProfiles } from '@/lib/profiles';
+import { authenticateAccount, profilesForAccount } from '@/lib/accounts';
 import { GET as search } from '@/services/search/handler';
 import { GET as downloads, POST as downloadsPost } from '@/services/downloads/handler';
 import { GET as categories } from '@/services/categories/[type]/handler';
@@ -91,18 +92,15 @@ async function dispatch(request: HttpRequest, context: Context) {
     if (!body || typeof body.username !== 'string' || !body.username.trim() || typeof body.password !== 'string') {
       return HttpResponse.json({ error: 'Username and password required' }, { status: 400 });
     }
-    const config = getServerConfig();
-    if (!config.jellyfinUrl) return HttpResponse.json({ error: 'Jellyfin is not configured' }, { status: 503 });
-    const result = await fetch(`${config.jellyfinUrl.replace(/\/+$/, '')}/Users/AuthenticateByName`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'MediaBrowser Client="HomeStream", Device="Android", DeviceId="homestream-android", Version="1.0"' },
-      body: JSON.stringify({ Username: body.username.trim(), Pw: body.password }), signal: AbortSignal.timeout(15000),
-    });
-    if (!result.ok) return HttpResponse.json({ error: 'Invalid username or password' }, { status: 401 });
-    const auth = await result.json();
-    if (!auth.User?.Id || !auth.User?.Name) return HttpResponse.json({ error: 'Invalid authentication response' }, { status: 502 });
-    if (await denyPasswordlessAdultLogin(auth.User.Id, body.password, auth.User.Name)) return HttpResponse.json({ error: 'Adult Jellyfin accounts need a password different from their username when Kids profiles are enabled. You can also use local pairing and the parent PIN.' }, { status: 403 });
-    const user = { id: auth.User.Id, name: auth.User.Name };
-    return HttpResponse.json({ user, token: await createSession({ ...user, admin:auth.User.Policy?.IsAdministrator===true, accessToken: auth.AccessToken }, 'mobile') });
+    const account = await authenticateAccount(body.username.trim(), body.password);
+    if (!account) return HttpResponse.json({ error: 'Invalid username or password' }, { status: 401 });
+    if (await denyPasswordlessAdultLogin(account.id, body.password, account.username)) {
+      return HttpResponse.json({ error: 'Adult accounts need a password different from their username when Kids profiles are enabled.' }, { status: 403 });
+    }
+    const accountProfiles = profilesForAccount(await getHomeflixProfiles(), account.id);
+    const defaultProfile = accountProfiles[0];
+    const user = { id: defaultProfile?.id || account.id, accountId: account.id, name: account.displayName };
+    return HttpResponse.json({ user, token: await createSession({ ...user, admin: account.isAdmin }, 'mobile') });
   }
   if (!get && route === 'auth/pair') {
     if (!directLocal(request)) return HttpResponse.json({ error: 'Automatic pairing requires a direct connection on your home network. Use Jellyfin sign-in remotely.' }, { status: 403 });

@@ -162,7 +162,8 @@ data class UserProfile(
     @SerialName("initials") val `initials`: String,
     @SerialName("avatarUrl") val `avatarUrl`: String? = null,
     @SerialName("isAdministrator") val `isAdministrator`: Boolean? = null,
-    @SerialName("jellyfinUserId") val `jellyfinUserId`: String? = null
+    @SerialName("jellyfinUserId") val `jellyfinUserId`: String? = null,
+    @SerialName("accountId") val `accountId`: String? = null
 )
 
 @Serializable

@@ -6,7 +6,7 @@ import { Readable } from 'node:stream';
 import { stateDatabase } from '@/state/database';
 import { ensureMusicTables } from '@/lib/music';
 import { getHomeflixProfiles } from '@/lib/profiles';
-import { getServerConfig } from '@/lib/config';
+import { authenticateAccount, profilesForAccount } from '@/lib/accounts';
 import { HttpRequest, HttpResponse } from '@/http';
 
 const SUBSONIC_VERSION = '1.16.1';
@@ -199,51 +199,43 @@ function decodePasswordParam(raw: string | null): string | null {
   return raw;
 }
 
-const subsonicAuthCache = new Map<string, number>();
-
-async function verifyJellyfinCredentials(username: string, password: string): Promise<boolean> {
-  if (!username) return false;
-  const key = `${username.toLowerCase()}:${crypto.createHash('sha256').update(password).digest('hex')}`;
-  const cachedUntil = subsonicAuthCache.get(key);
-  if (cachedUntil && cachedUntil > Date.now()) return true;
-  const config = getServerConfig();
-  const jellyfinUrl = (config.jellyfinUrl || '').replace(/\/+$/, '');
-  if (!jellyfinUrl) return false;
-  try {
-    const res = await fetch(`${jellyfinUrl}/Users/AuthenticateByName`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        Authorization: `MediaBrowser Client="${config.appName || 'HomeStream'}", Device="OpenSubsonic", DeviceId="homestream-subsonic", Version="1.0.0"`,
-      },
-      body: JSON.stringify({ Username: username, Pw: password }),
-      signal: AbortSignal.timeout(10000),
-    });
-    if (res.ok) {
-      subsonicAuthCache.set(key, Date.now() + 10 * 60_000);
-      return true;
-    }
-  } catch {}
-  return false;
+function parseSubsonicUsername(raw: string): { accountUser: string; profileHint: string } {
+  const trimmed = raw.trim();
+  if (trimmed.includes('@')) {
+    const [profileHint, accountUser] = trimmed.split('@', 2);
+    return { accountUser: accountUser.trim(), profileHint: profileHint.trim() };
+  }
+  if (trimmed.includes(':')) {
+    const [accountUser, profileHint] = trimmed.split(':', 2);
+    return { accountUser: accountUser.trim(), profileHint: profileHint.trim() };
+  }
+  return { accountUser: trimmed, profileHint: '' };
 }
 
-async function authorizeSubsonic(params: URLSearchParams): Promise<{ ok: true; username: string; profileId: string } | { ok: false }> {
-  const username = (params.get('u') || '').trim();
+async function authorizeSubsonic(
+  params: URLSearchParams
+): Promise<{ ok: true; username: string; profileId: string; profileIds: string[] } | { ok: false }> {
+  const rawU = (params.get('u') || '').trim();
   const p = decodePasswordParam(params.get('p'));
-  if (!username || p === null) {
+  if (!rawU || p === null) {
     return { ok: false };
   }
 
-  if (!await verifyJellyfinCredentials(username, p)) {
+  const { accountUser, profileHint } = parseSubsonicUsername(rawU);
+  const account = await authenticateAccount(accountUser, p);
+  if (!account) {
     return { ok: false };
   }
 
-  const profiles = await getHomeflixProfiles();
-  const matchedProfile = profiles.find(
-    (profile) => profile.name.toLowerCase() === username.toLowerCase() || profile.id === username
-  ) || profiles[0];
-  return { ok: true, username, profileId: matchedProfile?.id || '' };
+  const allProfiles = await getHomeflixProfiles();
+  const acctProfiles = profilesForAccount(allProfiles, account.id);
+  const scoped = profileHint
+    ? acctProfiles.find((prof) => prof.name.toLowerCase() === profileHint.toLowerCase() || prof.id === profileHint)
+    : undefined;
+
+  const profileIds = scoped ? [scoped.id] : acctProfiles.map((prof) => prof.id);
+  const profileId = scoped?.id || acctProfiles[0]?.id || '';
+  return { ok: true, username: rawU, profileId, profileIds };
 }
 
 async function readCombinedParams(request: HttpRequest): Promise<URLSearchParams> {
@@ -514,24 +506,30 @@ export async function handleOpenSubsonicRequest(
     }
 
     case 'getPlaylists': {
-      const playlists = (auth.profileId
-        ? db.prepare('SELECT * FROM playlists WHERE profile_id=? ORDER BY updated_at DESC').all(auth.profileId)
+      const playlists = (auth.profileIds.length
+        ? db.prepare(`SELECT p.* FROM playlists p WHERE p.profile_id IN (${auth.profileIds.map(() => '?').join(',')}) ORDER BY p.updated_at DESC`).all(...auth.profileIds)
         : db.prepare('SELECT * FROM playlists ORDER BY updated_at DESC').all()) as {
-        id: string; name: string; description: string | null; total_tracks: number; created_at: string; updated_at: string;
+        id: string; profile_id: string; name: string; description: string | null; total_tracks: number; created_at: string; updated_at: string;
       }[];
+      const profileNames = new Map((await getHomeflixProfiles()).map((prof) => [prof.id, prof.name]));
+      const multi = auth.profileIds.length > 1;
       return formatSubsonicResponse(format, callback, {
         playlists: {
-          playlist: playlists.map((p) => ({
-            id: p.id,
-            name: p.name,
-            comment: p.description || '',
-            owner: auth.username,
-            public: false,
-            songCount: p.total_tracks || 0,
-            duration: 0,
-            created: p.created_at,
-            changed: p.updated_at,
-          })),
+          playlist: playlists.map((p) => {
+            const ownerName = profileNames.get(p.profile_id);
+            const displayName = multi && ownerName && p.profile_id !== auth.profileId ? `[${ownerName}] ${p.name}` : p.name;
+            return {
+              id: p.id,
+              name: displayName,
+              comment: p.description || '',
+              owner: ownerName || auth.username,
+              public: false,
+              songCount: p.total_tracks || 0,
+              duration: 0,
+              created: p.created_at,
+              changed: p.updated_at,
+            };
+          }),
         },
       });
     }

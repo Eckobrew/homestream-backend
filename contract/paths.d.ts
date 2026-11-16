@@ -2391,6 +2391,7 @@ export interface components {
             avatarUrl?: string;
             isAdministrator?: boolean;
             jellyfinUserId?: string;
+            accountId?: string;
         };
         ProfilesResponse: {
             profiles: components["schemas"]["UserProfile"][];

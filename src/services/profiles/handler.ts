@@ -10,6 +10,7 @@ import {
   importProfilesFromJellyfin,
 } from '@/lib/profiles';
 import { getServerConfig } from '@/lib/config';
+import { getPrimaryAccount, profilesForAccount } from '@/lib/accounts';
 import { isRequestLocalOrTailscale } from '@/lib/network';
 import { readSession } from '@/lib/session';
 
@@ -27,66 +28,44 @@ async function handleGET(request: HttpRequest) {
     const sessionCookie = request.cookies.get('homeflix_session')?.value;
     const sessionUser = await readSession(sessionCookie, 'web');
 
-    // External login: lock directly to the authenticated Jellyfin user with no switching
-    if (!netCheck.isLocalOrTailscale) {
-      let externalProfile = profiles.find(
-        (p) => p.id === sessionUser?.id || p.jellyfinUserId === sessionUser?.id
-      );
+    const activeAccountId = sessionUser?.accountId || getPrimaryAccount()?.id;
+    const scopedProfiles = activeAccountId ? profilesForAccount(profiles, activeAccountId) : profiles;
 
-      if (!externalProfile && sessionUser?.id) {
-        const imported = await importProfilesFromJellyfin([sessionUser.id]);
-        externalProfile = imported.find((p) => p.id === sessionUser?.id) || { id: sessionUser.id, name: sessionUser.name, jellyfinUserId: sessionUser.id, avatarColor: 'from-red-600 to-red-800', avatarBg: 'bg-red-600', initials: sessionUser.name.slice(0, 2).toUpperCase() };
-      }
-
-      const activeList = externalProfile ? [externalProfile] : [];
-      const activeId = externalProfile?.id || sessionUser?.id || '';
-
-      const response = HttpResponse.json({
-        profiles: activeList,
-        activeProfileId: activeId,
+    if (!netCheck.isLocalOrTailscale && !sessionUser) {
+      return HttpResponse.json({
+        profiles: [],
+        activeProfileId: '',
         needsSetup: false,
         canSwitchProfile: false,
         isExternal: true,
         availableJellyfinUsers: [],
       });
-
-      if (activeId) {
-        response.cookies.set({
-          name: 'homeflix_profile_id',
-          value: activeId,
-          path: '/',
-          maxAge: 31536000,
-          sameSite: 'lax',
-        });
-      }
-
-      return response;
     }
 
-    // Internal / Tailscale connections: full decoupled profile switcher behavior
-    const needsSetup = profiles.length === 0;
+    // Both LAN and authenticated external accounts get full profile switching within their account
+    const needsSetup = scopedProfiles.length === 0;
 
     let availableJellyfinUsers: any[] = [];
-    if (needsSetup || includeAvailable) {
+    if ((netCheck.isLocalOrTailscale && (needsSetup || includeAvailable))) {
       availableJellyfinUsers = await getAvailableJellyfinUsers();
     }
 
     let activeProfileId = '';
 
-    if (cookieProfileId && profiles.some((p) => p.id === cookieProfileId)) {
+    if (cookieProfileId && scopedProfiles.some((p) => p.id === cookieProfileId)) {
       activeProfileId = cookieProfileId;
-    } else if (config.jellyfinUserId && profiles.some((p) => p.id === config.jellyfinUserId)) {
+    } else if (config.jellyfinUserId && scopedProfiles.some((p) => p.id === config.jellyfinUserId)) {
       activeProfileId = config.jellyfinUserId;
-    } else if (profiles.length > 0) {
-      activeProfileId = profiles[0].id;
+    } else if (scopedProfiles.length > 0) {
+      activeProfileId = scopedProfiles[0].id;
     }
 
     const response = HttpResponse.json({
-      profiles,
+      profiles: scopedProfiles,
       activeProfileId,
       needsSetup,
       canSwitchProfile: true,
-      isExternal: false,
+      isExternal: !netCheck.isLocalOrTailscale,
       availableJellyfinUsers,
     });
 
@@ -110,15 +89,19 @@ async function handleGET(request: HttpRequest) {
 async function handlePOST(request: HttpRequest) {
   try {
     const netCheck = await isRequestLocalOrTailscale(request);
-    if (!netCheck.isLocalOrTailscale) {
+    const sessionUser = await readSession(request.cookies.get('homeflix_session')?.value, 'web');
+    if (!netCheck.isLocalOrTailscale && !sessionUser) {
       return HttpResponse.json(
-        { error: 'Profile switching and management is disabled for external sessions' },
-        { status: 403 }
+        { error: 'Authentication required' },
+        { status: 401 }
       );
     }
 
     const body = await request.json();
-    const { action = 'select', profileId, name, paletteIndex, userIds, userId } = body;
+    const { action = 'select', profileId, name, paletteIndex, userIds, userId, accountId } = body;
+    const activeAccountId = (sessionUser?.admin || netCheck.isLocalOrTailscale) && typeof accountId === 'string' && accountId
+      ? accountId
+      : sessionUser?.accountId || getPrimaryAccount()?.id;
 
     // 1. Import profiles from Jellyfin
     if (action === 'import') {
@@ -162,13 +145,14 @@ async function handlePOST(request: HttpRequest) {
         return HttpResponse.json({ error: 'Profile name is required' }, { status: 400 });
       }
 
-      const newProfile = await addHomeflixProfile(name, paletteIndex);
+      const newProfile = await addHomeflixProfile(name, paletteIndex, activeAccountId);
       const allProfiles = await getHomeflixProfiles();
+      const scoped = activeAccountId ? profilesForAccount(allProfiles, activeAccountId) : allProfiles;
 
       const response = HttpResponse.json({
         success: true,
         profile: newProfile,
-        profiles: allProfiles,
+        profiles: scoped,
         activeProfileId: newProfile.id,
         needsSetup: false,
       });
