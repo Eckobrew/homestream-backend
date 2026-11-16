@@ -40,6 +40,8 @@ import { JellyfinClient } from '@/lib/jellyfin';
 import { getNativeEpisodeQueue, getNativeItemById, getNativeMovieCollection, getNativeResumeItems, recordNativeWatchProgress } from '@/lib/native-media';
 import { getMediaEngineSettings } from '@/lib/media-settings';
 import * as syncplayService from '@/services/syncplay/handler';
+import * as nativeLibraryService from '@/services/native/library/handler';
+import * as accountsService from '@/services/accounts/handler';
 import { resolveJellyfinUserId } from '@/lib/profiles';
 import { createSession, readSession } from '@/lib/session';
 import { allowLogin } from '@/lib/login-limit';
@@ -402,6 +404,15 @@ async function dispatchContent(request: HttpRequest, context: Context) {
   }
   if (get && route === 'request') return requestOptions(request);
   if (!get && route === 'request') return requestMedia(request);
+  if (route === 'native/library') {
+    if (!directLocal(request) && !session?.admin) return HttpResponse.json({ error: 'Administrator access required' }, { status: 403 });
+    return get ? nativeLibraryService.GET(request) : nativeLibraryService.POST(request);
+  }
+  if (route === 'accounts') {
+    const statusCheck = get && request.nextUrl.searchParams.get('status') === '1';
+    if (!statusCheck && !directLocal(request) && !session?.admin) return HttpResponse.json({ error: 'Administrator access required' }, { status: 403 });
+    return get ? accountsService.GET(request) : accountsService.POST(request);
+  }
   if (route === 'syncplay') return get ? syncplayService.GET(request) : syncplayService.POST(request);
   if (route === 'sessions' || route === 'sessions/commands') return get ? sessionsService.GET(request) : HttpResponse.json({ error: 'Method not allowed' }, { status: 405 });
   if (route === 'sessions/heartbeat' || route === 'sessions/command') return !get ? sessionsService.POST(request) : HttpResponse.json({ error: 'Method not allowed' }, { status: 405 });

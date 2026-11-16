@@ -4,6 +4,7 @@ import { Readable } from 'stream';
 import { HttpRequest, HttpResponse } from '@/http';
 import { streamLocalFile } from '@/media/local-file';
 import { getMediaEngineSettings } from '@/lib/media-settings';
+import { withParentalControls } from '@/lib/parental-controls';
 import {
   extractNativeSubtitleVtt,
   getNativeTranscodeSession,
@@ -24,7 +25,7 @@ function mimeForFile(filePath: string): string {
   return 'application/octet-stream';
 }
 
-export async function GET(request: HttpRequest) {
+async function handleGET(request: HttpRequest) {
   const { searchParams } = request.nextUrl;
   const settings = getMediaEngineSettings();
 
@@ -114,3 +115,5 @@ export async function GET(request: HttpRequest) {
 
   return streamLocalFile(request, fileRow.file_path, fs.statSync(fileRow.file_path).size, mimeForFile(fileRow.file_path));
 }
+
+export const GET = withParentalControls(handleGET);

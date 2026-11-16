@@ -1,3 +1,4 @@
+import path from 'path';
 import { getServerConfig } from './config';
 import { JellyfinClient } from './jellyfin';
 import { peerIdentity } from '@/request-context';
@@ -36,7 +37,7 @@ export async function activeProfile(request: HttpRequest): Promise<UserProfile |
   return null;
 }
 import { getNativeItemById } from './native-media';
-import { resolveNativeFileByItemOrFileId } from './native-transcode';
+import { getNativeTranscodeSession, resolveNativeFileByItemOrFileId } from './native-transcode';
 
 function nativeCertification(id: string): string | null {
   const direct = getNativeItemById(id);
@@ -65,6 +66,31 @@ export async function guardKidsRequest(request: HttpRequest, profile: UserProfil
   if (name === 'downloads' || name === 'downloads/manager' || name.startsWith('stream/download') || name.startsWith('stream/torrent')) throw new ParentalDenied('Downloading torrents are unavailable in Kids mode');
   if (name === 'trailer' || (name === 'request' && request.method === 'GET')) return;
   if (name.startsWith('profiles')) return;
+  if (name === 'native/stream') {
+    const artwork = request.nextUrl.searchParams.get('artwork');
+    if (artwork) {
+      const m = /^(nat-(?:m|s|e|sn|f)-[a-f0-9]+)/i.exec(path.basename(artwork));
+      if (m) await permit(m[1], profile);
+      return;
+    }
+    const targetFile = request.nextUrl.searchParams.get('fileId')
+      || request.nextUrl.searchParams.get('subtitle')
+      || request.nextUrl.searchParams.get('trickplay');
+    if (targetFile) {
+      const file = resolveNativeFileByItemOrFileId(targetFile);
+      if (!file) throw new ParentalDenied('This title is not available for this kids profile');
+      await permit(file.item_id, profile);
+      return;
+    }
+    const hlsId = request.nextUrl.searchParams.get('hls');
+    if (hlsId) {
+      const sess = getNativeTranscodeSession(hlsId);
+      if (!sess) throw new ParentalDenied('This title is not available for this kids profile');
+      await permit(sess.itemId, profile);
+      return;
+    }
+    throw new ParentalDenied('Media identity required');
+  }
   const sourceId = request.nextUrl.searchParams.get('mediaSourceId');
   if (sourceId && !/^[a-zA-Z0-9_-]{1,128}$/.test(sourceId)) throw new ParentalDenied('Invalid media source');
   let id = request.nextUrl.searchParams.get('itemId');

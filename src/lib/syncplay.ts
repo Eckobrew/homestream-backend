@@ -133,7 +133,8 @@ export function updateSyncPlayRoom(
   const now = Date.now();
   const nowIso = new Date(now).toISOString();
   const participant = room.participants.find((p) => p.profileId === profileId);
-  if (participant) participant.lastSeenAt = nowIso;
+  if (!participant) return null;
+  participant.lastSeenAt = nowIso;
 
   room.positionTicks = typeof patch.positionTicks === 'number' ? Math.max(0, patch.positionTicks) : positionAt(room, now);
   if (typeof patch.isPaused === 'boolean') room.isPaused = patch.isPaused;
