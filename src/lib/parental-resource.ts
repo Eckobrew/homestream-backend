@@ -37,6 +37,9 @@ export function imageResource(source: string, profile: UserProfile, age: number)
   try {
     const url = new URL(source, 'http://homestream.invalid');
     let target = source;
+    if (url.pathname === '/api/native/stream' || url.pathname === '/api/mobile/v1/native/stream') {
+      return resourceUrl(`${url.pathname}${url.search}`, profile, 'image', age);
+    }
     if (url.pathname === '/api/mobile/v1/image' || url.pathname === '/api/image') {
       const item = url.searchParams.get('itemId');
       const remote = url.searchParams.get('url');
@@ -70,12 +73,15 @@ export async function parentalResource(request: HttpRequest): Promise<Response> 
     const target = new URL(ticket.url, request.url);
     const jf = new URL(config.jellyfinUrl || 'http://homestream.invalid');
     const local = target.origin === jf.origin;
-    const isInternalStream = ticket.kind === 'stream' && (
+    const isInternalNative =
+      target.pathname === '/api/native/stream' ||
+      target.pathname === '/api/mobile/v1/native/stream';
+    const isInternalStream = isInternalNative || (ticket.kind === 'stream' && (
       target.pathname === '/api/stream/torrent' ||
       target.pathname === '/api/stream/download' ||
       target.pathname === '/api/mobile/v1/stream/torrent' ||
       target.pathname === '/api/mobile/v1/stream/download'
-    );
+    ));
     if (!local && !isInternalStream && !(ticket.kind === 'image' && target.protocol === 'https:' && ['image.tmdb.org', 'images.unsplash.com'].includes(target.hostname))) throw new Error('Invalid source');
     if (local && ticket.kind === 'stream' && !isInternalStream && !target.pathname.toLowerCase().startsWith(`${jf.pathname.replace(/\/$/, '')}/Videos/`.toLowerCase())) throw new Error('Invalid media path');
     const headers: Record<string, string> = {};

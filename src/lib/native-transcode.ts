@@ -93,7 +93,8 @@ export function startNativeHlsTranscode(options: {
   copyVideo?: boolean;
 }): ActiveStreamSession {
   const settings = getMediaEngineSettings();
-  const sessionId = crypto.createHash('sha1').update(`${options.file.id}-${options.profileId}-${options.audioIndex ?? 'a0'}-${options.burnSubtitleIndex ?? 'ns'}`).digest('hex').slice(0, 16);
+  const startSec = options.startSeconds && options.startSeconds > 0 ? Math.floor(options.startSeconds) : 0;
+  const sessionId = crypto.createHash('sha1').update(`${options.file.id}-${options.profileId}-${options.audioIndex ?? 'a0'}-${options.burnSubtitleIndex ?? 'ns'}-${startSec}`).digest('hex').slice(0, 16);
 
   const existing = activeSessions.get(sessionId);
   if (existing && fs.existsSync(path.join(existing.dir, 'master.m3u8'))) {
@@ -299,10 +300,14 @@ export function negotiateNativePlayback(
     audioCodecs?: string[];
     audioIndex?: number;
     burnSubtitleIndex?: number;
+    startSeconds?: number;
   }
 ): {
   streamUrl: string;
   isTranscoding: boolean;
+  contentType?: string;
+  durationSeconds?: number;
+  totalDurationTicks?: number;
   versions?: MediaVersion[];
   skipSegments?: SkipSegment[];
   trickplayUrl?: string;
@@ -358,10 +363,24 @@ export function negotiateNativePlayback(
     supportedVideo &&
     supportedAudio;
 
+  const totalDurationTicks = file.duration_ticks || 0;
+  const durationSeconds = totalDurationTicks > 0 ? Math.round(totalDurationTicks / 10_000_000) : undefined;
+
   if (canDirectPlay) {
+    const mimeByExt: Record<string, string> = {
+      '.mp4': 'video/mp4',
+      '.m4v': 'video/mp4',
+      '.webm': 'video/webm',
+      '.mkv': 'video/x-matroska',
+      '.avi': 'video/x-msvideo',
+      '.mov': 'video/quicktime',
+    };
     return {
       streamUrl: `/api/native/stream?fileId=${encodeURIComponent(file.id)}`,
       isTranscoding: false,
+      contentType: mimeByExt[ext] || 'video/mp4',
+      durationSeconds,
+      totalDurationTicks: totalDurationTicks || undefined,
       versions,
       skipSegments,
       trickplayUrl,
@@ -384,12 +403,16 @@ export function negotiateNativePlayback(
     profileId,
     audioIndex: options?.audioIndex,
     burnSubtitleIndex: options?.burnSubtitleIndex,
+    startSeconds: options?.startSeconds,
     copyVideo: canCopyVideo,
   });
 
   return {
     streamUrl: `/api/native/stream?hls=${encodeURIComponent(session.id)}&segment=master.m3u8`,
     isTranscoding: true,
+    contentType: 'application/x-mpegURL',
+    durationSeconds,
+    totalDurationTicks: totalDurationTicks || undefined,
     versions,
     skipSegments,
     trickplayUrl,

@@ -14,6 +14,8 @@ function mimeForFile(filePath: string): string {
   if (ext === '.mp4' || ext === '.m4v') return 'video/mp4';
   if (ext === '.webm') return 'video/webm';
   if (ext === '.mkv') return 'video/x-matroska';
+  if (ext === '.avi') return 'video/x-msvideo';
+  if (ext === '.mov') return 'video/quicktime';
   if (ext === '.m3u8') return 'application/vnd.apple.mpegurl';
   if (ext === '.ts') return 'video/mp2t';
   if (ext === '.vtt') return 'text/vtt; charset=utf-8';
@@ -111,31 +113,46 @@ export async function GET(request: HttpRequest) {
   const contentType = mimeForFile(fileRow.file_path);
 
   if (rangeHeader) {
-    const m = /bytes=(\d*)-(\d*)/.exec(rangeHeader);
-    const start = m?.[1] ? Number(m[1]) : 0;
-    const end = m?.[2] ? Math.min(total - 1, Number(m[2])) : total - 1;
-    if (start >= total || end < start) {
+    const m = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim());
+    if (!m || (!m[1] && !m[2])) {
       return new HttpResponse(null, { status: 416, headers: { 'Content-Range': `bytes */${total}` } });
     }
+    let start: number;
+    let end: number;
+    if (!m[1]) {
+      const suffix = Number(m[2]);
+      start = Math.max(0, total - suffix);
+      end = total - 1;
+    } else {
+      start = Number(m[1]);
+      end = m[2] ? Math.min(total - 1, Number(m[2])) : total - 1;
+    }
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start >= total || end < start) {
+      return new HttpResponse(null, { status: 416, headers: { 'Content-Range': `bytes */${total}` } });
+    }
+    const headers = {
+      'Content-Type': contentType,
+      'Content-Length': String(end - start + 1),
+      'Content-Range': `bytes ${start}-${end}/${total}`,
+      'Accept-Ranges': 'bytes',
+    };
+    if (request.method === 'HEAD') return new HttpResponse(null, { status: 206, headers });
     const stream = fs.createReadStream(fileRow.file_path, { start, end });
     return new HttpResponse(Readable.toWeb(stream) as ReadableStream, {
       status: 206,
-      headers: {
-        'Content-Type': contentType,
-        'Content-Length': String(end - start + 1),
-        'Content-Range': `bytes ${start}-${end}/${total}`,
-        'Accept-Ranges': 'bytes',
-      },
+      headers,
     });
   }
 
+  const headers = {
+    'Content-Type': contentType,
+    'Content-Length': String(total),
+    'Accept-Ranges': 'bytes',
+  };
+  if (request.method === 'HEAD') return new HttpResponse(null, { status: 200, headers });
   const stream = fs.createReadStream(fileRow.file_path);
   return new HttpResponse(Readable.toWeb(stream) as ReadableStream, {
     status: 200,
-    headers: {
-      'Content-Type': contentType,
-      'Content-Length': String(total),
-      'Accept-Ranges': 'bytes',
-    },
+    headers,
   });
 }

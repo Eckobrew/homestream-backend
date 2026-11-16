@@ -6,7 +6,8 @@ import { TmdbClient } from '@/lib/tmdb';
 import { JellyfinClient } from '@/lib/jellyfin';
 import { MediaItem } from '@/types';
 import { resolveJellyfinUserId } from '@/lib/profiles';
-import { getNativeItemById, getNativeSimilarItems } from '@/lib/native-media';
+import { getNativeItemById, getNativeSimilarItems, getNativeTmdbIdMap } from '@/lib/native-media';
+import { getMediaEngineSettings } from '@/lib/media-settings';
 
 
 const normalize = (text: string) => text.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -70,7 +71,10 @@ async function handleGET(request: HttpRequest, { params }: { params: Promise<{ i
   if (recommendations.length) {
     // Preserve the discovery service's relevance ranking. Library membership only
     // changes availability; it never earns an unrelated title a recommendation slot.
-    const available = await jellyfin.matchLibraryTmdbIds(recommendations.map(item => item.tmdbId || 0).filter(Boolean), type);
+    const useNative = getMediaEngineSettings().mediaEngine === 'native';
+    const available = useNative
+      ? getNativeTmdbIdMap()
+      : await jellyfin.matchLibraryTmdbIds(recommendations.map(item => item.tmdbId || 0).filter(Boolean), type);
     recommendations = recommendations.map(item => {
       const local = available.get(item.tmdbId || 0);
       return local ? { ...item, jellyfinId: local, status: 'available' as const } : item;

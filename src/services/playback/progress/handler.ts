@@ -8,6 +8,7 @@ import { readSession } from '@/lib/session';
 import { isRequestLocalOrTailscale } from '@/lib/network';
 import { saveStreamProgress } from '@/lib/stream-progress';
 import { recordNativeWatchProgress } from '@/lib/native-media';
+import { resolveNativeFileByItemOrFileId } from '@/lib/native-transcode';
 import { getMediaEngineSettings } from '@/lib/media-settings';
 
 
@@ -34,7 +35,8 @@ async function handlePOST(request: HttpRequest) {
     const isNonJellyfinId = /^(?:seerr|tmdb|dl|yt|nat)-/i.test(itemId);
     saveStreamProgress(effectiveProfileId, itemId, positionTicks);
     if (itemId.startsWith('nat-') || getMediaEngineSettings().mediaEngine === 'native') {
-      recordNativeWatchProgress(effectiveProfileId, itemId, positionTicks, 0, undefined, undefined, isPaused ? 0 : 10);
+      const fileDurationTicks = resolveNativeFileByItemOrFileId(itemId)?.duration_ticks || 0;
+      recordNativeWatchProgress(effectiveProfileId, itemId, positionTicks, fileDurationTicks, undefined, undefined, isPaused ? 0 : 10);
       if (itemId.startsWith('nat-')) {
         return HttpResponse.json({ success: true });
       }

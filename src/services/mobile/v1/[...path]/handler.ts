@@ -34,7 +34,9 @@ import { GET as downloadStream } from '@/services/stream/download/handler';
 import { GET as torrentStream } from '@/services/stream/torrent/handler';
 import { getServerConfig } from '@/lib/config';
 import { JellyfinClient } from '@/lib/jellyfin';
-import { getNativeEpisodeQueue, getNativeItemById, recordNativeWatchProgress } from '@/lib/native-media';
+import { getNativeEpisodeQueue, getNativeItemById, getNativeResumeItems, recordNativeWatchProgress } from '@/lib/native-media';
+import { getMediaEngineSettings } from '@/lib/media-settings';
+import * as syncplayService from '@/services/syncplay/handler';
 import { resolveJellyfinUserId } from '@/lib/profiles';
 import { createSession, readSession } from '@/lib/session';
 import { allowLogin } from '@/lib/login-limit';
@@ -212,6 +214,10 @@ async function dispatchContent(request: HttpRequest, context: Context) {
     return HttpResponse.json({ profile, revision: profile ? kidsPolicyRevision(profile) : '', canManageIntegrations: isAdmin });
   }
   if (get && route === 'continue-watching') {
+    const profileId = session?.id || request.nextUrl.searchParams.get('userId') || 'default';
+    if (getMediaEngineSettings().mediaEngine === 'native') {
+      return HttpResponse.json({ items: getNativeResumeItems(profileId) });
+    }
     const uid = await resolveJellyfinUserId(session?.id || request.nextUrl.searchParams.get('userId') || undefined);
     const jellyfin = new JellyfinClient(undefined, undefined, uid);
     try { return HttpResponse.json({ items: await jellyfin.getResumeItems(true) }); }
@@ -276,7 +282,8 @@ async function dispatchContent(request: HttpRequest, context: Context) {
     const itemId = request.nextUrl.searchParams.get('itemId');
     if (!itemId) return HttpResponse.json({ error: 'itemId required' }, { status: 400 });
     if (itemId.startsWith('nat-')) {
-      return HttpResponse.json({ items: getNativeEpisodeQueue(itemId) });
+      const profileId = session?.id || request.nextUrl.searchParams.get('userId') || 'default';
+      return HttpResponse.json({ items: getNativeEpisodeQueue(itemId, profileId) });
     }
     const uid = await resolveJellyfinUserId(request.nextUrl.searchParams.get('userId') || undefined);
     const jellyfin = new JellyfinClient(undefined, undefined, uid);
@@ -379,6 +386,7 @@ async function dispatchContent(request: HttpRequest, context: Context) {
   }
   if (get && route === 'request') return requestOptions(request);
   if (!get && route === 'request') return requestMedia(request);
+  if (route === 'syncplay') return get ? syncplayService.GET(request) : syncplayService.POST(request);
   if (route === 'sessions' || route === 'sessions/commands') return get ? sessionsService.GET(request) : HttpResponse.json({ error: 'Method not allowed' }, { status: 405 });
   if (route === 'sessions/heartbeat' || route === 'sessions/command') return !get ? sessionsService.POST(request) : HttpResponse.json({ error: 'Method not allowed' }, { status: 405 });
   return HttpResponse.json({ error: 'Unknown mobile endpoint' }, { status: 404 });

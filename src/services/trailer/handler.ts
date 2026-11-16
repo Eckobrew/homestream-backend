@@ -2,6 +2,7 @@ import { withParentalControls } from '@/lib/parental-controls';
 import { HttpRequest, HttpResponse } from '@/http';
 import { SeerrClient } from '@/lib/seerr';
 import { JellyfinClient } from '@/lib/jellyfin';
+import { getNativeItemById } from '@/lib/native-media';
 
 
 
@@ -29,6 +30,10 @@ async function handleGET(request: HttpRequest) {
       tmdbId = Number(itemId.replace(/^seerr-(?:movie-|tv-)?/, '')) || 0;
     } else if (/^\d+$/.test(itemId)) {
       tmdbId = Number(itemId);
+    } else if (itemId.startsWith('nat-')) {
+      const natItem = getNativeItemById(itemId);
+      if (natItem?.tmdbId) tmdbId = natItem.tmdbId;
+      if (natItem?.type === 'Series') mediaType = 'tv';
     } else {
       // If it's a Jellyfin ID, look up its provider IDs from Jellyfin
       const jellyfin = new JellyfinClient();

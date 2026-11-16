@@ -101,17 +101,22 @@ async function handleGET(request: HttpRequest) {
 
   if (itemId.startsWith('nat-') || getMediaEngineSettings().mediaEngine === 'native') {
     const profileId = searchParams.get('userId') || request.cookies.get('homeflix_profile_id')?.value || 'default';
+    const rawAudio = searchParams.get('audioIndex');
+    const rawBurn = searchParams.get('burnSubtitleIndex');
+    const parsedAudio = rawAudio !== null && /^\d+$/.test(rawAudio) ? Number(rawAudio) : undefined;
+    const parsedBurn = rawBurn !== null && /^\d+$/.test(rawBurn) ? Number(rawBurn) : undefined;
     const nativeResult = negotiateNativePlayback(itemId, profileId, {
       versionId: searchParams.get('versionId') || undefined,
       forceTranscode,
       videoCodecs,
       audioCodecs,
-      audioIndex: searchParams.get('audioIndex') ? Number(searchParams.get('audioIndex')) : undefined,
-      burnSubtitleIndex: searchParams.get('burnSubtitleIndex') ? Number(searchParams.get('burnSubtitleIndex')) : undefined,
+      audioIndex: parsedAudio,
+      burnSubtitleIndex: parsedBurn,
+      startSeconds: startTimeTicks && startTimeTicks > 0 ? Math.floor(startTimeTicks / 10_000_000) : undefined,
     });
     if (nativeResult.streamUrl) {
       const transport = nativeResult.isTranscoding ? 'HLS' : 'file';
-      const contentType = nativeResult.isTranscoding ? 'application/x-mpegURL' : 'video/mp4';
+      const contentType = nativeResult.contentType || (nativeResult.isTranscoding ? 'application/x-mpegURL' : 'video/mp4');
       return HttpResponse.json({ ...nativeResult, transport, contentType });
     }
     if (itemId.startsWith('nat-') || !jellyfin.isConfigured()) {

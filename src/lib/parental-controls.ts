@@ -35,11 +35,26 @@ export async function activeProfile(request: HttpRequest): Promise<UserProfile |
   if (kids.length) throw new ParentalDenied('Use a paired device and select a profile');
   return null;
 }
+import { getNativeItemById } from './native-media';
+import { resolveNativeFileByItemOrFileId } from './native-transcode';
+
+function nativeCertification(id: string): string | null {
+  const direct = getNativeItemById(id);
+  if (direct?.rating) return direct.rating;
+  const file = resolveNativeFileByItemOrFileId(id);
+  if (file?.item_id) {
+    return getNativeItemById(file.item_id)?.rating || null;
+  }
+  return null;
+}
+
 function route(request: HttpRequest) { return request.nextUrl.pathname.replace(/^\/api\/(mobile\/v1\/)?/, ''); }
 async function permit(id: string, profile: UserProfile, type: 'movie' | 'tv' = 'movie'): Promise<number> {
   const match = /^seerr-(?:(movie|tv)-)?(\d+)$/.exec(id);
   const rating = match ? await catalogCertification(Number(match[2]), match[1] === 'tv' ? 'tv' : type)
-    : /^\d+$/.test(id) ? await catalogCertification(Number(id), type) : await jellyfinCertification(id);
+    : /^\d+$/.test(id) ? await catalogCertification(Number(id), type)
+    : id.startsWith('nat-') ? nativeCertification(id)
+    : await jellyfinCertification(id);
   if (!isKids(profile) || !ratingAllowed(rating, profile.kidsRating)) throw new ParentalDenied('This title is not available for this kids profile');
   return ratingAge(rating)!;
 }
@@ -93,7 +108,7 @@ export async function filterKidsJson(value: unknown, profile: UserProfile): Prom
             rating = await catalogCertification(tmdb, item.type === 'Movie' ? 'movie' : 'tv');
           } else if (!rating && typeof item.episodeNumber === 'number') {
             if (++lookups > 96 || Date.now() > deadline) return { allowed: false, age: 1000 };
-            rating = await jellyfinCertification(id);
+            rating = id.startsWith('nat-') ? nativeCertification(id) : await jellyfinCertification(id);
           }
           const limit = isKids(profile) ? profile.kidsRating : 'U';
           return { allowed: ratingAllowed(rating, limit), age: ratingAge(rating) ?? 1000 };
