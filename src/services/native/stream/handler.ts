@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { Readable } from 'stream';
 import { HttpRequest, HttpResponse } from '@/http';
+import { streamLocalFile } from '@/media/local-file';
 import { getMediaEngineSettings } from '@/lib/media-settings';
 import {
   extractNativeSubtitleVtt,
@@ -76,26 +77,30 @@ export async function GET(request: HttpRequest) {
     if (!sess) return HttpResponse.json({ error: 'Transcode session expired' }, { status: 404 });
     const asset = path.basename(searchParams.get('segment') || 'master.m3u8');
     const full = path.join(sess.dir, asset);
-    const deadline = Date.now() + 10_000;
+    const deadline = Date.now() + 20_000;
     while (!fs.existsSync(full) && Date.now() < deadline) {
-      if (sess.process && (sess.process.exitCode !== null || sess.process.killed)) break;
+      if (request.signal.aborted || sess.startupFailed || sess.process?.killed) break;
+      if (!asset.endsWith('.m3u8') && sess.process && sess.process.exitCode !== null) break;
       await new Promise((r) => setTimeout(r, 100));
     }
+    if (sess.startupFailed) return HttpResponse.json({ error: 'Native transcoding failed to start' }, { status: 503 });
     if (!fs.existsSync(full)) return HttpResponse.json({ error: 'Segment not ready' }, { status: 404 });
     if (asset.endsWith('.m3u8')) {
       const text = fs.readFileSync(full, 'utf8').replace(
         /^(seg_\d+\.ts)$/gm,
-        `/api/native/stream?hls=${encodeURIComponent(hlsSessionId)}&segment=$1`
+        `?hls=${encodeURIComponent(hlsSessionId)}&segment=$1`
       );
       return new HttpResponse(text, {
         status: 200,
         headers: { 'Content-Type': 'application/vnd.apple.mpegurl', 'Cache-Control': 'no-cache' },
       });
     }
+    const headers = { 'Content-Type': 'video/mp2t', 'Content-Length': String(fs.statSync(full).size) };
+    if (request.method === 'HEAD') return new HttpResponse(null, { status: 200, headers });
     const stream = fs.createReadStream(full);
     return new HttpResponse(Readable.toWeb(stream) as ReadableStream, {
       status: 200,
-      headers: { 'Content-Type': 'video/mp2t' },
+      headers,
     });
   }
 
@@ -107,52 +112,5 @@ export async function GET(request: HttpRequest) {
     return HttpResponse.json({ error: 'Media file not found' }, { status: 404 });
   }
 
-  const stat = fs.statSync(fileRow.file_path);
-  const total = stat.size;
-  const rangeHeader = request.headers.get('range');
-  const contentType = mimeForFile(fileRow.file_path);
-
-  if (rangeHeader) {
-    const m = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim());
-    if (!m || (!m[1] && !m[2])) {
-      return new HttpResponse(null, { status: 416, headers: { 'Content-Range': `bytes */${total}` } });
-    }
-    let start: number;
-    let end: number;
-    if (!m[1]) {
-      const suffix = Number(m[2]);
-      start = Math.max(0, total - suffix);
-      end = total - 1;
-    } else {
-      start = Number(m[1]);
-      end = m[2] ? Math.min(total - 1, Number(m[2])) : total - 1;
-    }
-    if (!Number.isFinite(start) || !Number.isFinite(end) || start >= total || end < start) {
-      return new HttpResponse(null, { status: 416, headers: { 'Content-Range': `bytes */${total}` } });
-    }
-    const headers = {
-      'Content-Type': contentType,
-      'Content-Length': String(end - start + 1),
-      'Content-Range': `bytes ${start}-${end}/${total}`,
-      'Accept-Ranges': 'bytes',
-    };
-    if (request.method === 'HEAD') return new HttpResponse(null, { status: 206, headers });
-    const stream = fs.createReadStream(fileRow.file_path, { start, end });
-    return new HttpResponse(Readable.toWeb(stream) as ReadableStream, {
-      status: 206,
-      headers,
-    });
-  }
-
-  const headers = {
-    'Content-Type': contentType,
-    'Content-Length': String(total),
-    'Accept-Ranges': 'bytes',
-  };
-  if (request.method === 'HEAD') return new HttpResponse(null, { status: 200, headers });
-  const stream = fs.createReadStream(fileRow.file_path);
-  return new HttpResponse(Readable.toWeb(stream) as ReadableStream, {
-    status: 200,
-    headers,
-  });
+  return streamLocalFile(request, fileRow.file_path, fs.statSync(fileRow.file_path).size, mimeForFile(fileRow.file_path));
 }

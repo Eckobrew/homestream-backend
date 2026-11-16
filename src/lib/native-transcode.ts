@@ -6,8 +6,9 @@ import { promisify } from 'util';
 import { stateDatabase } from '@/state/database';
 import { getMediaEngineSettings } from '@/lib/media-settings';
 import { ensureNativeMediaTables, NativeMediaFileRow } from '@/lib/native-media';
-import { MediaVersion, SkipSegment, SubtitleTrack } from '@/types';
+import { MediaAudioTrack, MediaVersion, SkipSegment, SubtitleTrack } from '@/types';
 import { log } from '@/log';
+import { getNativeHardwareAcceleration, hardwareDeviceArgs, hardwareEncoders, hardwareVideoFilters } from './native-hardware';
 
 const execFileAsync = promisify(execFile);
 
@@ -23,6 +24,7 @@ export interface ActiveStreamSession {
   bitrateMbps: number;
   dir: string;
   process?: ChildProcess;
+  startupFailed?: boolean;
   startedAt: string;
   lastAccessAt: number;
 }
@@ -85,7 +87,7 @@ export function resolveNativeFileByItemOrFileId(targetId: string, versionId?: st
   return byItem || null;
 }
 
-export function startNativeHlsTranscode(options: {
+export async function startNativeHlsTranscode(options: {
   file: NativeMediaFileRow;
   title: string;
   profileId: string;
@@ -93,13 +95,21 @@ export function startNativeHlsTranscode(options: {
   burnSubtitleIndex?: number;
   startSeconds?: number;
   copyVideo?: boolean;
-}): ActiveStreamSession {
+}): Promise<ActiveStreamSession> {
   const settings = getMediaEngineSettings();
+  const acceleration = settings.hwAccel === 'auto'
+    ? (options.copyVideo ? 'none' : (await getNativeHardwareAcceleration(settings.vaapiDevice))[0] || 'none')
+    : settings.hwAccel;
   const startSec = options.startSeconds && options.startSeconds > 0 ? Math.floor(options.startSeconds) : 0;
-  const sessionId = crypto.createHash('sha1').update(`${options.file.id}-${options.profileId}-${options.audioIndex ?? 'a0'}-${options.burnSubtitleIndex ?? 'ns'}-${startSec}`).digest('hex').slice(0, 16);
+  const sessionKey = JSON.stringify([
+    options.file.id, options.profileId, options.audioIndex, options.burnSubtitleIndex, startSec, Boolean(options.copyVideo),
+    acceleration, settings.vaapiDevice, settings.hdrToneMapping, settings.burnInImageSubtitles,
+    settings.maxTranscodeBitrateMbps, settings.hlsSegmentSeconds, settings.transcodePreset, settings.transcodeTempDir,
+  ]);
+  const sessionId = crypto.createHash('sha1').update(sessionKey).digest('hex').slice(0, 16);
 
   const existing = activeSessions.get(sessionId);
-  if (existing && fs.existsSync(path.join(existing.dir, 'master.m3u8'))) {
+  if (existing && !existing.startupFailed && !existing.process?.killed && (!fs.existsSync(path.join(existing.dir, 'master.m3u8')) || existing.process?.exitCode === null || existing.process?.exitCode === 0)) {
     existing.lastAccessAt = Date.now();
     return existing;
   }
@@ -109,19 +119,6 @@ export function startNativeHlsTranscode(options: {
   fs.mkdirSync(dir, { recursive: true });
   const playlistPath = path.join(dir, 'master.m3u8');
 
-  const args: string[] = ['-y', '-hide_banner', '-loglevel', 'warning'];
-  if (options.startSeconds && options.startSeconds > 0) {
-    args.push('-ss', String(options.startSeconds));
-  }
-
-  if (settings.hwAccel === 'vaapi' && settings.vaapiDevice) {
-    args.push('-vaapi_device', settings.vaapiDevice);
-  }
-
-  args.push('-i', options.file.file_path);
-  args.push('-map', '0:v:0');
-  args.push('-map', options.audioIndex !== undefined ? `0:${options.audioIndex}` : '0:a:0?');
-
   const filters: string[] = [];
   if (settings.hdrToneMapping && options.file.has_hdr) {
     filters.push('zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p');
@@ -130,51 +127,10 @@ export function startNativeHlsTranscode(options: {
     const escaped = options.file.file_path.replace(/:/g, '\\:').replace(/'/g, "\\'");
     filters.push(`subtitles='${escaped}':si=${options.burnSubtitleIndex}`);
   }
-  if (filters.length > 0) {
-    args.push('-vf', filters.join(','));
-  }
 
   const bitrateMbps = settings.maxTranscodeBitrateMbps || 20;
-  let videoCodec = 'copy';
-  if (options.copyVideo && filters.length === 0) {
-    args.push('-c:v', 'copy');
-  } else {
-    videoCodec = settings.hwAccel === 'nvenc'
-      ? 'h264_nvenc'
-      : settings.hwAccel === 'vaapi'
-      ? 'h264_vaapi'
-      : settings.hwAccel === 'qsv'
-      ? 'h264_qsv'
-      : settings.hwAccel === 'videotoolbox'
-      ? 'h264_videotoolbox'
-      : 'libx264';
-
-    args.push('-c:v', videoCodec);
-    if (videoCodec === 'libx264') {
-      args.push('-preset', settings.transcodePreset || 'veryfast', '-pix_fmt', 'yuv420p', '-crf', '20');
-      if (bitrateMbps > 0) {
-        args.push('-maxrate', `${bitrateMbps}M`, '-bufsize', `${bitrateMbps * 2}M`);
-      }
-    } else if (bitrateMbps > 0) {
-      args.push('-b:v', `${bitrateMbps}M`, '-maxrate', `${bitrateMbps}M`, '-bufsize', `${bitrateMbps * 2}M`);
-    }
-  }
-
-  args.push('-c:a', 'aac', '-ac', '2', '-b:a', '192k');
-  args.push(
-    '-f', 'hls',
-    '-hls_time', String(settings.hlsSegmentSeconds || 4),
-    '-hls_list_size', '0',
-    '-hls_segment_filename', path.join(dir, 'seg_%05d.ts'),
-    playlistPath
-  );
-
-  const proc = spawn('ffmpeg', args, { stdio: ['ignore', 'ignore', 'pipe'] });
-  proc.stderr?.on('data', (chunk) => {
-    const msg = chunk.toString().trim();
-    if (msg) log.warn(`[native-ffmpeg ${sessionId}] ${msg}`);
-  });
-
+  const videoCodec = options.copyVideo && filters.length === 0
+    ? 'copy' : acceleration === 'none' ? 'libx264' : hardwareEncoders[acceleration] || 'libx264';
   const session: ActiveStreamSession = {
     id: sessionId,
     fileId: options.file.id,
@@ -186,11 +142,61 @@ export function startNativeHlsTranscode(options: {
     audioCodec: 'aac',
     bitrateMbps,
     dir,
-    process: proc,
     startedAt: new Date().toISOString(),
     lastAccessAt: Date.now(),
   };
+
+  function launch(encoder: string) {
+    const args = ['-y', '-hide_banner', '-loglevel', 'warning'];
+    if (startSec > 0) args.push('-ss', String(startSec));
+    args.push(...hardwareDeviceArgs(encoder, settings.vaapiDevice));
+    args.push('-i', options.file.file_path, '-map', '0:v:0');
+    args.push('-map', options.audioIndex !== undefined ? `0:${options.audioIndex}` : '0:a:0?');
+    const videoFilters = [...filters, ...hardwareVideoFilters(encoder)];
+    if (videoFilters.length) args.push('-vf', videoFilters.join(','));
+
+    args.push('-c:v', encoder);
+    if (encoder !== 'copy') {
+      args.push('-force_key_frames', `expr:gte(t,n_forced*${settings.hlsSegmentSeconds || 4})`);
+      if (encoder === 'libx264') {
+        args.push('-preset', settings.transcodePreset || 'veryfast', '-pix_fmt', 'yuv420p', '-crf', '20');
+      } else if (bitrateMbps > 0) {
+        args.push('-b:v', `${bitrateMbps}M`);
+      }
+      if (bitrateMbps > 0) args.push('-maxrate', `${bitrateMbps}M`, '-bufsize', `${bitrateMbps * 2}M`);
+    }
+
+    args.push(
+      '-c:a', 'aac', '-ac', '2', '-b:a', '192k',
+      '-f', 'hls', '-hls_time', String(settings.hlsSegmentSeconds || 4),
+      '-hls_playlist_type', 'event', '-hls_flags', 'temp_file',
+      '-hls_segment_filename', path.join(dir, 'seg_%05d.ts'), playlistPath,
+    );
+
+    const proc = spawn('ffmpeg', args, { stdio: ['ignore', 'ignore', 'pipe'] });
+    session.process = proc;
+    session.videoCodec = encoder;
+    proc.stderr?.on('data', chunk => {
+      const message = chunk.toString().trim();
+      if (message) log.warn(`[native-ffmpeg ${sessionId}] ${message}`);
+    });
+    proc.once('error', error => {
+      session.startupFailed = true;
+      log.error(`[native-ffmpeg ${sessionId}] Failed to start: ${error.message}`);
+    });
+    proc.once('close', code => {
+      if (activeSessions.get(sessionId) !== session || session.startupFailed || fs.existsSync(playlistPath)) return;
+      if (code !== 0 && encoder !== 'copy' && encoder !== 'libx264') {
+        log.warn(`[native-ffmpeg ${sessionId}] ${encoder} failed before publishing HLS; retrying with libx264`);
+        launch('libx264');
+      } else {
+        session.startupFailed = true;
+      }
+    });
+  }
+
   activeSessions.set(sessionId, session);
+  launch(videoCodec);
   return session;
 }
 
@@ -232,7 +238,7 @@ export function listNativeSubtitlesForFile(file: NativeMediaFileRow): SubtitleTr
   const base = path.basename(file.file_path, path.extname(file.file_path));
   try {
     if (fs.existsSync(dir)) {
-      const sidecars = fs.readdirSync(dir).filter((name) => name.startsWith(base) && /\.(vtt|srt)$/i.test(name));
+      const sidecars = fs.readdirSync(dir).filter((name) => name.startsWith(`${base}.`) && /\.(vtt|srt)$/i.test(name));
       sidecars.forEach((name, idx) => {
         const langMatch = /\.([a-z]{2,3})\.(vtt|srt)$/i.exec(name);
         tracks.push({
@@ -249,6 +255,19 @@ export function listNativeSubtitlesForFile(file: NativeMediaFileRow): SubtitleTr
   }
 
   return tracks;
+}
+
+function nativeAudioTracks(file: NativeMediaFileRow): MediaAudioTrack[] {
+  try {
+    const streams = JSON.parse(file.streams_json || '[]') as Array<{ codec_type: string; index: number; tags?: { title?: string; language?: string } }>;
+    return streams.filter(stream => stream.codec_type === 'audio' && Number.isSafeInteger(stream.index)).map((stream, index) => ({
+      index: stream.index,
+      title: stream.tags?.title || stream.tags?.language || `Audio ${index + 1}`,
+      language: stream.tags?.language,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 const inFlightSubtitles = new Map<string, Promise<string | null>>();
@@ -292,19 +311,20 @@ export async function extractNativeSubtitleVtt(file: NativeMediaFileRow, index?:
   return job;
 }
 
-export function negotiateNativePlayback(
+export async function negotiateNativePlayback(
   itemId: string,
   profileId: string,
   options?: {
     versionId?: string;
     forceTranscode?: boolean;
+    receiver?: string;
     videoCodecs?: string[];
     audioCodecs?: string[];
     audioIndex?: number;
     burnSubtitleIndex?: number;
     startSeconds?: number;
   }
-): {
+): Promise<{
   streamUrl: string;
   isTranscoding: boolean;
   contentType?: string;
@@ -314,8 +334,9 @@ export function negotiateNativePlayback(
   skipSegments?: SkipSegment[];
   trickplayUrl?: string;
   subtitles: SubtitleTrack[];
+  audioTracks?: MediaAudioTrack[];
   error?: string;
-} {
+}> {
   ensureNativeMediaTables();
   const file = resolveNativeFileByItemOrFileId(itemId, options?.versionId);
   if (!file || !fs.existsSync(file.file_path)) {
@@ -348,20 +369,27 @@ export function negotiateNativePlayback(
     ? `/api/native/stream?trickplay=${encodeURIComponent(file.id)}&asset=trickplay.vtt`
     : undefined;
   const subtitles = listNativeSubtitlesForFile(file);
+  const audioTracks = nativeAudioTracks(file);
+  const preferredTrack = audioTracks.find(track => track.language?.toLowerCase() === settings.defaultAudioLanguage?.toLowerCase());
+  const audioIndex = options?.audioIndex ?? (preferredTrack && preferredTrack !== audioTracks[0] ? preferredTrack.index : undefined);
+  if (options?.audioIndex !== undefined && audioTracks.length && !audioTracks.some(track => track.index === options.audioIndex)) {
+    return { streamUrl: '', isTranscoding: false, subtitles, audioTracks, error: 'Audio track not found' };
+  }
 
   const ext = path.extname(file.file_path).toLowerCase();
   const vCodec = (file.video_codec || '').toLowerCase();
   const aCodec = (file.audio_codec || '').toLowerCase();
-  const supportedVideo = !options?.videoCodecs?.length || options.videoCodecs.some((c) => vCodec.includes(c.toLowerCase()));
-  const supportedAudio = !options?.audioCodecs?.length || options.audioCodecs.some((c) => aCodec.includes(c.toLowerCase()));
-  const browserContainerOk = ext === '.mp4' || ext === '.m4v' || ext === '.webm' || (ext === '.mkv' && vCodec === 'h264');
+  const supportedVideo = !options?.videoCodecs || options.videoCodecs.includes(vCodec);
+  const supportedAudio = !aCodec || !options?.audioCodecs || options.audioCodecs.includes(aCodec);
+  const containerSupported = ext === '.mp4' || ext === '.m4v' || ext === '.webm'
+    || (ext === '.mkv' && vCodec === 'h264' && options?.receiver !== 'browser' && options?.receiver !== 'cast');
 
   const canDirectPlay =
     settings.allowDirectPlay &&
     !options?.forceTranscode &&
     options?.burnSubtitleIndex === undefined &&
-    options?.audioIndex === undefined &&
-    browserContainerOk &&
+    audioIndex === undefined &&
+    containerSupported &&
     supportedVideo &&
     supportedAudio;
 
@@ -387,6 +415,7 @@ export function negotiateNativePlayback(
       skipSegments,
       trickplayUrl,
       subtitles,
+      audioTracks,
     };
   }
 
@@ -399,11 +428,11 @@ export function negotiateNativePlayback(
     options?.burnSubtitleIndex === undefined;
 
   const itemRow = db.prepare('SELECT title FROM native_media_items WHERE id = ?').get(file.item_id) as { title?: string } | undefined;
-  const session = startNativeHlsTranscode({
+  const session = await startNativeHlsTranscode({
     file,
     title: itemRow?.title || path.basename(file.file_path),
     profileId,
-    audioIndex: options?.audioIndex,
+    audioIndex,
     burnSubtitleIndex: options?.burnSubtitleIndex,
     startSeconds: options?.startSeconds,
     copyVideo: canCopyVideo,
@@ -419,5 +448,6 @@ export function negotiateNativePlayback(
     skipSegments,
     trickplayUrl,
     subtitles,
+    audioTracks,
   };
 }

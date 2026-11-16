@@ -11,11 +11,20 @@ import {
   scanNativeLibraries,
 } from '@/lib/native-media';
 import { listActiveNativeStreams, stopNativeStreamSession } from '@/lib/native-transcode';
+import { importJellyfinWatchHistory } from '@/lib/jellyfin-history-import';
+import { isRequestLocalOrTailscale } from '@/lib/network';
+import { readSession } from '@/lib/session';
+import { getNativeHardwareAcceleration } from '@/lib/native-hardware';
 
 export async function GET(request: HttpRequest) {
   const { searchParams } = request.nextUrl;
   const view = searchParams.get('view') || 'overview';
   const profileId = searchParams.get('profileId') || undefined;
+  const settings = getMediaEngineSettings();
+
+  if (view === 'hardware') {
+    return HttpResponse.json({ hardwareAcceleration: await getNativeHardwareAcceleration(settings.vaapiDevice) });
+  }
 
   if (view === 'stats') {
     return HttpResponse.json({
@@ -34,7 +43,8 @@ export async function GET(request: HttpRequest) {
   const type = typeParam === 'Movie' || typeParam === 'Series' ? typeParam : undefined;
 
   return HttpResponse.json({
-    settings: getMediaEngineSettings(),
+    settings,
+    hardwareAcceleration: await getNativeHardwareAcceleration(settings.vaapiDevice),
     scanStatus: getNativeScanStatus(),
     items: listNativeLibraryItems({ type, unmatchedOnly }),
     activeStreams: listActiveNativeStreams(),
@@ -51,6 +61,19 @@ export async function POST(request: HttpRequest) {
   }
 
   const action = String(body.action || '').trim();
+
+  if (action === 'importJellyfinHistory') {
+    if (!request.nextUrl.pathname.startsWith('/api/mobile/') &&
+        !(await isRequestLocalOrTailscale(request)).isLocalOrTailscale &&
+        !(await readSession(request.cookies.get('homeflix_session')?.value, 'web'))?.admin) {
+      return HttpResponse.json({ error: 'Administrator access required' }, { status: 403 });
+    }
+    try {
+      return HttpResponse.json({ success: true, ...await importJellyfinWatchHistory() });
+    } catch (error) {
+      return HttpResponse.json({ error: error instanceof Error ? error.message : 'Watch history import failed' }, { status: 400 });
+    }
+  }
 
   if (action === 'saveSettings') {
     const patch = (body.settings && typeof body.settings === 'object' ? body.settings : body) as Record<string, unknown>;
