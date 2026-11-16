@@ -72,7 +72,9 @@ export function resolveNativeFileByItemOrFileId(targetId: string, versionId?: st
   ensureNativeMediaTables();
   const db = stateDatabase();
   if (versionId) {
-    const byVer = db.prepare('SELECT * FROM native_media_files WHERE id = ?').get(versionId) as NativeMediaFileRow | undefined;
+    const byVer = db.prepare(
+      'SELECT * FROM native_media_files WHERE id = ? AND (item_id = ? OR episode_id = ? OR id = ?)'
+    ).get(versionId, targetId, targetId, targetId) as NativeMediaFileRow | undefined;
     if (byVer) return byVer;
   }
   const byFile = db.prepare('SELECT * FROM native_media_files WHERE id = ?').get(targetId) as NativeMediaFileRow | undefined;

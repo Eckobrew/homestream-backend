@@ -32,6 +32,7 @@ import { GET as categories } from '@/services/categories/[type]/handler';
 import { GET as recommendations } from '@/services/media/[id]/recommendations/handler';
 import { GET as downloadStream } from '@/services/stream/download/handler';
 import { GET as torrentStream } from '@/services/stream/torrent/handler';
+import { GET as nativeStream } from '@/services/native/stream/handler';
 import { getServerConfig } from '@/lib/config';
 import { JellyfinClient } from '@/lib/jellyfin';
 import { getNativeEpisodeQueue, getNativeItemById, getNativeResumeItems, recordNativeWatchProgress } from '@/lib/native-media';
@@ -355,6 +356,7 @@ async function dispatchContent(request: HttpRequest, context: Context) {
   if (get && params.path.length === 3 && params.path[0] === 'media' && params.path[2] === 'recommendations') return recommendations(request, { params: Promise.resolve({ id: params.path[1] }) });
   if ((get || request.method === 'HEAD') && route === 'stream/download') return downloadStream(request);
   if ((get || request.method === 'HEAD') && route === 'stream/torrent') return torrentStream(request);
+  if ((get || request.method === 'HEAD') && route === 'native/stream') return nativeStream(request);
   if (get && route === 'home') return home(request);
   if (get && /^library\/(movies|tv|youtube)$/.test(route)) {
     return library(request, { params: Promise.resolve({ type: params.path[1] }) });
