@@ -7,9 +7,7 @@ import { stateDatabase } from '@/state/database';
 import { ensureMusicTables } from '@/lib/music';
 import { getHomeflixProfiles } from '@/lib/profiles';
 import { getServerConfig } from '@/lib/config';
-import { isLanIp } from '@/lib/network';
 import { HttpRequest, HttpResponse } from '@/http';
-import type { PeerIdentity } from '@/request-context';
 
 const SUBSONIC_VERSION = '1.16.1';
 const SERVER_TYPE = 'HomeStream';
@@ -230,40 +228,22 @@ async function verifyJellyfinCredentials(username: string, password: string): Pr
   return false;
 }
 
-async function authorizeSubsonic(params: URLSearchParams, peer: PeerIdentity): Promise<{ ok: true; username: string; profileId: string } | { ok: false }> {
+async function authorizeSubsonic(params: URLSearchParams): Promise<{ ok: true; username: string; profileId: string } | { ok: false }> {
   const username = (params.get('u') || '').trim();
+  const p = decodePasswordParam(params.get('p'));
+  if (!username || p === null) {
+    return { ok: false };
+  }
+
+  if (!await verifyJellyfinCredentials(username, p)) {
+    return { ok: false };
+  }
+
   const profiles = await getHomeflixProfiles();
   const matchedProfile = profiles.find(
-    (p) => p.name.toLowerCase() === username.toLowerCase() || p.id === username
+    (profile) => profile.name.toLowerCase() === username.toLowerCase() || profile.id === username
   ) || profiles[0];
-  const profileId = matchedProfile?.id || '';
-
-  const configuredSecret = process.env.HOMESTREAM_SUBSONIC_PASSWORD || process.env.HOMESTREAM_MOBILE_TOKEN || '';
-  const p = decodePasswordParam(params.get('p'));
-  const t = params.get('t');
-  const s = params.get('s');
-
-  if (peer.direct && isLanIp(peer.clientIp)) {
-    return { ok: true, username: username || matchedProfile?.name || 'homestream', profileId };
-  }
-
-  if (configuredSecret) {
-    if (p && p === configuredSecret) {
-      return { ok: true, username: username || matchedProfile?.name || 'homestream', profileId };
-    }
-    if (t && s) {
-      const expected = crypto.createHash('md5').update(`${configuredSecret}${s}`).digest('hex');
-      if (expected.toLowerCase() === t.toLowerCase()) {
-        return { ok: true, username: username || matchedProfile?.name || 'homestream', profileId };
-      }
-    }
-  }
-
-  if (p !== null && username && await verifyJellyfinCredentials(username, p)) {
-    return { ok: true, username, profileId };
-  }
-
-  return { ok: false };
+  return { ok: true, username, profileId: matchedProfile?.id || '' };
 }
 
 async function readCombinedParams(request: HttpRequest): Promise<URLSearchParams> {
@@ -354,8 +334,7 @@ function streamAudioFile(request: HttpRequest, filePath: string, maxBitRate: num
 
 export async function handleOpenSubsonicRequest(
   rawMethod: string,
-  request: HttpRequest,
-  peer: PeerIdentity
+  request: HttpRequest
 ): Promise<HttpResponse> {
   if (request.method === 'OPTIONS') {
     return new HttpResponse(null, {
@@ -374,7 +353,7 @@ export async function handleOpenSubsonicRequest(
   const format = (params.get('f') || 'xml').toLowerCase();
   const callback = params.get('callback');
 
-  const auth = await authorizeSubsonic(params, peer);
+  const auth = await authorizeSubsonic(params);
   if (!auth.ok) {
     return errorResponse(format, callback, 40, 'Wrong username or password.');
   }

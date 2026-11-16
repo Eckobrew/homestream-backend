@@ -117,7 +117,6 @@ export function createApp() {
         for (const [name, value] of Object.entries(incoming.headers)) {
           if (value !== undefined) headers.set(name, Array.isArray(value) ? value.join(', ') : value);
         }
-        const peer = resolvePeer(incoming.raw.socket.remoteAddress || '', headers, trustedProxies, allowProxyPairing);
         const controller = new AbortController();
         const onClose = () => { if (!reply.raw.writableFinished) controller.abort(); };
         incoming.raw.once('aborted', () => controller.abort());
@@ -132,7 +131,7 @@ export function createApp() {
           body: ['GET', 'HEAD', 'OPTIONS'].includes(incoming.method) ? undefined : incoming.body ? new Uint8Array(incoming.body as Buffer).buffer : undefined,
         });
         const methodParam = (incoming.params as { method?: string }).method || '';
-        const response = await runUpstreamContext(() => handleOpenSubsonicRequest(methodParam, req, peer));
+        const response = await runUpstreamContext(() => handleOpenSubsonicRequest(methodParam, req));
         reply.code(response.status);
         for (const [name, value] of response.headers) reply.header(name, value);
         if (incoming.method === 'HEAD') { await response.body?.cancel(); return reply.send(); }
