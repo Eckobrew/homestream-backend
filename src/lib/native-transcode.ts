@@ -42,13 +42,22 @@ setInterval(() => {
 
 export function listActiveNativeStreams(): Array<Omit<ActiveStreamSession, 'process'>> {
   const now = Date.now();
-  const timeoutMs = (getMediaEngineSettings().transcodeIdleTimeoutSeconds || 120) * 1000;
+  const timeoutMs = Math.max((getMediaEngineSettings().transcodeIdleTimeoutSeconds || 120) * 1000, 300_000);
   for (const [id, sess] of activeSessions.entries()) {
     if (now - sess.lastAccessAt > timeoutMs) {
       stopNativeStreamSession(id);
     }
   }
   return Array.from(activeSessions.values()).map(({ process: _proc, ...rest }) => rest);
+}
+
+export function touchNativeTranscodeSessionByItem(itemId: string, profileId?: string): void {
+  const now = Date.now();
+  for (const sess of activeSessions.values()) {
+    if ((sess.itemId === itemId || sess.fileId === itemId) && (!profileId || sess.profileId === profileId)) {
+      sess.lastAccessAt = now;
+    }
+  }
 }
 
 export function stopNativeStreamSession(sessionId: string): boolean {

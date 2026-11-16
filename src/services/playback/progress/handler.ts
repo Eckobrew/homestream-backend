@@ -8,7 +8,7 @@ import { readSession } from '@/lib/session';
 import { isRequestLocalOrTailscale } from '@/lib/network';
 import { saveStreamProgress } from '@/lib/stream-progress';
 import { recordNativeWatchProgress } from '@/lib/native-media';
-import { resolveNativeFileByItemOrFileId } from '@/lib/native-transcode';
+import { resolveNativeFileByItemOrFileId, touchNativeTranscodeSessionByItem } from '@/lib/native-transcode';
 import { getMediaEngineSettings } from '@/lib/media-settings';
 
 
@@ -35,8 +35,11 @@ async function handlePOST(request: HttpRequest) {
     const isNonJellyfinId = /^(?:seerr|tmdb|dl|yt|nat)-/i.test(itemId);
     saveStreamProgress(effectiveProfileId, itemId, positionTicks);
     if (itemId.startsWith('nat-') || getMediaEngineSettings().mediaEngine === 'native') {
-      const fileDurationTicks = resolveNativeFileByItemOrFileId(itemId)?.duration_ticks || 0;
+      const fileRow = resolveNativeFileByItemOrFileId(itemId);
+      const fileDurationTicks = fileRow?.duration_ticks || 0;
       const nativeProfileId = await resolveJellyfinUserId(effectiveProfileId);
+      touchNativeTranscodeSessionByItem(fileRow?.item_id || itemId, effectiveProfileId);
+      touchNativeTranscodeSessionByItem(fileRow?.item_id || itemId, nativeProfileId);
       recordNativeWatchProgress(nativeProfileId, itemId, positionTicks, fileDurationTicks, undefined, undefined, isPaused || isStarted || isStopped ? 0 : 10);
       if (itemId.startsWith('nat-')) {
         return HttpResponse.json({ success: true });
