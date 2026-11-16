@@ -15,6 +15,7 @@ import { JellyfinClient } from './lib/jellyfin';
 import { getServerConfig } from './lib/config';
 import { withJellyfinSession } from './lib/jellyfin-session';
 import { withParentalControls } from './lib/parental-controls';
+import { handleOpenSubsonicRequest } from './lib/opensubsonic';
 import openapi from '../contract/openapi.json';
 
 type Handler = (request: HttpRequest, context: { params: Promise<Record<string, string | string[]>> }) => Promise<Response> | Response;
@@ -106,5 +107,39 @@ export function createApp() {
   }
   register('/api/catalog-links', ['GET'], { GET: catalogLinks });
   register('/api/v1/catalog-links', ['GET'], { GET: catalogLinks });
+
+  for (const method of ['GET', 'HEAD', 'POST', 'OPTIONS'] as const) {
+    app.route({
+      method,
+      url: '/rest/:method',
+      handler: async (incoming, reply) => {
+        const headers = new Headers();
+        for (const [name, value] of Object.entries(incoming.headers)) {
+          if (value !== undefined) headers.set(name, Array.isArray(value) ? value.join(', ') : value);
+        }
+        const peer = resolvePeer(incoming.raw.socket.remoteAddress || '', headers, trustedProxies, allowProxyPairing);
+        const controller = new AbortController();
+        const onClose = () => { if (!reply.raw.writableFinished) controller.abort(); };
+        incoming.raw.once('aborted', () => controller.abort());
+        reply.raw.once('close', onClose);
+        const host = headers.get('host') || 'localhost';
+        const origin = process.env.HOMESTREAM_EXTERNAL_URL || `${incoming.protocol}://${host}`;
+        const url = new URL(incoming.raw.url || '/', origin);
+        const req = new HttpRequest(url, {
+          method: incoming.method,
+          headers,
+          signal: controller.signal,
+          body: ['GET', 'HEAD', 'OPTIONS'].includes(incoming.method) ? undefined : incoming.body ? new Uint8Array(incoming.body as Buffer).buffer : undefined,
+        });
+        const methodParam = (incoming.params as { method?: string }).method || '';
+        const response = await runUpstreamContext(() => handleOpenSubsonicRequest(methodParam, req, peer));
+        reply.code(response.status);
+        for (const [name, value] of response.headers) reply.header(name, value);
+        if (incoming.method === 'HEAD') { await response.body?.cancel(); return reply.send(); }
+        return reply.send(response.body ? Readable.fromWeb(response.body as import('node:stream/web').ReadableStream) : null);
+      },
+    });
+  }
+
   return app;
 }
