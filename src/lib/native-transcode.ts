@@ -29,6 +29,15 @@ export interface ActiveStreamSession {
 
 const activeSessions = new Map<string, ActiveStreamSession>();
 
+// Reap idle transcode sessions and temp directories every 60s even if Admin is never opened
+setInterval(() => {
+  try {
+    listActiveNativeStreams();
+  } catch {
+    // Ignore reaper errors
+  }
+}, 60_000).unref();
+
 export function listActiveNativeStreams(): Array<Omit<ActiveStreamSession, 'process'>> {
   const now = Date.now();
   const timeoutMs = (getMediaEngineSettings().transcodeIdleTimeoutSeconds || 120) * 1000;
