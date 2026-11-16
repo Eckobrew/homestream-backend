@@ -199,18 +199,44 @@ data class ProfilesResponse(
 )
 
 @Serializable
+data class SubtitleTrack(
+    @SerialName("id") val `id`: String,
+    @SerialName("index") val `index`: Double,
+    @SerialName("title") val `title`: String,
+    @SerialName("language") val `language`: String,
+    @SerialName("isDefault") val `isDefault`: Boolean? = null,
+    @SerialName("isForced") val `isForced`: Boolean? = null,
+    @SerialName("src") val `src`: String
+)
+
+@Serializable
+data class MediaAudioTrack(
+    @SerialName("index") val `index`: Double,
+    @SerialName("title") val `title`: String,
+    @SerialName("language") val `language`: String? = null
+)
+
+@Serializable
 data class PlaybackResponse(
     @SerialName("streamUrl") val `streamUrl`: String,
     @SerialName("isTranscoding") val `isTranscoding`: Boolean,
     @SerialName("durationSeconds") val `durationSeconds`: Double? = null,
+    @SerialName("totalDurationTicks") val `totalDurationTicks`: Double? = null,
+    @SerialName("playMethod") val `playMethod`: String? = null,
     @SerialName("transport") val `transport`: String? = null,
-    @SerialName("contentType") val `contentType`: String? = null
+    @SerialName("contentType") val `contentType`: String? = null,
+    @SerialName("versions") val `versions`: List<MediaVersion>? = null,
+    @SerialName("skipSegments") val `skipSegments`: List<SkipSegment>? = null,
+    @SerialName("trickplayUrl") val `trickplayUrl`: String? = null,
+    @SerialName("subtitles") val `subtitles`: List<SubtitleTrack>? = null,
+    @SerialName("audioTracks") val `audioTracks`: List<MediaAudioTrack>? = null
 )
 
 @Serializable
 data class PublicConfig(
     @SerialName("appName") val `appName`: String,
     @SerialName("isConfigured") val `isConfigured`: Boolean,
+    @SerialName("mediaEngine") val `mediaEngine`: String? = null,
     @SerialName("jellyfinUrl") val `jellyfinUrl`: String,
     @SerialName("hasJellyfinKey") val `hasJellyfinKey`: Boolean,
     @SerialName("jellyfinUserId") val `jellyfinUserId`: String,
@@ -244,17 +270,6 @@ data class RequestMediaPayload(
     @SerialName("is4k") val `is4k`: Boolean? = null,
     @SerialName("profileId") val `profileId`: Double? = null,
     @SerialName("serverId") val `serverId`: Double? = null
-)
-
-@Serializable
-data class SubtitleTrack(
-    @SerialName("id") val `id`: String,
-    @SerialName("index") val `index`: Double,
-    @SerialName("title") val `title`: String,
-    @SerialName("language") val `language`: String,
-    @SerialName("isDefault") val `isDefault`: Boolean? = null,
-    @SerialName("isForced") val `isForced`: Boolean? = null,
-    @SerialName("src") val `src`: String
 )
 
 @Serializable
@@ -667,6 +682,7 @@ data class WebPostProfilesBody(
     @SerialName("paletteIndex") val `paletteIndex`: Long? = null,
     @SerialName("avatarId") val `avatarId`: String? = null,
     @SerialName("mode") val `mode`: String? = null,
+    @SerialName("jellyfinName") val `jellyfinName`: String? = null,
     @SerialName("password") val `password`: String? = null,
     @SerialName("isKids") val `isKids`: Boolean? = null,
     @SerialName("kidsDateOfBirth") val `kidsDateOfBirth`: String? = null,
@@ -755,7 +771,8 @@ data class WebGetNativeLibraryResponse(
     @SerialName("scanStatus") val `scanStatus`: JsonElement? = null,
     @SerialName("items") val `items`: List<JsonElement>? = null,
     @SerialName("activeStreams") val `activeStreams`: List<JsonElement>? = null,
-    @SerialName("stats") val `stats`: JsonElement? = null
+    @SerialName("stats") val `stats`: JsonElement? = null,
+    @SerialName("hardwareAcceleration") val `hardwareAcceleration`: List<String>? = null
 )
 
 @Serializable
@@ -785,7 +802,10 @@ data class WebGetNativeStreamQuery(
     @SerialName("segment") val `segment`: String? = null,
     @SerialName("trickplay") val `trickplay`: String? = null,
     @SerialName("asset") val `asset`: String? = null,
-    @SerialName("artwork") val `artwork`: String? = null
+    @SerialName("artwork") val `artwork`: String? = null,
+    @SerialName("subtitle") val `subtitle`: String? = null,
+    @SerialName("index") val `index`: String? = null,
+    @SerialName("sidecar") val `sidecar`: String? = null
 )
 
 @Serializable
@@ -901,7 +921,10 @@ data class WebGetPlaybackQuery(
     @SerialName("type") val `type`: String? = null,
     @SerialName("season") val `season`: String? = null,
     @SerialName("episode") val `episode`: String? = null,
-    @SerialName("title") val `title`: String? = null
+    @SerialName("title") val `title`: String? = null,
+    @SerialName("versionId") val `versionId`: String? = null,
+    @SerialName("audioIndex") val `audioIndex`: String? = null,
+    @SerialName("burnSubtitleIndex") val `burnSubtitleIndex`: String? = null
 )
 
 @Serializable
@@ -970,6 +993,7 @@ data class WebGetSubtitlesQuery(
     @SerialName("userId") val `userId`: String? = null,
     @SerialName("itemId") val `itemId`: String,
     @SerialName("mediaSourceId") val `mediaSourceId`: String? = null,
+    @SerialName("versionId") val `versionId`: String? = null,
     @SerialName("index") val `index`: String? = null
 )
 
@@ -1820,6 +1844,135 @@ data class MobileGetMediaIdRecommendationsResponseRecommendationsItem(
 )
 
 @Serializable
+data class MobileGetAccountsQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("status") val `status`: String? = null
+)
+
+@Serializable
+data class MobileGetAccountsResponse(
+    @SerialName("accounts") val `accounts`: List<JsonElement>? = null,
+    @SerialName("profiles") val `profiles`: List<MobileGetAccountsResponseProfilesItem>? = null,
+    @SerialName("needsFirstStart") val `needsFirstStart`: Boolean? = null
+)
+
+@Serializable
+data class MobileGetAccountsResponseProfilesItem(
+    @SerialName("id") val `id`: String? = null,
+    @SerialName("name") val `name`: String? = null,
+    @SerialName("isKids") val `isKids`: Boolean? = null,
+    @SerialName("kidsRating") val `kidsRating`: String? = null
+)
+
+@Serializable
+data class MobilePostAccountsQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class MobilePostAccountsBody(
+    @SerialName("action") val `action`: String,
+    @SerialName("accountId") val `accountId`: String? = null,
+    @SerialName("username") val `username`: String? = null,
+    @SerialName("displayName") val `displayName`: String? = null,
+    @SerialName("password") val `password`: String? = null,
+    @SerialName("isAdmin") val `isAdmin`: Boolean? = null,
+    @SerialName("parentPin") val `parentPin`: String? = null
+)
+
+@Serializable
+data class MobilePostAccountsResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("account") val `account`: JsonElement? = null,
+    @SerialName("accounts") val `accounts`: List<JsonElement>? = null
+)
+
+@Serializable
+data class MobileGetNativeLibraryQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("view") val `view`: String? = null,
+    @SerialName("profileId") val `profileId`: String? = null,
+    @SerialName("unmatched") val `unmatched`: String? = null,
+    @SerialName("type") val `type`: String? = null
+)
+
+@Serializable
+data class MobileGetNativeLibraryResponse(
+    @SerialName("settings") val `settings`: JsonElement? = null,
+    @SerialName("scanStatus") val `scanStatus`: JsonElement? = null,
+    @SerialName("items") val `items`: List<JsonElement>? = null,
+    @SerialName("activeStreams") val `activeStreams`: List<JsonElement>? = null,
+    @SerialName("stats") val `stats`: JsonElement? = null,
+    @SerialName("hardwareAcceleration") val `hardwareAcceleration`: List<String>? = null
+)
+
+@Serializable
+data class MobilePostNativeLibraryQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class MobilePostNativeLibraryBody(
+    @SerialName("action") val `action`: String
+)
+
+@Serializable
+data class MobilePostNativeLibraryResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("settings") val `settings`: JsonElement? = null,
+    @SerialName("scanStatus") val `scanStatus`: JsonElement? = null
+)
+
+@Serializable
+data class MobileGetNativeStreamQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("fileId") val `fileId`: String? = null,
+    @SerialName("itemId") val `itemId`: String? = null,
+    @SerialName("versionId") val `versionId`: String? = null,
+    @SerialName("hls") val `hls`: String? = null,
+    @SerialName("segment") val `segment`: String? = null,
+    @SerialName("trickplay") val `trickplay`: String? = null,
+    @SerialName("asset") val `asset`: String? = null,
+    @SerialName("artwork") val `artwork`: String? = null,
+    @SerialName("subtitle") val `subtitle`: String? = null,
+    @SerialName("index") val `index`: String? = null,
+    @SerialName("sidecar") val `sidecar`: String? = null
+)
+
+@Serializable
+data class MobileGetSyncplayQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("code") val `code`: String? = null
+)
+
+@Serializable
+data class MobileGetSyncplayResponse(
+    @SerialName("room") val `room`: JsonElement? = null
+)
+
+@Serializable
+data class MobilePostSyncplayQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class MobilePostSyncplayBody(
+    @SerialName("action") val `action`: String,
+    @SerialName("code") val `code`: String? = null,
+    @SerialName("itemId") val `itemId`: String? = null,
+    @SerialName("episodeId") val `episodeId`: String? = null,
+    @SerialName("title") val `title`: String? = null,
+    @SerialName("positionTicks") val `positionTicks`: Long? = null,
+    @SerialName("isPaused") val `isPaused`: Boolean? = null
+)
+
+@Serializable
+data class MobilePostSyncplayResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("room") val `room`: JsonElement? = null
+)
+
+@Serializable
 data class MobileGetSearchQuery(
     @SerialName("userId") val `userId`: String? = null,
     @SerialName("q") val `q`: String? = null
@@ -1899,7 +2052,10 @@ data class MobileGetPlaybackQuery(
     @SerialName("type") val `type`: String? = null,
     @SerialName("season") val `season`: String? = null,
     @SerialName("episode") val `episode`: String? = null,
-    @SerialName("title") val `title`: String? = null
+    @SerialName("title") val `title`: String? = null,
+    @SerialName("versionId") val `versionId`: String? = null,
+    @SerialName("audioIndex") val `audioIndex`: String? = null,
+    @SerialName("burnSubtitleIndex") val `burnSubtitleIndex`: String? = null
 )
 
 @Serializable
@@ -1940,6 +2096,7 @@ data class MobileGetSubtitlesQuery(
     @SerialName("userId") val `userId`: String? = null,
     @SerialName("itemId") val `itemId`: String,
     @SerialName("mediaSourceId") val `mediaSourceId`: String? = null,
+    @SerialName("versionId") val `versionId`: String? = null,
     @SerialName("index") val `index`: String? = null
 )
 
@@ -1995,6 +2152,114 @@ data class MobileGetStreamTorrentQuery(
     @SerialName("native") val `native`: String? = null,
     @SerialName("source") val `source`: String? = null,
     @SerialName("probe") val `probe`: String? = null
+)
+
+@Serializable
+data class MobileGetBooksQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("q") val `q`: String? = null,
+    @SerialName("offset") val `offset`: String? = null
+)
+
+@Serializable
+data class MobileGetBooksSearchQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("q") val `q`: String? = null
+)
+
+@Serializable
+data class MobileGetBooksBookQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("bookId") val `bookId`: String
+)
+
+@Serializable
+data class MobileGetBooksCoverQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("bookId") val `bookId`: String
+)
+
+@Serializable
+data class MobileGetBooksFileQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("bookId") val `bookId`: String,
+    @SerialName("format") val `format`: String? = null,
+    @SerialName("download") val `download`: String? = null
+)
+
+@Serializable
+data class MobileGetBooksQueueQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class MobileGetBooksProgressQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("bookId") val `bookId`: String
+)
+
+@Serializable
+data class MobilePostBooksProgressQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class MobilePostBooksProgressBody(
+    @SerialName("bookId") val `bookId`: String,
+    @SerialName("location") val `location`: String,
+    @SerialName("percent") val `percent`: Double? = null
+)
+
+@Serializable
+data class MobilePostBooksProgressResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null
+)
+
+@Serializable
+data class MobilePostBooksRequestQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class MobilePostBooksRequestBody(
+    @SerialName("foreignBookId") val `foreignBookId`: String,
+    @SerialName("title") val `title`: String,
+    @SerialName("author") val `author`: String
+)
+
+@Serializable
+data class MobilePostBooksRequestResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null
+)
+
+@Serializable
+data class MobilePostBooksProfileBookQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class MobilePostBooksProfileBookBody(
+    @SerialName("bookId") val `bookId`: String
+)
+
+@Serializable
+data class MobilePostBooksProfileBookResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null
+)
+
+@Serializable
+data class MobileDeleteBooksProfileBookQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("bookId") val `bookId`: String? = null
+)
+
+@Serializable
+data class MobileDeleteBooksProfileBookResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("message") val `message`: String? = null
 )
 
 @Serializable
@@ -2704,6 +2969,7 @@ data class MobilePostProfilesBody(
     @SerialName("paletteIndex") val `paletteIndex`: Long? = null,
     @SerialName("avatarId") val `avatarId`: String? = null,
     @SerialName("mode") val `mode`: String? = null,
+    @SerialName("jellyfinName") val `jellyfinName`: String? = null,
     @SerialName("password") val `password`: String? = null,
     @SerialName("isKids") val `isKids`: Boolean? = null,
     @SerialName("kidsDateOfBirth") val `kidsDateOfBirth`: String? = null,
@@ -2797,7 +3063,8 @@ data class MobileGetProfilesUsersQuery(
 
 @Serializable
 data class MobileGetProfilesUsersResponse(
-    @SerialName("users") val `users`: List<MobileGetProfilesUsersResponseUsersItem>? = null
+    @SerialName("users") val `users`: List<MobileGetProfilesUsersResponseUsersItem>? = null,
+    @SerialName("mediaEngine") val `mediaEngine`: String? = null
 )
 
 @Serializable
@@ -2820,7 +3087,8 @@ data class MobilePostProfilesUsersBody(
 
 @Serializable
 data class MobilePostProfilesUsersResponse(
-    @SerialName("users") val `users`: List<MobilePostProfilesUsersResponseUsersItem>? = null
+    @SerialName("users") val `users`: List<MobilePostProfilesUsersResponseUsersItem>? = null,
+    @SerialName("mediaEngine") val `mediaEngine`: String? = null
 )
 
 @Serializable

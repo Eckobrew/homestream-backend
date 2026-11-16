@@ -10,6 +10,12 @@ export interface SkipSegment {
   title?: string;
 }
 
+export interface MediaAudioTrack {
+  index: number;
+  title: string;
+  language?: string;
+}
+
 export interface MediaVersion {
   id: string;
   label: string;

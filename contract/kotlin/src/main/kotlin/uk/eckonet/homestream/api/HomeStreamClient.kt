@@ -145,6 +145,9 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         query.`trickplay`?.let { url.addQueryParameter("trickplay", it.toString()) }
         query.`asset`?.let { url.addQueryParameter("asset", it.toString()) }
         query.`artwork`?.let { url.addQueryParameter("artwork", it.toString()) }
+        query.`subtitle`?.let { url.addQueryParameter("subtitle", it.toString()) }
+        query.`index`?.let { url.addQueryParameter("index", it.toString()) }
+        query.`sidecar`?.let { url.addQueryParameter("sidecar", it.toString()) }
         return executeStream(url.build().toString(), "GET", null, range)
     }
 
@@ -206,6 +209,9 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         query.`season`?.let { url.addQueryParameter("season", it.toString()) }
         query.`episode`?.let { url.addQueryParameter("episode", it.toString()) }
         query.`title`?.let { url.addQueryParameter("title", it.toString()) }
+        query.`versionId`?.let { url.addQueryParameter("versionId", it.toString()) }
+        query.`audioIndex`?.let { url.addQueryParameter("audioIndex", it.toString()) }
+        query.`burnSubtitleIndex`?.let { url.addQueryParameter("burnSubtitleIndex", it.toString()) }
         return execute(url.build().toString(), "GET", null, null)
     }
 
@@ -241,6 +247,7 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
         query.`itemId`.let { url.addQueryParameter("itemId", it.toString()) }
         query.`mediaSourceId`?.let { url.addQueryParameter("mediaSourceId", it.toString()) }
+        query.`versionId`?.let { url.addQueryParameter("versionId", it.toString()) }
         query.`index`?.let { url.addQueryParameter("index", it.toString()) }
         return execute(url.build().toString(), "GET", null, null)
     }
@@ -485,18 +492,18 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         return execute(url.build().toString(), "POST", json.encodeToString(body), null)
     }
 
-    fun `web_get_music_playlist`(query: WebGetMusicPlaylistQuery, body: JsonElement): ApiResponse<JsonElement> {
+    fun `web_get_music_playlist`(query: WebGetMusicPlaylistQuery): ApiResponse<JsonElement> {
         val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("music").addPathSegment("playlist")
         query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
         query.`playlistId`?.let { url.addQueryParameter("playlistId", it.toString()) }
-        return execute(url.build().toString(), "GET", json.encodeToString(body), null)
+        return execute(url.build().toString(), "GET", null, null)
     }
 
-    fun `web_delete_music_playlist`(query: WebDeleteMusicPlaylistQuery, body: JsonElement): ApiResponse<WebDeleteMusicPlaylistResponse> {
+    fun `web_delete_music_playlist`(query: WebDeleteMusicPlaylistQuery): ApiResponse<WebDeleteMusicPlaylistResponse> {
         val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("music").addPathSegment("playlist")
         query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
         query.`playlistId`?.let { url.addQueryParameter("playlistId", it.toString()) }
-        return execute(url.build().toString(), "DELETE", json.encodeToString(body), null)
+        return execute(url.build().toString(), "DELETE", null, null)
     }
 
     fun `web_post_music_playlist_track`(query: WebPostMusicPlaylistTrackQuery, body: WebPostMusicPlaylistTrackBody): ApiResponse<WebPostMusicPlaylistTrackResponse> {
@@ -726,6 +733,65 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         return execute(url.build().toString(), "GET", null, null)
     }
 
+    fun `mobile_get_accounts`(query: MobileGetAccountsQuery): ApiResponse<MobileGetAccountsResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("accounts")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`status`?.let { url.addQueryParameter("status", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `mobile_post_accounts`(query: MobilePostAccountsQuery, body: MobilePostAccountsBody): ApiResponse<MobilePostAccountsResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("accounts")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
+    fun `mobile_get_native_library`(query: MobileGetNativeLibraryQuery): ApiResponse<MobileGetNativeLibraryResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("native").addPathSegment("library")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`view`?.let { url.addQueryParameter("view", it.toString()) }
+        query.`profileId`?.let { url.addQueryParameter("profileId", it.toString()) }
+        query.`unmatched`?.let { url.addQueryParameter("unmatched", it.toString()) }
+        query.`type`?.let { url.addQueryParameter("type", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `mobile_post_native_library`(query: MobilePostNativeLibraryQuery, body: MobilePostNativeLibraryBody): ApiResponse<MobilePostNativeLibraryResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("native").addPathSegment("library")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
+    fun `mobile_get_native_stream`(query: MobileGetNativeStreamQuery, range: String? = null): okhttp3.Response {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("native").addPathSegment("stream")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`fileId`?.let { url.addQueryParameter("fileId", it.toString()) }
+        query.`itemId`?.let { url.addQueryParameter("itemId", it.toString()) }
+        query.`versionId`?.let { url.addQueryParameter("versionId", it.toString()) }
+        query.`hls`?.let { url.addQueryParameter("hls", it.toString()) }
+        query.`segment`?.let { url.addQueryParameter("segment", it.toString()) }
+        query.`trickplay`?.let { url.addQueryParameter("trickplay", it.toString()) }
+        query.`asset`?.let { url.addQueryParameter("asset", it.toString()) }
+        query.`artwork`?.let { url.addQueryParameter("artwork", it.toString()) }
+        query.`subtitle`?.let { url.addQueryParameter("subtitle", it.toString()) }
+        query.`index`?.let { url.addQueryParameter("index", it.toString()) }
+        query.`sidecar`?.let { url.addQueryParameter("sidecar", it.toString()) }
+        return executeStream(url.build().toString(), "GET", null, range)
+    }
+
+    fun `mobile_get_syncplay`(query: MobileGetSyncplayQuery): ApiResponse<MobileGetSyncplayResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("syncplay")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`code`?.let { url.addQueryParameter("code", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `mobile_post_syncplay`(query: MobilePostSyncplayQuery, body: MobilePostSyncplayBody): ApiResponse<MobilePostSyncplayResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("syncplay")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
     fun `mobile_get_search`(query: MobileGetSearchQuery): ApiResponse<MobileGetSearchResponse> {
         val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("search")
         query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
@@ -771,6 +837,9 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         query.`season`?.let { url.addQueryParameter("season", it.toString()) }
         query.`episode`?.let { url.addQueryParameter("episode", it.toString()) }
         query.`title`?.let { url.addQueryParameter("title", it.toString()) }
+        query.`versionId`?.let { url.addQueryParameter("versionId", it.toString()) }
+        query.`audioIndex`?.let { url.addQueryParameter("audioIndex", it.toString()) }
+        query.`burnSubtitleIndex`?.let { url.addQueryParameter("burnSubtitleIndex", it.toString()) }
         return execute(url.build().toString(), "GET", null, null)
     }
 
@@ -792,6 +861,7 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
         query.`itemId`.let { url.addQueryParameter("itemId", it.toString()) }
         query.`mediaSourceId`?.let { url.addQueryParameter("mediaSourceId", it.toString()) }
+        query.`versionId`?.let { url.addQueryParameter("versionId", it.toString()) }
         query.`index`?.let { url.addQueryParameter("index", it.toString()) }
         return execute(url.build().toString(), "GET", null, null)
     }
@@ -840,6 +910,82 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         query.`source`?.let { url.addQueryParameter("source", it.toString()) }
         query.`probe`?.let { url.addQueryParameter("probe", it.toString()) }
         return executeStream(url.build().toString(), "GET", null, range)
+    }
+
+    fun `mobile_get_books`(query: MobileGetBooksQuery): ApiResponse<BooksResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("books")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`q`?.let { url.addQueryParameter("q", it.toString()) }
+        query.`offset`?.let { url.addQueryParameter("offset", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `mobile_get_books_search`(query: MobileGetBooksSearchQuery): ApiResponse<BookSearchResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("books").addPathSegment("search")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`q`?.let { url.addQueryParameter("q", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `mobile_get_books_book`(query: MobileGetBooksBookQuery): ApiResponse<BookDetailResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("books").addPathSegment("book")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`bookId`.let { url.addQueryParameter("bookId", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `mobile_get_books_cover`(query: MobileGetBooksCoverQuery, range: String? = null): okhttp3.Response {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("books").addPathSegment("cover")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`bookId`.let { url.addQueryParameter("bookId", it.toString()) }
+        return executeStream(url.build().toString(), "GET", null, range)
+    }
+
+    fun `mobile_get_books_file`(query: MobileGetBooksFileQuery, range: String? = null): okhttp3.Response {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("books").addPathSegment("file")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`bookId`.let { url.addQueryParameter("bookId", it.toString()) }
+        query.`format`?.let { url.addQueryParameter("format", it.toString()) }
+        query.`download`?.let { url.addQueryParameter("download", it.toString()) }
+        return executeStream(url.build().toString(), "GET", null, range)
+    }
+
+    fun `mobile_get_books_queue`(query: MobileGetBooksQueueQuery): ApiResponse<BookQueueResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("books").addPathSegment("queue")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `mobile_get_books_progress`(query: MobileGetBooksProgressQuery): ApiResponse<JsonElement> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("books").addPathSegment("progress")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`bookId`.let { url.addQueryParameter("bookId", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `mobile_post_books_progress`(query: MobilePostBooksProgressQuery, body: MobilePostBooksProgressBody): ApiResponse<MobilePostBooksProgressResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("books").addPathSegment("progress")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
+    fun `mobile_post_books_request`(query: MobilePostBooksRequestQuery, body: MobilePostBooksRequestBody): ApiResponse<MobilePostBooksRequestResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("books").addPathSegment("request")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
+    fun `mobile_post_books_profile_book`(query: MobilePostBooksProfileBookQuery, body: MobilePostBooksProfileBookBody): ApiResponse<MobilePostBooksProfileBookResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("books").addPathSegment("profile-book")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
+    fun `mobile_delete_books_profile_book`(query: MobileDeleteBooksProfileBookQuery): ApiResponse<MobileDeleteBooksProfileBookResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("books").addPathSegment("profile-book")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`bookId`?.let { url.addQueryParameter("bookId", it.toString()) }
+        return execute(url.build().toString(), "DELETE", null, null)
     }
 
     fun `mobile_get_music`(query: MobileGetMusicQuery): ApiResponse<MusicResponse> {
@@ -942,18 +1088,18 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         return execute(url.build().toString(), "POST", json.encodeToString(body), null)
     }
 
-    fun `mobile_get_music_playlist`(query: MobileGetMusicPlaylistQuery, body: JsonElement): ApiResponse<JsonElement> {
+    fun `mobile_get_music_playlist`(query: MobileGetMusicPlaylistQuery): ApiResponse<JsonElement> {
         val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("music").addPathSegment("playlist")
         query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
         query.`playlistId`?.let { url.addQueryParameter("playlistId", it.toString()) }
-        return execute(url.build().toString(), "GET", json.encodeToString(body), null)
+        return execute(url.build().toString(), "GET", null, null)
     }
 
-    fun `mobile_delete_music_playlist`(query: MobileDeleteMusicPlaylistQuery, body: JsonElement): ApiResponse<MobileDeleteMusicPlaylistResponse> {
+    fun `mobile_delete_music_playlist`(query: MobileDeleteMusicPlaylistQuery): ApiResponse<MobileDeleteMusicPlaylistResponse> {
         val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("music").addPathSegment("playlist")
         query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
         query.`playlistId`?.let { url.addQueryParameter("playlistId", it.toString()) }
-        return execute(url.build().toString(), "DELETE", json.encodeToString(body), null)
+        return execute(url.build().toString(), "DELETE", null, null)
     }
 
     fun `mobile_post_music_playlist_track`(query: MobilePostMusicPlaylistTrackQuery, body: MobilePostMusicPlaylistTrackBody): ApiResponse<MobilePostMusicPlaylistTrackResponse> {

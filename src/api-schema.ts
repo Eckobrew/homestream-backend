@@ -14,7 +14,7 @@ const list = (items: Schema = object()): Schema => ({ type: 'array', items });
 const success = object({ success: boolean, message: text });
 const profile = object({ id, name: text, isKids: boolean, kidsRating: { type:'string',enum:['U','PG','12','15','18'] } });
 const media = object({ id, title: text, type: { type:'string',enum:['Movie','Series','Episode'] } });
-const profilesBody = object({ action: { type:'string',enum:['create','import','delete','select','update'] }, profileId:id, name:{type:'string',minLength:1,maxLength:64}, userIds:list(id), jellyfinUserIds:list(id), jellyfinUserId:id, paletteIndex:integer, avatarId:text, mode:{type:'string',enum:['existing','new']}, password:text, isKids:boolean, kidsDateOfBirth:text, parentPin:{type:'string',pattern:'^\\d{4,8}$'} });
+const profilesBody = object({ action: { type:'string',enum:['create','import','delete','select','update'] }, profileId:id, name:{type:'string',minLength:1,maxLength:64}, userIds:list(id), jellyfinUserIds:list(id), jellyfinUserId:id, paletteIndex:integer, avatarId:text, mode:{type:'string',enum:['existing','new','native']}, jellyfinName:text, password:text, isKids:boolean, kidsDateOfBirth:text, parentPin:{type:'string',pattern:'^\\d{4,8}$'} });
 const progress = object({ itemId:id, userId:id, positionTicks:integer, isPaused:boolean, isStopped:boolean, isStarted:boolean },['itemId','positionTicks']);
 const request = object({ mediaType:{type:'string',enum:['movie','tv']},mediaId:{...integer,minimum:1}, seasons:{anyOf:[{type:'string',const:'all'},list(integer)]},is4k:boolean,profileId:integer,serverId:integer },['mediaType','mediaId']);
 const login = object({ username:{type:'string',minLength:1,maxLength:200},password:text,action:{type:'string',enum:['login','logout']} });
@@ -36,22 +36,22 @@ add('profiles','GET',object({profiles:list(profile),activeProfileId:text,needsSe
 add('profiles','POST',object({success:boolean,profiles:list(profile),profile}),{},profilesBody);
 add('accounts','GET',object({accounts:list(),profiles:list(profile),needsFirstStart:boolean}),{status:natural});
 add('accounts','POST',object({success:boolean,account:object(),accounts:list()}),{},object({action:{type:'string',enum:['bootstrap','create','set-password','set-admin','delete']},accountId:id,username:text,displayName:text,password:text,isAdmin:boolean,parentPin:{type:'string',pattern:'^\\d{4,8}$'}},['action']));
-add('native/library','GET',object({settings:object(),scanStatus:object(),items:list(),activeStreams:list(),stats:object()}),{view:text,profileId:id,unmatched:natural,type:text});
+add('native/library','GET',object({settings:object(),scanStatus:object(),items:list(),activeStreams:list(),stats:object(),hardwareAcceleration:list(text)}),{view:text,profileId:id,unmatched:natural,type:text});
 add('native/library','POST',object({success:boolean,settings:object(),scanStatus:object()}),{},object({action:text},['action']));
-add('native/stream','GET',object(),{fileId:id,itemId:id,versionId:id,hls:id,segment:text,trickplay:id,asset:text,artwork:text},undefined,{binary:true});
+add('native/stream','GET',object(),{fileId:id,itemId:id,versionId:id,hls:id,segment:text,trickplay:id,asset:text,artwork:text,subtitle:id,index:natural,sidecar:text},undefined,{binary:true});
 add('syncplay','GET',object({room:object()}),{code:text});
 add('syncplay','POST',object({success:boolean,room:object()}),{},object({action:text,code:text,itemId:id,episodeId:id,title:text,positionTicks:integer,isPaused:boolean},['action']));
 add('search','GET',object({results:list(media),isDemoMode:boolean}),{q:text});
 add('downloads','GET',object({items:list()}));
 add('downloads/manager','GET',object(),{hash:text,profileId:id});
 add('downloads/manager','POST',object({success:boolean,message:text}),{},object({action:{type:'string',enum:['pause','resume','delete','add','sequential','file-priority','set-category','recheck','cancel-system']},hash:text,hashes:text,deleteFiles:boolean,urls:text,category:text,paused:boolean,fileIds:{anyOf:[text,list(integer)]},fileIndex:integer,priority:integer,id:text,queueId:text},['action']));
-const playbackQuery = { itemId:id, startTimeTicks:natural, forceTranscode:flag, canPlayHevc:flag, receiver:{type:'string',enum:['browser','cast','native-tv']}, videoCodecs:text,audioCodecs:text,videoCapabilities:text,maxWidth:natural,maxHeight:natural, tmdbId:natural, type:text, season:natural, episode:natural, title:text };
+const playbackQuery = { itemId:id, startTimeTicks:natural, forceTranscode:flag, canPlayHevc:flag, receiver:{type:'string',enum:['browser','cast','native-tv']}, videoCodecs:text,audioCodecs:text,videoCapabilities:text,maxWidth:natural,maxHeight:natural, tmdbId:natural, type:text, season:natural, episode:natural, title:text, versionId:id, audioIndex:natural, burnSubtitleIndex:natural };
 add('playback','GET',object(),playbackQuery,undefined,{requiredQuery:['itemId'],responseModel:'PlaybackResponse'});
 add('playback/progress','POST',success,{},progress);
 add('request','GET',object({profiles:list(),defaultProfileId:{type:'integer'}}),{type:{type:'string',enum:['movie','tv']}});
 add('request','POST',success,{},request);
 add('preview-stream','GET',object(),{itemId:id,ticks:natural},undefined,{requiredQuery:['itemId'],binary:true});
-add('subtitles','GET',object({subtitles:list()}),{itemId:id,mediaSourceId:id,index:natural},undefined,{requiredQuery:['itemId']});
+add('subtitles','GET',object({subtitles:list()}),{itemId:id,mediaSourceId:id,versionId:id,index:natural},undefined,{requiredQuery:['itemId']});
 add('trailer','GET',object({success:boolean,trailer:{anyOf:[object(),{type:'null'}]}}),{itemId:id,tmdbId:natural,type:{type:'string',enum:['movie','tv']}});
 add('stream/download','GET',object(),{hash:id,path:text,fileIndex:natural,season:natural,episode:natural,start:{type:'string',pattern:'^\\d+(\\.\\d+)?$'},transcode:{type:'string',enum:['0','1']},native:{type:'string',enum:['0','1']},source:{type:'string',enum:['0','1']},probe:{type:'string',enum:['0','1']},growing:{type:'string',enum:['0','1']}},undefined,{binary:true});
 add('stream/torrent','GET',object(),{tmdbId:natural,type:text,season:natural,episode:natural,title:text,magnet:text,forceTranscode:flag,canPlayHevc:flag,receiver:text,start:{type:'string',pattern:'^\\d+(\\.\\d+)?$'},transcode:{type:'string',enum:['0','1']},native:{type:'string',enum:['0','1']},source:{type:'string',enum:['0','1']},probe:{type:'string',enum:['0','1']}},undefined,{binary:true});
@@ -84,8 +84,8 @@ add('music/playlists','POST',object({success:boolean,playlist:object()}),{},obje
 add('music/playlists/import','POST',object({success:boolean,message:text,playlists:list(),totalTracksQueued:integer}),{},object({url:text,urls:{anyOf:[largeText,list(largeText)]},spotifyUrl:text,csv:largeText,files:list(object({name:text,content:largeText})),zipBase64:largeText,playlistName:text}));
 add('music/playlists/import-spotify','POST',object({success:boolean,message:text,playlists:list(),totalTracksQueued:integer}),{},object({url:text,urls:{anyOf:[largeText,list(largeText)]},spotifyUrl:text}));
 add('music/playlists/import-exportify','POST',object({success:boolean,message:text,playlists:list(),totalTracksQueued:integer}),{},object({csv:largeText,files:list(object({name:text,content:largeText})),zipBase64:largeText,playlistName:text}));
-add('music/playlist','GET',object(),{playlistId:id},{requiredQuery:['playlistId']});
-add('music/playlist','DELETE',success,{playlistId:id},{requiredQuery:['playlistId']});
+add('music/playlist','GET',object(),{playlistId:id});
+add('music/playlist','DELETE',success,{playlistId:id});
 add('music/playlist/track','POST',success,{},object({playlistId:id,trackId:id},['playlistId','trackId']));
 add('music/playlist/track','DELETE',success,{playlistId:id,trackId:id},{requiredQuery:['playlistId','trackId']});
 add('requested','GET',object(),{},undefined,{responseModel:'RequestedResponse'});
@@ -118,7 +118,10 @@ add('sessions/command','POST',object({ok:boolean,command:object()}),{},object({t
 add('sessions/commands','GET',object(),{deviceId:text},undefined,{requiredQuery:['deviceId'],binary:true});
 export const webOperations = operations;
 const shared = ['integrations','requested','music','music/album','music/artwork','music/stream','music/download','music/import-status','music/request','music/profile-album','music/playlists','music/playlists/import','music/playlists/import-spotify','music/playlists/import-exportify','music/playlist','music/playlist/track','youtube/search','youtube/stream','youtube/stream-video','youtube/progress','youtube/continue-watching','youtube/auth','youtube/recommendations','youtube/download','youtube/subscriptions','youtube/subscriptions/check','youtube/queue','youtube/archive','youtube/stream-local','youtube/thumbnail','sessions','sessions/heartbeat','sessions/command','sessions/commands','home','library/{type}','categories/{type}','media/{id}','media/{id}/recommendations','search','downloads','downloads/manager','playback','request','subtitles','trailer','stream/download','stream/torrent'];
-export const mobileOperations: Operation[] = operations.filter(operation => shared.includes(operation.path)).map(operation => ({...operation}));
+export const mobileOperations: Operation[] = operations.filter(({ path }) =>
+  shared.includes(path) || path === 'native/stream' || path === 'native/library' || path === 'syncplay' || path === 'accounts'
+    || path === 'books' || path.startsWith('books/')
+).map(operation => ({...operation}));
 function native(path:string,method:string,response:Schema,query:Record<string,Schema>={},body?:Schema,extra:Partial<Operation>={}) { mobileOperations.push({path,method,response,query:{userId:id,...query},body,...extra}); }
 native('discovery','GET',object({apiVersion:integer,appName:text,cast:boolean,pairing:text,localPairing:boolean,jellyfinLogin:boolean}),{},undefined,{public:true});
 native('capabilities','GET',object(),{},undefined,{responseModel:'Capabilities'});
@@ -129,7 +132,7 @@ native('profiles','GET',object({profiles:list(profile),canManage:boolean,avatars
 native('profiles','POST',object({success:boolean,profile,passwordMode:text}),{},profilesBody);
 native('profiles/select','POST',object({profile,revision:text}),{},object({profileId:id,parentPin:{type:'string',pattern:'^\\d{4,8}$'}},['profileId']));
 for (const path of ['profiles/status','session/status']) native(path,'GET',object({profile:{anyOf:[profile,{type:'null'}]},revision:text,parentPinConfigured:boolean}));
-for (const method of ['GET','POST']) native('profiles/users',method,object({users:list(profile)}),{},method === 'POST' ? object({parentPin:{type:'string',pattern:'^\\d{4,8}$'}}) : undefined);
+for (const method of ['GET','POST']) native('profiles/users',method,object({users:list(profile),mediaEngine:text}),{},method === 'POST' ? object({parentPin:{type:'string',pattern:'^\\d{4,8}$'}}) : undefined);
 native('continue-watching','GET',object({items:list(media)}));
 native('episodes','GET',object({items:list()}),{itemId:id},undefined,{requiredQuery:['itemId']});
 native('watched','POST',success,{},object({itemId:id,played:boolean,userId:id},['itemId','played']));
