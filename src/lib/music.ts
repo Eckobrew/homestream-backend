@@ -141,7 +141,8 @@ export function ensureMusicTables() {
         id TEXT PRIMARY KEY,
         next_attempt INTEGER NOT NULL DEFAULT 0,
         progress_signature TEXT NOT NULL DEFAULT '',
-        progress_at INTEGER NOT NULL DEFAULT 0
+        progress_at INTEGER NOT NULL DEFAULT 0,
+        attempts INTEGER NOT NULL DEFAULT 0
       );
       CREATE TABLE IF NOT EXISTS music_download_sources (
         job_id TEXT NOT NULL,
@@ -165,6 +166,9 @@ export function ensureMusicTables() {
     }
     if (!db.prepare("SELECT 1 FROM pragma_table_info('playlist_tracks') WHERE name='transfer_size'").get()) {
       db.exec('ALTER TABLE playlist_tracks ADD COLUMN transfer_size INTEGER');
+    }
+    if (!db.prepare("SELECT 1 FROM pragma_table_info('music_download_jobs') WHERE name='attempts'").get()) {
+      db.exec('ALTER TABLE music_download_jobs ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0');
     }
     seedNathanProfileMusic(db);
     dbInitialized = true;
@@ -1403,9 +1407,17 @@ const SOURCE_COOLDOWN_MS = 24 * 60 * 60_000;
 const MISSING_TRANSFER_MS = 60_000;
 const STALLED_TRANSFER_MS = 30 * 60_000;
 const REMOTE_QUEUE_MS = 6 * 60 * 60_000;
-const MAX_ACTIVE_PLAYLIST_DOWNLOADS = 12;
+const MAX_ACTIVE_PLAYLIST_DOWNLOADS = 32;
+const MAX_CONCURRENT_SEARCHES = 3;
 const runMediaCheck = promisify(execFile);
 type DownloadTable = 'music_requests' | 'playlist_tracks';
+
+function retryDelayMs(attempts: number): number {
+  if (attempts <= 1) return 5 * 60_000;
+  if (attempts === 2) return 15 * 60_000;
+  if (attempts === 3) return 45 * 60_000;
+  return Math.min(6 * 60 * 60_000, 2 * 60 * 60_000 * (attempts - 3));
+}
 
 async function validateDownloadedAudio(file: string) {
   await runMediaCheck('ffmpeg', ['-nostdin', '-v', 'error', '-xerror', '-i', file, '-map', '0:a:0', '-f', 'null', '-'], { timeout: 120_000 });
@@ -1413,23 +1425,26 @@ async function validateDownloadedAudio(file: string) {
 
 async function searchSoulseek(slskd: SlskdClient, query: string) {
   const search = await slskd.startSearch(query, 20);
-  for (let i = 0; i < 12; i++) {
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    if ((await slskd.getSearchState(search.id)).isComplete) {
-      try {
-        return await slskd.getSearchResponses(search.id);
-      } finally {
-        await slskd.deleteSearch(search.id);
+  try {
+    for (let i = 0; i < 10; i++) {
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      if ((await slskd.getSearchState(search.id)).isComplete) {
+        break;
       }
     }
+    return await slskd.getSearchResponses(search.id);
+  } finally {
+    await slskd.deleteSearch(search.id).catch(() => {});
   }
-  return slskd.getSearchResponses(search.id);
 }
 
 function scheduleSearch(table: DownloadTable, id: string, reason: string, delay: number) {
   const db = stateDatabase();
-  db.prepare(`INSERT INTO music_download_jobs(id,next_attempt) VALUES (?,?)
-    ON CONFLICT(id) DO UPDATE SET next_attempt=excluded.next_attempt, progress_signature='', progress_at=0`).run(id, Date.now() + delay);
+  const prev = Number(db.prepare('SELECT attempts FROM music_download_jobs WHERE id=?').get(id)?.attempts || 0);
+  const attempts = prev + 1;
+  const effectiveDelay = delay < 0 ? retryDelayMs(attempts) : delay;
+  db.prepare(`INSERT INTO music_download_jobs(id,next_attempt,attempts) VALUES (?,?,?)
+    ON CONFLICT(id) DO UPDATE SET next_attempt=excluded.next_attempt, attempts=excluded.attempts, progress_signature='', progress_at=0`).run(id, Date.now() + effectiveDelay, attempts);
   if (table === 'music_requests') {
     db.prepare(`UPDATE music_requests SET status='requested', progress=0, download_speed=0, eta_seconds=0,
       error_message=?, updated_at=? WHERE id=?`).run(reason, new Date().toISOString(), id);
@@ -1477,9 +1492,9 @@ async function retryTransfer(slskd: SlskdClient, table: DownloadTable, job: any,
   scheduleSearch(table, job.id, reason, 0);
 }
 
-/** Poll slskd and run one search at a time across both queues. */
+/** Poll slskd and run bounded concurrent searches across both queues. */
 let downloadMonitorInterval: NodeJS.Timeout | null = null;
-let searchRunning = false;
+let activeSearches = 0;
 
 export function startDownloadMonitor() {
   if (downloadMonitorInterval) return;
@@ -2136,34 +2151,38 @@ export async function importSpotifyPlaylists(
  * Ensures max 2 concurrent searches with pacing delay to protect slskd and Soulseek network.
  */
 export function processNextPlaylistTrack(): void {
-  if (searchRunning || !new SlskdClient().isConfigured()) return;
+  if (!new SlskdClient().isConfigured()) return;
   ensureMusicTables();
   const db = stateDatabase();
-  const album = db.prepare(`SELECT r.* FROM music_requests r LEFT JOIN music_download_jobs j ON j.id=r.id
-    WHERE r.status='requested' AND COALESCE(j.next_attempt,0)<=? ORDER BY r.created_at LIMIT 1`).get(Date.now());
-  const activeTracks = Number(db.prepare("SELECT COUNT(*) AS n FROM playlist_tracks WHERE status IN ('downloading','importing')").get()?.n);
-  const track = album || activeTracks >= MAX_ACTIVE_PLAYLIST_DOWNLOADS ? undefined : db.prepare(`SELECT pt.*, p.profile_id FROM playlist_tracks pt
-    JOIN playlists p ON p.id=pt.playlist_id LEFT JOIN music_download_jobs j ON j.id=pt.id
-    WHERE pt.status='pending' AND COALESCE(j.next_attempt,0)<=?
-    ORDER BY pt.created_at, pt.position LIMIT 1`).get(Date.now());
-  const job = album || track;
-  if (!job) return;
-  const id = String(job.id);
-  const table = album ? 'music_requests' : 'playlist_tracks';
-  db.prepare(`UPDATE ${table} SET status='searching' WHERE id=?`).run(id);
-  searchRunning = true;
-  const search = album
-    ? dispatchAlbumDownload(id, String(album.artist_name), String(album.album_title))
-    : executeTrackSearchAndDownload(track);
-  void search.catch(error => {
-    scheduleSearch(table, id, `Search failed: ${error.message}`, SEARCH_RETRY_MS);
-  }).finally(() => {
-    const pacing = setTimeout(() => {
-      searchRunning = false;
-      if (downloadMonitorInterval) processNextPlaylistTrack();
-    }, 2000);
-    pacing.unref();
-  });
+  while (activeSearches < MAX_CONCURRENT_SEARCHES) {
+    const now = Date.now();
+    const album = db.prepare(`SELECT r.* FROM music_requests r LEFT JOIN music_download_jobs j ON j.id=r.id
+      WHERE r.status='requested' AND COALESCE(j.next_attempt,0)<=?
+      ORDER BY COALESCE(j.attempts,0) ASC, COALESCE(j.next_attempt,0) ASC, r.created_at ASC LIMIT 1`).get(now);
+    const activeTracks = Number(db.prepare("SELECT COUNT(*) AS n FROM playlist_tracks WHERE status IN ('downloading','importing','searching')").get()?.n);
+    const track = album || activeTracks >= MAX_ACTIVE_PLAYLIST_DOWNLOADS ? undefined : db.prepare(`SELECT pt.*, p.profile_id FROM playlist_tracks pt
+      JOIN playlists p ON p.id=pt.playlist_id LEFT JOIN music_download_jobs j ON j.id=pt.id
+      WHERE pt.status='pending' AND COALESCE(j.next_attempt,0)<=?
+      ORDER BY COALESCE(j.attempts,0) ASC, COALESCE(j.next_attempt,0) ASC, pt.created_at ASC, pt.position ASC LIMIT 1`).get(now);
+    const job = album || track;
+    if (!job) break;
+    const id = String(job.id);
+    const table = album ? 'music_requests' : 'playlist_tracks';
+    db.prepare(`UPDATE ${table} SET status='searching' WHERE id=?`).run(id);
+    activeSearches++;
+    const search = album
+      ? dispatchAlbumDownload(id, String(album.artist_name), String(album.album_title))
+      : executeTrackSearchAndDownload(track);
+    void search.catch(error => {
+      scheduleSearch(table, id, `Search failed: ${error.message}`, -1);
+    }).finally(() => {
+      const pacing = setTimeout(() => {
+        activeSearches = Math.max(0, activeSearches - 1);
+        if (downloadMonitorInterval) processNextPlaylistTrack();
+      }, 500);
+      pacing.unref();
+    });
+  }
 }
 
 /**
@@ -2208,10 +2227,15 @@ async function executeTrackSearchAndDownload(track: any) {
   const query = `${primaryArtist} ${cleanTitle}`.trim();
 
   const responses = await searchSoulseek(slskd, query);
+  if (!responses.length) {
+    scheduleSearch('playlist_tracks', track.id, 'No sources found on Soulseek network', -1);
+    return;
+  }
   // Find best MP3 file
   let bestUser = '';
   let bestFile: { filename: string; size: number } | null = null;
   let bestScore = -1;
+  const normalizedArtist = normalizeMusicString(primaryArtist);
 
   for (const resp of responses) {
     const user = resp.username;
@@ -2235,8 +2259,12 @@ async function executeTrackSearchAndDownload(track: any) {
       const normalizedName = normalizeMusicString(name);
       const normalizedTitle = normalizeMusicString(cleanTitle);
       if (!normalizedTitle || !(` ${normalizedName} `).includes(` ${normalizedTitle} `)) continue;
+      if (normalizedArtist) {
+        const normalizedPath = normalizeMusicString(fn);
+        score += normalizedPath.includes(normalizedArtist) ? 25 : -30;
+      }
       const feature = track.title.match(/\bfeat\.?\s+([^)]*)/i)?.[1];
-      if (feature && !normalizedName.includes(normalizeMusicString(feature))) continue;
+      if (feature && normalizedName.includes(normalizeMusicString(feature))) score += 25;
 
       if (score > bestScore) {
         bestScore = score;
@@ -2247,7 +2275,7 @@ async function executeTrackSearchAndDownload(track: any) {
   }
 
   if (!bestUser || !bestFile) {
-    scheduleSearch('playlist_tracks', track.id, 'No eligible matching audio found on Soulseek', SEARCH_RETRY_MS);
+    scheduleSearch('playlist_tracks', track.id, 'No eligible matching audio found on Soulseek', -1);
     return;
   }
 
