@@ -8,6 +8,7 @@ import { JellyfinClient, isYouTubeItem } from '@/lib/jellyfin';
 import { SeerrClient } from '@/lib/seerr';
 import { TmdbClient } from '@/lib/tmdb';
 import { SmartRecommendationEngine } from '@/lib/recommendations';
+import { stateDatabase } from '@/state/database';
 import { getNativeUserRequests } from '@/lib/user-requests';
 import { QBittorrentClient } from '@/lib/qbittorrent';
 import { resolveJellyfinUserId } from '@/lib/profiles';
@@ -270,27 +271,67 @@ async function handleGET(request: HttpRequest) {
     }
 
     // Multiple "Because You Watched <Title>" sections directly below Continue Watching, pulling from TMDB (including non-library titles)
-    const bywSeeds: MediaItem[] = [];
+    const bywSeeds: Array<{ id: string; title: string; type: 'Movie' | 'Series'; tmdbId?: number }> = [];
     const seenSeedTitles = new Set<string>();
-    for (const item of safeResume) {
+    const pushSeed = (item: { id: string; title?: string; type?: string; tmdbId?: number }) => {
       const key = (item.title || '').trim().toLowerCase();
-      if (!key || seenSeedTitles.has(key)) continue;
+      if (!key || seenSeedTitles.has(key)) return;
       seenSeedTitles.add(key);
-      bywSeeds.push(item);
+      bywSeeds.push({
+        id: item.id,
+        title: item.title!.trim(),
+        type: item.type === 'Series' || item.type === 'Episode' ? 'Series' : 'Movie',
+        tmdbId: typeof item.tmdbId === 'number' && item.tmdbId > 0 ? item.tmdbId : undefined,
+      });
+    };
+
+    for (const item of safeResume) {
+      pushSeed(item);
       if (bywSeeds.length >= 3) break;
     }
 
-    if (tmdb.isConfigured() && bywSeeds.some((s) => typeof s.tmdbId === 'number' && s.tmdbId > 0)) {
+    if (bywSeeds.length < 3 && useNative) {
+      try {
+        const recentWatched = stateDatabase()
+          .prepare(
+            `SELECT m.id, m.title, m.type, m.tmdb_id as tmdbId
+             FROM native_watch_progress p
+             JOIN native_media_items m ON m.id = p.item_id
+             WHERE p.profile_id = ?
+             ORDER BY p.updated_at DESC
+             LIMIT 10`
+          )
+          .all(targetUserId || 'default') as Array<{ id: string; title: string; type: string; tmdbId?: number }>;
+        for (const row of recentWatched) {
+          pushSeed(row);
+          if (bywSeeds.length >= 3) break;
+        }
+      } catch {}
+    }
+
+    if (tmdb.isConfigured() && bywSeeds.length > 0) {
       const tmdbBywResults = await Promise.all(
-        bywSeeds
-          .filter((s) => typeof s.tmdbId === 'number' && s.tmdbId > 0)
-          .map(async (seed) => {
-            const recs = await Promise.race([
-              tmdb.getRecommendations(seed.tmdbId!, seed.type === 'Series' ? 'tv' : 'movie'),
-              new Promise<MediaItem[]>((r) => setTimeout(() => r([]), 2500)),
+        bywSeeds.map(async (seed) => {
+          let tmdbId = seed.tmdbId;
+          let recType: 'movie' | 'tv' = seed.type === 'Series' ? 'tv' : 'movie';
+          if (!tmdbId) {
+            const matches = await Promise.race([
+              tmdb.search(seed.title),
+              new Promise<MediaItem[]>((r) => setTimeout(() => r([]), 2000)),
             ]).catch(() => [] as MediaItem[]);
-            return { seed, items: recs.filter(isReleasedItem).slice(0, 15) };
-          })
+            const hit = matches.find((m) => typeof m.tmdbId === 'number' && m.tmdbId > 0);
+            if (hit?.tmdbId) {
+              tmdbId = hit.tmdbId;
+              recType = hit.type === 'Series' ? 'tv' : 'movie';
+            }
+          }
+          if (!tmdbId) return { seed, items: [] as MediaItem[] };
+          const recs = await Promise.race([
+            tmdb.getRecommendations(tmdbId, recType),
+            new Promise<MediaItem[]>((r) => setTimeout(() => r([]), 2500)),
+          ]).catch(() => [] as MediaItem[]);
+          return { seed, items: recs.filter(isReleasedItem).slice(0, 15) };
+        })
       );
       for (const entry of tmdbBywResults) {
         if (entry.items.length > 0) {
