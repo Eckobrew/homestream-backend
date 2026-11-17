@@ -269,6 +269,49 @@ async function handleGET(request: HttpRequest) {
       });
     }
 
+    // Multiple "Because You Watched <Title>" sections directly below Continue Watching, pulling from TMDB (including non-library titles)
+    const bywSeeds: MediaItem[] = [];
+    const seenSeedTitles = new Set<string>();
+    for (const item of safeResume) {
+      const key = (item.title || '').trim().toLowerCase();
+      if (!key || seenSeedTitles.has(key)) continue;
+      seenSeedTitles.add(key);
+      bywSeeds.push(item);
+      if (bywSeeds.length >= 3) break;
+    }
+
+    if (tmdb.isConfigured() && bywSeeds.some((s) => typeof s.tmdbId === 'number' && s.tmdbId > 0)) {
+      const tmdbBywResults = await Promise.all(
+        bywSeeds
+          .filter((s) => typeof s.tmdbId === 'number' && s.tmdbId > 0)
+          .map(async (seed) => {
+            const recs = await Promise.race([
+              tmdb.getRecommendations(seed.tmdbId!, seed.type === 'Series' ? 'tv' : 'movie'),
+              new Promise<MediaItem[]>((r) => setTimeout(() => r([]), 2500)),
+            ]).catch(() => [] as MediaItem[]);
+            return { seed, items: recs.filter(isReleasedItem).slice(0, 15) };
+          })
+      );
+      for (const entry of tmdbBywResults) {
+        if (entry.items.length > 0) {
+          sections.push({
+            id: `because-you-watched-${entry.seed.id}`,
+            title: `Because You Watched ${entry.seed.title}`,
+            items: entry.items,
+          });
+        }
+      }
+    } else if (useNative) {
+      const byw = getNativeBecauseYouWatched(targetUserId || 'default', 15);
+      if (byw && byw.items.length > 0) {
+        sections.push({
+          id: 'because-you-watched',
+          title: `Because You Watched ${byw.seedTitle}`,
+          items: byw.items,
+        });
+      }
+    }
+
     const safeTopRated = topRated.filter((i) => i.source !== 'youtube' && !isYouTubeItem(i));
     if (safeTopRated.length > 0) {
       sections.push({
@@ -294,17 +337,6 @@ async function handleGET(request: HttpRequest) {
         title: 'Recently Added TV Shows',
         items: latestSeries,
       });
-    }
-
-    if (useNative) {
-      const byw = getNativeBecauseYouWatched(targetUserId || 'default', 15);
-      if (byw && byw.items.length > 0) {
-        sections.push({
-          id: 'because-you-watched',
-          title: `Because You Watched ${byw.seedTitle}`,
-          items: byw.items,
-        });
-      }
     }
 
     const requestSections: MediaRowSection[] = [];
