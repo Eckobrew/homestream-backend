@@ -26,7 +26,8 @@ test('the in-process torrent route preserves season-pack selection and reads rea
       const path = join(directory, name);
       execFileSync('ffmpeg', [
         '-v', 'error', '-f', 'lavfi', '-i', `testsrc2=s=160x90:r=24:d=${duration}`,
-        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', path,
+        '-f', 'lavfi', '-i', `sine=frequency=440:duration=${duration}`,
+        '-c:v', 'libx264', '-c:a', 'aac', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', path,
       ]);
       return { name, data: await readFile(path) };
     }));

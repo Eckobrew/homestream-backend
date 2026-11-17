@@ -235,7 +235,7 @@ async function handleGET(request: HttpRequest) {
 
     ffmpegArgs.push(...videoStrategy.args);
 
-    ffmpegArgs.push(...streamAudioArguments(sourceVideo, searchParams));
+    ffmpegArgs.push(...streamAudioArguments(sourceVideo, videoQuery));
 
     ffmpegArgs.push(
       '-f',
