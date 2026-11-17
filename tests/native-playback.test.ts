@@ -27,7 +27,12 @@ test('native video serves byte ranges and mobile HLS segments across remux and t
       '-c:v', 'libx264', '-g', '24', '-pix_fmt', 'yuv420p', file,
     ]);
     const source = await readFile(file);
-    saveMediaEngineSettings({ mediaEngine: 'native', transcodeTempDir: join(directory, 'hls'), hlsSegmentSeconds: 1 });
+    saveMediaEngineSettings({
+      mediaEngine: 'native',
+      transcodeTempDir: join(directory, 'hls'),
+      hlsSegmentSeconds: 1,
+      libraries: [{ id: 'test-lib', name: 'Test', type: 'movie', enabled: true, paths: [directory], scanIntervalMinutes: 60, preferNfo: false, autoDownloadArtwork: false }],
+    });
     ensureNativeMediaTables();
     stateDatabase().prepare(
       'INSERT INTO native_media_files (id, item_id, file_path, file_size, video_codec, audio_codec, streams_json, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'

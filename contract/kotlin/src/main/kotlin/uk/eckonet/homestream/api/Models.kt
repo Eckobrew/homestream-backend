@@ -206,6 +206,7 @@ data class SubtitleTrack(
     @SerialName("language") val `language`: String,
     @SerialName("isDefault") val `isDefault`: Boolean? = null,
     @SerialName("isForced") val `isForced`: Boolean? = null,
+    @SerialName("burnIn") val `burnIn`: Boolean? = null,
     @SerialName("src") val `src`: String
 )
 
@@ -810,6 +811,7 @@ data class WebGetNativeStreamQuery(
     @SerialName("hls") val `hls`: String? = null,
     @SerialName("segment") val `segment`: String? = null,
     @SerialName("trickplay") val `trickplay`: String? = null,
+    @SerialName("rev") val `rev`: String? = null,
     @SerialName("asset") val `asset`: String? = null,
     @SerialName("artwork") val `artwork`: String? = null,
     @SerialName("subtitle") val `subtitle`: String? = null,
@@ -1008,7 +1010,8 @@ data class WebGetSubtitlesQuery(
 
 @Serializable
 data class WebGetSubtitlesResponse(
-    @SerialName("subtitles") val `subtitles`: List<JsonElement>? = null
+    @SerialName("subtitles") val `subtitles`: List<JsonElement>? = null,
+    @SerialName("subtitleMode") val `subtitleMode`: String? = null
 )
 
 @Serializable
@@ -1805,6 +1808,140 @@ data class WebGetSessionsCommandsQuery(
 )
 
 @Serializable
+data class WebGetWatchlistQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class WebGetWatchlistResponse(
+    @SerialName("items") val `items`: List<JsonElement>? = null
+)
+
+@Serializable
+data class WebPostWatchlistQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class WebPostWatchlistBody(
+    @SerialName("itemId") val `itemId`: String,
+    @SerialName("title") val `title`: String,
+    @SerialName("type") val `type`: String? = null,
+    @SerialName("posterUrl") val `posterUrl`: String? = null,
+    @SerialName("year") val `year`: Long? = null
+)
+
+@Serializable
+data class WebPostWatchlistResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("item") val `item`: JsonElement? = null,
+    @SerialName("items") val `items`: List<JsonElement>? = null
+)
+
+@Serializable
+data class WebDeleteWatchlistQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("itemId") val `itemId`: String
+)
+
+@Serializable
+data class WebDeleteWatchlistResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("items") val `items`: List<JsonElement>? = null
+)
+
+@Serializable
+data class WebGetProfilePrefsQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("seriesId") val `seriesId`: String? = null
+)
+
+@Serializable
+data class WebGetProfilePrefsResponse(
+    @SerialName("defaults") val `defaults`: JsonElement? = null,
+    @SerialName("seriesOverride") val `seriesOverride`: JsonElement? = null,
+    @SerialName("effective") val `effective`: JsonElement? = null
+)
+
+@Serializable
+data class WebPostProfilePrefsQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class WebPostProfilePrefsBody(
+    @SerialName("seriesId") val `seriesId`: String? = null,
+    @SerialName("audioLang") val `audioLang`: String? = null,
+    @SerialName("subtitleLang") val `subtitleLang`: String? = null,
+    @SerialName("subtitleMode") val `subtitleMode`: String? = null
+)
+
+@Serializable
+data class WebPostProfilePrefsResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("defaults") val `defaults`: JsonElement? = null,
+    @SerialName("seriesOverride") val `seriesOverride`: JsonElement? = null,
+    @SerialName("effective") val `effective`: JsonElement? = null
+)
+
+@Serializable
+data class WebDeleteProfilePrefsQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("seriesId") val `seriesId`: String
+)
+
+@Serializable
+data class WebDeleteProfilePrefsResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("defaults") val `defaults`: JsonElement? = null,
+    @SerialName("effective") val `effective`: JsonElement? = null
+)
+
+@Serializable
+data class WebGetCollectionsQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class WebGetCollectionsResponse(
+    @SerialName("collections") val `collections`: List<JsonElement>? = null
+)
+
+@Serializable
+data class WebPostCollectionsQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class WebPostCollectionsBody(
+    @SerialName("action") val `action`: String? = null,
+    @SerialName("name") val `name`: String? = null,
+    @SerialName("description") val `description`: String? = null,
+    @SerialName("isShared") val `isShared`: Boolean? = null,
+    @SerialName("collectionId") val `collectionId`: String? = null,
+    @SerialName("itemId") val `itemId`: String? = null
+)
+
+@Serializable
+data class WebPostCollectionsResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("collection") val `collection`: JsonElement? = null,
+    @SerialName("collections") val `collections`: List<JsonElement>? = null
+)
+
+@Serializable
+data class WebDeleteCollectionsQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("id") val `id`: String
+)
+
+@Serializable
+data class WebDeleteCollectionsResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("collections") val `collections`: List<JsonElement>? = null
+)
+
+@Serializable
 data class MobileGetHomeQuery(
     @SerialName("userId") val `userId`: String? = null
 )
@@ -1943,6 +2080,7 @@ data class MobileGetNativeStreamQuery(
     @SerialName("hls") val `hls`: String? = null,
     @SerialName("segment") val `segment`: String? = null,
     @SerialName("trickplay") val `trickplay`: String? = null,
+    @SerialName("rev") val `rev`: String? = null,
     @SerialName("asset") val `asset`: String? = null,
     @SerialName("artwork") val `artwork`: String? = null,
     @SerialName("subtitle") val `subtitle`: String? = null,
@@ -2113,7 +2251,8 @@ data class MobileGetSubtitlesQuery(
 
 @Serializable
 data class MobileGetSubtitlesResponse(
-    @SerialName("subtitles") val `subtitles`: List<JsonElement>? = null
+    @SerialName("subtitles") val `subtitles`: List<JsonElement>? = null,
+    @SerialName("subtitleMode") val `subtitleMode`: String? = null
 )
 
 @Serializable
@@ -2861,6 +3000,140 @@ data class MobilePostSessionsCommandResponse(
 data class MobileGetSessionsCommandsQuery(
     @SerialName("userId") val `userId`: String? = null,
     @SerialName("deviceId") val `deviceId`: String
+)
+
+@Serializable
+data class MobileGetWatchlistQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class MobileGetWatchlistResponse(
+    @SerialName("items") val `items`: List<JsonElement>? = null
+)
+
+@Serializable
+data class MobilePostWatchlistQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class MobilePostWatchlistBody(
+    @SerialName("itemId") val `itemId`: String,
+    @SerialName("title") val `title`: String,
+    @SerialName("type") val `type`: String? = null,
+    @SerialName("posterUrl") val `posterUrl`: String? = null,
+    @SerialName("year") val `year`: Long? = null
+)
+
+@Serializable
+data class MobilePostWatchlistResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("item") val `item`: JsonElement? = null,
+    @SerialName("items") val `items`: List<JsonElement>? = null
+)
+
+@Serializable
+data class MobileDeleteWatchlistQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("itemId") val `itemId`: String
+)
+
+@Serializable
+data class MobileDeleteWatchlistResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("items") val `items`: List<JsonElement>? = null
+)
+
+@Serializable
+data class MobileGetProfilePrefsQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("seriesId") val `seriesId`: String? = null
+)
+
+@Serializable
+data class MobileGetProfilePrefsResponse(
+    @SerialName("defaults") val `defaults`: JsonElement? = null,
+    @SerialName("seriesOverride") val `seriesOverride`: JsonElement? = null,
+    @SerialName("effective") val `effective`: JsonElement? = null
+)
+
+@Serializable
+data class MobilePostProfilePrefsQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class MobilePostProfilePrefsBody(
+    @SerialName("seriesId") val `seriesId`: String? = null,
+    @SerialName("audioLang") val `audioLang`: String? = null,
+    @SerialName("subtitleLang") val `subtitleLang`: String? = null,
+    @SerialName("subtitleMode") val `subtitleMode`: String? = null
+)
+
+@Serializable
+data class MobilePostProfilePrefsResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("defaults") val `defaults`: JsonElement? = null,
+    @SerialName("seriesOverride") val `seriesOverride`: JsonElement? = null,
+    @SerialName("effective") val `effective`: JsonElement? = null
+)
+
+@Serializable
+data class MobileDeleteProfilePrefsQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("seriesId") val `seriesId`: String
+)
+
+@Serializable
+data class MobileDeleteProfilePrefsResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("defaults") val `defaults`: JsonElement? = null,
+    @SerialName("effective") val `effective`: JsonElement? = null
+)
+
+@Serializable
+data class MobileGetCollectionsQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class MobileGetCollectionsResponse(
+    @SerialName("collections") val `collections`: List<JsonElement>? = null
+)
+
+@Serializable
+data class MobilePostCollectionsQuery(
+    @SerialName("userId") val `userId`: String? = null
+)
+
+@Serializable
+data class MobilePostCollectionsBody(
+    @SerialName("action") val `action`: String? = null,
+    @SerialName("name") val `name`: String? = null,
+    @SerialName("description") val `description`: String? = null,
+    @SerialName("isShared") val `isShared`: Boolean? = null,
+    @SerialName("collectionId") val `collectionId`: String? = null,
+    @SerialName("itemId") val `itemId`: String? = null
+)
+
+@Serializable
+data class MobilePostCollectionsResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("collection") val `collection`: JsonElement? = null,
+    @SerialName("collections") val `collections`: List<JsonElement>? = null
+)
+
+@Serializable
+data class MobileDeleteCollectionsQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("id") val `id`: String
+)
+
+@Serializable
+data class MobileDeleteCollectionsResponse(
+    @SerialName("success") val `success`: Boolean? = null,
+    @SerialName("collections") val `collections`: List<JsonElement>? = null
 )
 
 @Serializable

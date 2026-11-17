@@ -41,6 +41,9 @@ import { getNativeEpisodeQueue, getNativeItemById, getNativeMovieCollection, get
 import { getMediaEngineSettings } from '@/lib/media-settings';
 import * as syncplayService from '@/services/syncplay/handler';
 import * as nativeLibraryService from '@/services/native/library/handler';
+import * as watchlistService from '@/services/watchlist/handler';
+import * as profilePrefsService from '@/services/profile-prefs/handler';
+import * as collectionsService from '@/services/collections/handler';
 import * as accountsService from '@/services/accounts/handler';
 import { resolveJellyfinUserId } from '@/lib/profiles';
 import { createSession, readSession } from '@/lib/session';
@@ -414,6 +417,18 @@ async function dispatchContent(request: HttpRequest, context: Context) {
     return get ? accountsService.GET(request) : accountsService.POST(request);
   }
   if (route === 'syncplay') return get ? syncplayService.GET(request) : syncplayService.POST(request);
+  if (route === 'watchlist') {
+    if (request.method === 'DELETE') return watchlistService.DELETE(request);
+    return get ? watchlistService.GET(request) : watchlistService.POST(request);
+  }
+  if (route === 'profile-prefs') {
+    if (request.method === 'DELETE') return profilePrefsService.DELETE(request);
+    return get ? profilePrefsService.GET(request) : profilePrefsService.POST(request);
+  }
+  if (route === 'collections') {
+    if (request.method === 'DELETE') return collectionsService.DELETE(request);
+    return get ? collectionsService.GET(request) : collectionsService.POST(request);
+  }
   if (route === 'sessions' || route === 'sessions/commands') return get ? sessionsService.GET(request) : HttpResponse.json({ error: 'Method not allowed' }, { status: 405 });
   if (route === 'sessions/heartbeat' || route === 'sessions/command') return !get ? sessionsService.POST(request) : HttpResponse.json({ error: 'Method not allowed' }, { status: 405 });
   return HttpResponse.json({ error: 'Unknown mobile endpoint' }, { status: 404 });

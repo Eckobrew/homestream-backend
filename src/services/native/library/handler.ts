@@ -5,16 +5,37 @@ import {
   deleteNativeItem,
   editNativeItemMetadata,
   generateTrickplayForFile,
+  getMediaCacheStats,
+  getNativeLibraryHealth,
   getNativeScanStatus,
   getNativeWatchStats,
   getTrickplayBackfillStatus,
+  hideFromContinueWatching,
   identifyNativeItem,
+  listNativeFilesForAdmin,
   listNativeLibraryItems,
+  pruneMediaCaches,
   refreshNativeMetadata,
+  repairNativeLibraryHealth,
   scanNativeLibraries,
   setManualSkipSegments,
+  startOverNativeItem,
   startTrickplayBackfill,
 } from '@/lib/native-media';
+import {
+  createSqliteBackup,
+  getBackupScheduleConfig,
+  listSqliteBackups,
+  saveBackupScheduleConfig,
+  verifySqliteBackup,
+} from '@/lib/backups';
+import {
+  approveIntroPreview,
+  dismissIntroPreview,
+  getIntroDetectionStatus,
+  listIntroPreviews,
+  startIntroDetectionJob,
+} from '@/lib/intro-detection';
 import { listActiveNativeStreams, stopNativeStreamSession } from '@/lib/native-transcode';
 import { importJellyfinWatchHistory } from '@/lib/jellyfin-history-import';
 import { isRequestLocalOrTailscale } from '@/lib/network';
@@ -43,6 +64,21 @@ export async function GET(request: HttpRequest) {
     });
   }
 
+  if (view === 'health') {
+    return HttpResponse.json({ health: getNativeLibraryHealth() });
+  }
+
+  if (view === 'maintenance') {
+    return HttpResponse.json({
+      trickplayBackfill: getTrickplayBackfillStatus(),
+      cacheStats: getMediaCacheStats(),
+      introDetection: getIntroDetectionStatus(),
+      introPreviews: listIntroPreviews(),
+      backups: listSqliteBackups(),
+      backupSchedule: getBackupScheduleConfig(),
+    });
+  }
+
   const unmatchedOnly = searchParams.get('unmatched') === '1';
   const typeParam = searchParams.get('type');
   const type = typeParam === 'Movie' || typeParam === 'Series' ? typeParam : undefined;
@@ -55,9 +91,22 @@ export async function GET(request: HttpRequest) {
     scanStatus: getNativeScanStatus(),
     trickplayBackfill: getTrickplayBackfillStatus(),
     items: listNativeLibraryItems({ type, unmatchedOnly, limit, offset }),
+    adminFiles: listNativeFilesForAdmin(),
     activeStreams: listActiveNativeStreams(),
     stats: getNativeWatchStats(profileId),
+    health: getNativeLibraryHealth(),
+    cacheStats: getMediaCacheStats(),
+    introDetection: getIntroDetectionStatus(),
+    introPreviews: listIntroPreviews(),
+    backups: listSqliteBackups(),
+    backupSchedule: getBackupScheduleConfig(),
   });
+}
+
+async function isAdminAuthorized(request: HttpRequest): Promise<boolean> {
+  if (request.nextUrl.pathname.startsWith('/api/mobile/')) return true;
+  if ((await isRequestLocalOrTailscale(request)).isLocalOrTailscale) return true;
+  return Boolean((await readSession(request.cookies.get('homeflix_session')?.value, 'web'))?.admin);
 }
 
 export async function POST(request: HttpRequest) {
@@ -153,9 +202,10 @@ export async function POST(request: HttpRequest) {
 
   if (action === 'setSkipSegments') {
     const fileId = String(body.fileId || '').trim();
+    const reset = Boolean(body.reset);
     const segments = Array.isArray(body.segments) ? body.segments : [];
     if (!fileId) return HttpResponse.json({ error: 'fileId required' }, { status: 400 });
-    const ok = setManualSkipSegments(fileId, segments);
+    const ok = setManualSkipSegments(fileId, segments, reset);
     return ok ? HttpResponse.json({ success: true }) : HttpResponse.json({ error: 'File not found' }, { status: 404 });
   }
 
@@ -210,6 +260,91 @@ export async function POST(request: HttpRequest) {
     const sessionId = String(body.sessionId || '').trim();
     const ok = stopNativeStreamSession(sessionId);
     return HttpResponse.json({ success: ok });
+  }
+
+  if (action === 'hideContinueWatching') {
+    const profileId = request.cookies.get('homeflix_profile_id')?.value || 'default';
+    const itemId = String(body.itemId || '').trim();
+    if (!itemId) return HttpResponse.json({ error: 'itemId is required' }, { status: 400 });
+    return HttpResponse.json({ success: hideFromContinueWatching(profileId, itemId) });
+  }
+
+  if (action === 'startOver') {
+    const profileId = request.cookies.get('homeflix_profile_id')?.value || 'default';
+    const itemId = String(body.itemId || '').trim();
+    if (!itemId) return HttpResponse.json({ error: 'itemId is required' }, { status: 400 });
+    return HttpResponse.json({ success: startOverNativeItem(profileId, itemId) });
+  }
+
+  const adminActions = new Set([
+    'repairHealth', 'pruneCaches', 'introDetectionStart', 'introPreviewApprove',
+    'introPreviewDismiss', 'backupCreate', 'backupVerify', 'backupSchedule',
+  ]);
+  if (adminActions.has(action) && !(await isAdminAuthorized(request))) {
+    return HttpResponse.json({ error: 'Administrator access required' }, { status: 403 });
+  }
+
+  if (action === 'repairHealth') {
+    const repair = String(body.repair || '') as 'pruneMissing' | 'refreshMetadata' | 'backfillTrickplay';
+    if (!['pruneMissing', 'refreshMetadata', 'backfillTrickplay'].includes(repair)) {
+      return HttpResponse.json({ error: 'Invalid repair action' }, { status: 400 });
+    }
+    const result = await repairNativeLibraryHealth(repair);
+    return HttpResponse.json({ success: result.ok, ...result, health: getNativeLibraryHealth() });
+  }
+
+  if (action === 'pruneCaches') {
+    const pruned = pruneMediaCaches();
+    return HttpResponse.json({ success: true, ...pruned, cacheStats: getMediaCacheStats() });
+  }
+
+  if (action === 'introDetectionStart') {
+    const seriesId = typeof body.seriesId === 'string' && body.seriesId.trim() ? body.seriesId.trim() : undefined;
+    const res = startIntroDetectionJob(seriesId);
+    return HttpResponse.json({ success: true, ...res });
+  }
+
+  if (action === 'introPreviewApprove') {
+    const fileId = String(body.fileId || '').trim();
+    const startSeconds = Number(body.startSeconds);
+    const endSeconds = Number(body.endSeconds);
+    if (!fileId || !Number.isFinite(startSeconds) || !Number.isFinite(endSeconds) || endSeconds <= startSeconds) {
+      return HttpResponse.json({ error: 'fileId and valid startSeconds < endSeconds required' }, { status: 400 });
+    }
+    const ok = approveIntroPreview(fileId, startSeconds, endSeconds);
+    return HttpResponse.json({ success: ok, introPreviews: listIntroPreviews() });
+  }
+
+  if (action === 'introPreviewDismiss') {
+    const fileId = String(body.fileId || '').trim();
+    if (!fileId) return HttpResponse.json({ error: 'fileId required' }, { status: 400 });
+    const ok = dismissIntroPreview(fileId);
+    return HttpResponse.json({ success: ok, introPreviews: listIntroPreviews() });
+  }
+
+  if (action === 'backupCreate') {
+    const created = await createSqliteBackup();
+    return HttpResponse.json({ success: created.verification.ok, ...created, backups: listSqliteBackups() });
+  }
+
+  if (action === 'backupVerify') {
+    const filename = String(body.filename || '').trim();
+    if (!filename) return HttpResponse.json({ error: 'filename is required' }, { status: 400 });
+    try {
+      const verification = verifySqliteBackup(filename);
+      return HttpResponse.json({ success: verification.ok, verification });
+    } catch (error) {
+      return HttpResponse.json({ error: error instanceof Error ? error.message : 'Verification failed' }, { status: 400 });
+    }
+  }
+
+  if (action === 'backupSchedule') {
+    const schedule = saveBackupScheduleConfig({
+      enabled: typeof body.enabled === 'boolean' ? body.enabled : undefined,
+      intervalHours: typeof body.intervalHours === 'number' ? body.intervalHours : undefined,
+      retentionCount: typeof body.retentionCount === 'number' ? body.retentionCount : undefined,
+    });
+    return HttpResponse.json({ success: true, backupSchedule: schedule });
   }
 
   return HttpResponse.json({ error: 'Unknown native library action' }, { status: 400 });

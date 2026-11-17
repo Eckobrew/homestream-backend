@@ -9,6 +9,7 @@ import { activeLibraryFileClause, ensureNativeMediaTables, NativeMediaFileRow, r
 import { MediaAudioTrack, MediaVersion, SkipSegment, SubtitleTrack } from '@/types';
 import { log } from '@/log';
 import { getNativeHardwareAcceleration, hardwareDeviceArgs, hardwareEncoders, hardwareVideoFilters } from './native-hardware';
+import { getProfileMediaPrefs } from './profile-features';
 import type { TvVideoCapability } from './tv-playback-profile';
 
 const execFileAsync = promisify(execFile);
@@ -31,6 +32,14 @@ export interface ActiveStreamSession {
 }
 
 const activeSessions = new Map<string, ActiveStreamSession>();
+
+export function getActiveTranscodeCount(): number {
+  let count = 0;
+  for (const s of activeSessions.values()) {
+    if (s.process && !s.startupFailed) count++;
+  }
+  return count;
+}
 
 // Reap idle transcode sessions and temp directories every 60s even if Admin is never opened
 setInterval(() => {
@@ -506,6 +515,7 @@ export async function negotiateNativePlayback(
   contentType?: string;
   durationSeconds?: number;
   totalDurationTicks?: number;
+  startTimeTicks?: number;
   versions?: MediaVersion[];
   skipSegments?: SkipSegment[];
   trickplayUrl?: string;
@@ -565,7 +575,14 @@ export async function negotiateNativePlayback(
   const trickplayUrl = resolveTrickplayUrlForFile(file as NativeMediaFileRow & { source_revision?: number });
   const subtitles = listNativeSubtitlesForFile(file);
   const audioTracks = nativeAudioTracks(file);
-  const preferredTrack = audioTracks.find(track => track.language?.toLowerCase() === settings.defaultAudioLanguage?.toLowerCase());
+  const epRow = file.episode_id
+    ? (db.prepare('SELECT series_id FROM native_media_episodes WHERE id = ?').get(file.episode_id) as { series_id?: string } | undefined)
+    : undefined;
+  const profilePrefs = getProfileMediaPrefs(profileId, epRow?.series_id);
+  const preferredAudioLang = profilePrefs.effective.audioLang || settings.defaultAudioLanguage;
+  const preferredTrack = preferredAudioLang
+    ? audioTracks.find(track => track.language?.toLowerCase().startsWith(preferredAudioLang.toLowerCase()))
+    : undefined;
   const audioIndex = options?.audioIndex ?? (preferredTrack && preferredTrack !== audioTracks[0] ? preferredTrack.index : undefined);
   if (options?.audioIndex !== undefined && audioTracks.length && !audioTracks.some(track => track.index === options.audioIndex)) {
     return { streamUrl: '', isTranscoding: false, subtitles, audioTracks, error: 'Audio track not found' };
@@ -595,6 +612,7 @@ export async function negotiateNativePlayback(
       contentType: mimeByExt[fit.ext] || 'video/mp4',
       durationSeconds,
       totalDurationTicks: totalDurationTicks || undefined,
+      startTimeTicks: 0,
       versions,
       skipSegments,
       trickplayUrl,
@@ -632,6 +650,7 @@ export async function negotiateNativePlayback(
     contentType: 'application/x-mpegURL',
     durationSeconds,
     totalDurationTicks: totalDurationTicks || undefined,
+    startTimeTicks: options?.startSeconds && options.startSeconds > 0 ? Math.floor(options.startSeconds) * 10_000_000 : 0,
     versions,
     skipSegments,
     trickplayUrl,

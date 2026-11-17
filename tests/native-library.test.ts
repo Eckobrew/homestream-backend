@@ -64,7 +64,7 @@ test('native-only installation scans versions, serves playback extras and saves 
       method: 'POST', url: '/api/mobile/v1/native/library', headers,
       payload: { action: 'saveSettings', settings: {
         mediaEngine: 'native', artworkCacheDir: join(directory, 'artwork'), enableMultiVersionGrouping: true,
-        enableSkipIntroCredits: true, trickplayIntervalSeconds: 2, trickplayWidth: 160,
+        enableSkipIntroCredits: true, enableTrickplay: true, trickplayIntervalSeconds: 2, trickplayWidth: 160,
         libraries: [
           { id: 'movies', name: 'Movies', type: 'movie', enabled: true, paths: [movies], preferNfo: true },
           { id: 'shows', name: 'Shows', type: 'tv', enabled: true, paths: [shows] },
@@ -119,7 +119,11 @@ test('native-only installation scans versions, serves playback extras and saves 
     assert.equal(subtitles.json().subtitles.length, 1);
     const trickplay = await app.inject(delivery.trickplayUrl);
     assert.match(trickplay.body, /00:00:02\.000 --> 00:00:03\.000/);
-    const sprite = await app.inject(delivery.trickplayUrl.replace('trickplay.vtt', 'sprite.jpg'));
+    const cueLine = trickplay.body.split(/\r?\n/).find(line => line.includes('#xywh='));
+    assert.ok(cueLine, 'Expected a Trickplay cue line');
+    const rawCueAsset = cueLine!.split('#')[0].trim();
+    const cueAssetUrl = rawCueAsset.startsWith('/api/native/') ? rawCueAsset.replace('/api/native/', '/api/mobile/v1/native/') : rawCueAsset;
+    const sprite = await app.inject({ url: cueAssetUrl, headers });
     assert.equal(sprite.headers['content-type'], 'image/jpeg');
     assert.ok(sprite.rawPayload.length > 0);
     let preview = await app.inject(item.videoStreamUrl);

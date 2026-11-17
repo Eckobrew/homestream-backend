@@ -5,6 +5,7 @@ import { ensureYouTubeTables, processNextDownload, pollAllSubscribedChannels } f
 import { ensureMusicTables, startDownloadMonitor, processNextPlaylistTrack } from './lib/music';
 import { ensureBookTables, startBooksMonitor } from './lib/books';
 import { startNativeLibraryMonitor } from './lib/native-media';
+import { startBackupScheduler } from './lib/backups';
 import { getMediaEngineSettings } from './lib/media-settings';
 import { getNativeHardwareAcceleration } from './lib/native-hardware';
 const app = createApp();
@@ -19,6 +20,7 @@ try {
   ensureBookTables();
   startBooksMonitor();
   startNativeLibraryMonitor();
+  startBackupScheduler();
   void getNativeHardwareAcceleration(getMediaEngineSettings().vaapiDevice).catch(() => {});
   startPreviewCleanup();
   processNextPlaylistTrack();

@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { createApp } from '../src/app';
 import { ensureNativeMediaTables } from '../src/lib/native-media';
+import { saveMediaEngineSettings } from '../src/lib/media-settings';
 import { saveHomeflixProfiles } from '../src/lib/profiles';
 import { stateDatabase } from '../src/state/database';
 
@@ -32,6 +33,13 @@ test('imports Jellyfin movie and episode history into native playback without re
   process.env.JELLYFIN_API_KEY = 'jellyfin-fixture-key';
   const app = createApp();
   try {
+    saveMediaEngineSettings({
+      mediaEngine: 'native',
+      libraries: [
+        { id: 'movies', name: 'Movies', type: 'movie', enabled: true, paths: [join(directory, 'movies')], scanIntervalMinutes: 60, preferNfo: false, autoDownloadArtwork: false },
+        { id: 'tv', name: 'TV', type: 'tv', enabled: true, paths: [join(directory, 'tv')], scanIntervalMinutes: 60, preferNfo: false, autoDownloadArtwork: false },
+      ],
+    });
     ensureNativeMediaTables();
     await saveHomeflixProfiles([{
       id: 'home-viewer', jellyfinUserId: 'jellyfin-viewer', name: 'Viewer', avatarColor: '', avatarBg: '', initials: 'V',
@@ -40,20 +48,33 @@ test('imports Jellyfin movie and episode history into native playback without re
     const storeItem = db.prepare('INSERT INTO native_media_items (id, type, title, tmdb_id, library_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
     storeItem.run('nat-film', 'Movie', 'Film', 101, 'movies', date, date);
     storeItem.run('nat-series', 'Series', 'Series', 102, 'tv', date, date);
+    db.prepare('INSERT INTO native_media_files (id, item_id, file_path, file_size, library_id, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .run('nat-film-file', 'nat-film', join(directory, 'movies', 'Film.mp4'), 1000, 'movies', date);
     db.prepare('INSERT INTO native_media_episodes (id, series_id, season_number, episode_number, name) VALUES (?, ?, ?, ?, ?)')
       .run('nat-episode', 'nat-series', 1, 2, 'Episode');
-    const importHistory = () => app.inject({
-      method: 'POST', url: '/api/v1/native/library', payload: { action: 'importJellyfinHistory' },
+    const importHistory = (extra: Record<string, unknown> = {}) => app.inject({
+      method: 'POST', url: '/api/v1/native/library', payload: { action: 'importJellyfinHistory', ...extra },
     });
+    const preview = await importHistory({ dryRun: true });
+    assert.equal(preview.statusCode, 200, preview.body);
+    assert.equal(preview.json().dryRun, true);
+    assert.equal(preview.json().imported, 2);
+    assert.equal(preview.json().unmatched, 1);
+    assert.equal(preview.json().unmatchedItems.length, 1);
     const result = await importHistory();
     assert.equal(result.statusCode, 200, result.body);
-    assert.deepEqual(result.json(), { success: true, imported: 2, unmatched: 1, alreadyPresent: 0 });
+    assert.equal(result.json().imported, 2);
+    assert.equal(result.json().unmatched, 1);
+    assert.equal(result.json().alreadyPresent, 0);
     const detail = await app.inject('/api/v1/media/nat-film?userId=home-viewer');
     assert.equal(detail.json().item.playbackPositionTicks, 120_000_000);
     const episode = await app.inject('/api/v1/media/nat-episode?userId=home-viewer');
     assert.equal(episode.json().item.played, true);
     db.prepare("UPDATE native_watch_history SET position_ticks = 210000000 WHERE item_id = 'nat-film'").run();
-    assert.deepEqual((await importHistory()).json(), { success: true, imported: 0, unmatched: 1, alreadyPresent: 2 });
+    const rerun = (await importHistory()).json();
+    assert.equal(rerun.imported, 0);
+    assert.equal(rerun.unmatched, 1);
+    assert.equal(rerun.alreadyPresent, 2);
     assert.equal((await app.inject('/api/v1/media/nat-film?userId=home-viewer')).json().item.playbackPositionTicks, 210_000_000);
   } finally {
     await app.close();

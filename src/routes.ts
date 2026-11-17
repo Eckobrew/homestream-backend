@@ -20,6 +20,9 @@ import * as serviceAccounts from './services/accounts/handler';
 import * as serviceNativeLibrary from './services/native/library/handler';
 import * as serviceNativeStream from './services/native/stream/handler';
 import * as serviceSyncPlay from './services/syncplay/handler';
+import * as serviceWatchlist from './services/watchlist/handler';
+import * as serviceProfilePrefs from './services/profile-prefs/handler';
+import * as serviceCollections from './services/collections/handler';
 import * as service13 from './services/request/handler';
 import * as service14 from './services/search/handler';
 import * as service15 from './services/stream/download/handler';
@@ -86,6 +89,9 @@ export const routes = [
   { path: "/api/native/library", methods: ["GET", "POST"], service: serviceNativeLibrary },
   { path: "/api/native/stream", methods: ["GET"], service: serviceNativeStream },
   { path: "/api/syncplay", methods: ["GET", "POST"], service: serviceSyncPlay },
+  { path: "/api/watchlist", methods: ["GET", "POST", "DELETE"], service: serviceWatchlist },
+  { path: "/api/profile-prefs", methods: ["GET", "POST", "DELETE"], service: serviceProfilePrefs },
+  { path: "/api/collections", methods: ["GET", "POST", "DELETE"], service: serviceCollections },
   { path: "/api/request", methods: ["GET", "POST"], service: service13 },
   { path: "/api/search", methods: ["GET"], service: service14 },
   { path: "/api/stream/download", methods: ["GET"], service: service15 },

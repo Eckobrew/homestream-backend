@@ -4,7 +4,7 @@ export type MediaType = 'Movie' | 'Series' | 'Episode';
 export type AvailabilityStatus = 'available' | 'partially_available' | 'requested' | 'processing' | 'not_requested';
 
 export interface SkipSegment {
-  type: 'intro' | 'credits';
+  type: 'intro' | 'recap' | 'credits';
   startSeconds: number;
   endSeconds: number;
   title?: string;
@@ -32,6 +32,7 @@ export interface SubtitleTrack {
   language: string;
   isDefault?: boolean;
   isForced?: boolean;
+  burnIn?: boolean;
   src: string;
 }
 

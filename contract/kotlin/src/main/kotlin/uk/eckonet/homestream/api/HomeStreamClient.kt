@@ -143,6 +143,7 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         query.`hls`?.let { url.addQueryParameter("hls", it.toString()) }
         query.`segment`?.let { url.addQueryParameter("segment", it.toString()) }
         query.`trickplay`?.let { url.addQueryParameter("trickplay", it.toString()) }
+        query.`rev`?.let { url.addQueryParameter("rev", it.toString()) }
         query.`asset`?.let { url.addQueryParameter("asset", it.toString()) }
         query.`artwork`?.let { url.addQueryParameter("artwork", it.toString()) }
         query.`subtitle`?.let { url.addQueryParameter("subtitle", it.toString()) }
@@ -698,6 +699,64 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         return executeStream(url.build().toString(), "GET", null, range)
     }
 
+    fun `web_get_watchlist`(query: WebGetWatchlistQuery): ApiResponse<WebGetWatchlistResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("watchlist")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `web_post_watchlist`(query: WebPostWatchlistQuery, body: WebPostWatchlistBody): ApiResponse<WebPostWatchlistResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("watchlist")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
+    fun `web_delete_watchlist`(query: WebDeleteWatchlistQuery): ApiResponse<WebDeleteWatchlistResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("watchlist")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`itemId`.let { url.addQueryParameter("itemId", it.toString()) }
+        return execute(url.build().toString(), "DELETE", null, null)
+    }
+
+    fun `web_get_profile_prefs`(query: WebGetProfilePrefsQuery): ApiResponse<WebGetProfilePrefsResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("profile-prefs")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`seriesId`?.let { url.addQueryParameter("seriesId", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `web_post_profile_prefs`(query: WebPostProfilePrefsQuery, body: WebPostProfilePrefsBody): ApiResponse<WebPostProfilePrefsResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("profile-prefs")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
+    fun `web_delete_profile_prefs`(query: WebDeleteProfilePrefsQuery): ApiResponse<WebDeleteProfilePrefsResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("profile-prefs")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`seriesId`.let { url.addQueryParameter("seriesId", it.toString()) }
+        return execute(url.build().toString(), "DELETE", null, null)
+    }
+
+    fun `web_get_collections`(query: WebGetCollectionsQuery): ApiResponse<WebGetCollectionsResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("collections")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `web_post_collections`(query: WebPostCollectionsQuery, body: WebPostCollectionsBody): ApiResponse<WebPostCollectionsResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("collections")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
+    fun `web_delete_collections`(query: WebDeleteCollectionsQuery): ApiResponse<WebDeleteCollectionsResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("collections")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`id`.let { url.addQueryParameter("id", it.toString()) }
+        return execute(url.build().toString(), "DELETE", null, null)
+    }
+
     fun `mobile_get_home`(query: MobileGetHomeQuery): ApiResponse<HomeResponse> {
         val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("home")
         query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
@@ -771,6 +830,7 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         query.`hls`?.let { url.addQueryParameter("hls", it.toString()) }
         query.`segment`?.let { url.addQueryParameter("segment", it.toString()) }
         query.`trickplay`?.let { url.addQueryParameter("trickplay", it.toString()) }
+        query.`rev`?.let { url.addQueryParameter("rev", it.toString()) }
         query.`asset`?.let { url.addQueryParameter("asset", it.toString()) }
         query.`artwork`?.let { url.addQueryParameter("artwork", it.toString()) }
         query.`subtitle`?.let { url.addQueryParameter("subtitle", it.toString()) }
@@ -1292,6 +1352,64 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
         query.`deviceId`.let { url.addQueryParameter("deviceId", it.toString()) }
         return executeStream(url.build().toString(), "GET", null, range)
+    }
+
+    fun `mobile_get_watchlist`(query: MobileGetWatchlistQuery): ApiResponse<MobileGetWatchlistResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("watchlist")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `mobile_post_watchlist`(query: MobilePostWatchlistQuery, body: MobilePostWatchlistBody): ApiResponse<MobilePostWatchlistResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("watchlist")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
+    fun `mobile_delete_watchlist`(query: MobileDeleteWatchlistQuery): ApiResponse<MobileDeleteWatchlistResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("watchlist")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`itemId`.let { url.addQueryParameter("itemId", it.toString()) }
+        return execute(url.build().toString(), "DELETE", null, null)
+    }
+
+    fun `mobile_get_profile_prefs`(query: MobileGetProfilePrefsQuery): ApiResponse<MobileGetProfilePrefsResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("profile-prefs")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`seriesId`?.let { url.addQueryParameter("seriesId", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `mobile_post_profile_prefs`(query: MobilePostProfilePrefsQuery, body: MobilePostProfilePrefsBody): ApiResponse<MobilePostProfilePrefsResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("profile-prefs")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
+    fun `mobile_delete_profile_prefs`(query: MobileDeleteProfilePrefsQuery): ApiResponse<MobileDeleteProfilePrefsResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("profile-prefs")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`seriesId`.let { url.addQueryParameter("seriesId", it.toString()) }
+        return execute(url.build().toString(), "DELETE", null, null)
+    }
+
+    fun `mobile_get_collections`(query: MobileGetCollectionsQuery): ApiResponse<MobileGetCollectionsResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("collections")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `mobile_post_collections`(query: MobilePostCollectionsQuery, body: MobilePostCollectionsBody): ApiResponse<MobilePostCollectionsResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("collections")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        return execute(url.build().toString(), "POST", json.encodeToString(body), null)
+    }
+
+    fun `mobile_delete_collections`(query: MobileDeleteCollectionsQuery): ApiResponse<MobileDeleteCollectionsResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("collections")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`id`.let { url.addQueryParameter("id", it.toString()) }
+        return execute(url.build().toString(), "DELETE", null, null)
     }
 
     fun `mobile_get_discovery`(query: MobileGetDiscoveryQuery): ApiResponse<MobileGetDiscoveryResponse> {
