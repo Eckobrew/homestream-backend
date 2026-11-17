@@ -7450,6 +7450,34 @@
             }
           },
           {
+            "name": "download",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          {
+            "name": "prepare",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          {
+            "name": "maxHeight",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d+$",
+              "maxLength": 16
+            }
+          },
+          {
             "name": "Range",
             "in": "header",
             "required": false,
@@ -52503,6 +52531,34 @@
             "schema": {
               "type": "string",
               "maxLength": 8192
+            }
+          },
+          {
+            "name": "download",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          {
+            "name": "prepare",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          },
+          {
+            "name": "maxHeight",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d+$",
+              "maxLength": 16
             }
           },
           {

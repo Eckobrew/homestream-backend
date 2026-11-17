@@ -816,7 +816,10 @@ data class WebGetNativeStreamQuery(
     @SerialName("artwork") val `artwork`: String? = null,
     @SerialName("subtitle") val `subtitle`: String? = null,
     @SerialName("index") val `index`: String? = null,
-    @SerialName("sidecar") val `sidecar`: String? = null
+    @SerialName("sidecar") val `sidecar`: String? = null,
+    @SerialName("download") val `download`: String? = null,
+    @SerialName("prepare") val `prepare`: String? = null,
+    @SerialName("maxHeight") val `maxHeight`: String? = null
 )
 
 @Serializable
@@ -2085,7 +2088,10 @@ data class MobileGetNativeStreamQuery(
     @SerialName("artwork") val `artwork`: String? = null,
     @SerialName("subtitle") val `subtitle`: String? = null,
     @SerialName("index") val `index`: String? = null,
-    @SerialName("sidecar") val `sidecar`: String? = null
+    @SerialName("sidecar") val `sidecar`: String? = null,
+    @SerialName("download") val `download`: String? = null,
+    @SerialName("prepare") val `prepare`: String? = null,
+    @SerialName("maxHeight") val `maxHeight`: String? = null
 )
 
 @Serializable

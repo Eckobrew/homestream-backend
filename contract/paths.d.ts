@@ -6083,6 +6083,9 @@ export interface operations {
                 subtitle?: string;
                 index?: string;
                 sidecar?: string;
+                download?: string;
+                prepare?: string;
+                maxHeight?: string;
             };
             header?: {
                 Range?: string;
@@ -24448,6 +24451,9 @@ export interface operations {
                 subtitle?: string;
                 index?: string;
                 sidecar?: string;
+                download?: string;
+                prepare?: string;
+                maxHeight?: string;
             };
             header?: {
                 Range?: string;

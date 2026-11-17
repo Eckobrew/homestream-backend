@@ -8,6 +8,7 @@ import { withParentalControls } from '@/lib/parental-controls';
 import {
   extractNativeSubtitleVtt,
   getNativeTranscodeSession,
+  prepareOfflineMp4,
   resolveNativeFileByItemOrFileId,
 } from '@/lib/native-transcode';
 
@@ -107,12 +108,28 @@ async function handleGET(request: HttpRequest) {
     });
   }
 
-  // 4. Direct Play HTTP 206 byte-range video stream
+  // 4. Direct Play HTTP 206 byte-range video stream (or finite MP4 offline download)
   const fileId = searchParams.get('fileId') || searchParams.get('itemId') || '';
   const versionId = searchParams.get('versionId') || undefined;
   const fileRow = resolveNativeFileByItemOrFileId(fileId, versionId);
   if (!fileRow || !fs.existsSync(fileRow.file_path)) {
     return HttpResponse.json({ error: 'Media file not found' }, { status: 404 });
+  }
+
+  if (searchParams.get('download') === '1') {
+    const rawMaxHeight = searchParams.get('maxHeight');
+    const maxHeight = rawMaxHeight && /^\d+$/.test(rawMaxHeight) && Number(rawMaxHeight) > 0 ? Number(rawMaxHeight) : undefined;
+    const job = prepareOfflineMp4(fileRow, maxHeight);
+    if (searchParams.get('prepare') === '1') {
+      if (job.status === 'failed') return HttpResponse.json({ status: 'failed', error: job.error || 'Offline export failed' }, { status: 500 });
+      if (job.status === 'preparing') return HttpResponse.json({ status: 'preparing' }, { status: 202 });
+      return HttpResponse.json({ status: 'ready' }, { status: 200 });
+    }
+    if (job.status === 'failed') return HttpResponse.json({ error: job.error || 'Offline MP4 delivery failed' }, { status: 500 });
+    if (job.status === 'preparing' || !job.targetPath || !fs.existsSync(job.targetPath)) {
+      return HttpResponse.json({ status: 'preparing' }, { status: 202 });
+    }
+    return streamLocalFile(request, job.targetPath, fs.statSync(job.targetPath).size, 'video/mp4');
   }
 
   return streamLocalFile(request, fileRow.file_path, fs.statSync(fileRow.file_path).size, mimeForFile(fileRow.file_path));

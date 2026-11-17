@@ -149,6 +149,9 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         query.`subtitle`?.let { url.addQueryParameter("subtitle", it.toString()) }
         query.`index`?.let { url.addQueryParameter("index", it.toString()) }
         query.`sidecar`?.let { url.addQueryParameter("sidecar", it.toString()) }
+        query.`download`?.let { url.addQueryParameter("download", it.toString()) }
+        query.`prepare`?.let { url.addQueryParameter("prepare", it.toString()) }
+        query.`maxHeight`?.let { url.addQueryParameter("maxHeight", it.toString()) }
         return executeStream(url.build().toString(), "GET", null, range)
     }
 
@@ -836,6 +839,9 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         query.`subtitle`?.let { url.addQueryParameter("subtitle", it.toString()) }
         query.`index`?.let { url.addQueryParameter("index", it.toString()) }
         query.`sidecar`?.let { url.addQueryParameter("sidecar", it.toString()) }
+        query.`download`?.let { url.addQueryParameter("download", it.toString()) }
+        query.`prepare`?.let { url.addQueryParameter("prepare", it.toString()) }
+        query.`maxHeight`?.let { url.addQueryParameter("maxHeight", it.toString()) }
         return executeStream(url.build().toString(), "GET", null, range)
     }
 

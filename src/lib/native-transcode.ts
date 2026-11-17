@@ -267,7 +267,10 @@ export function getNativeTranscodeSession(sessionId: string): ActiveStreamSessio
   return sess || null;
 }
 
-export function listNativeSubtitlesForFile(file: NativeMediaFileRow): SubtitleTrack[] {
+export function listNativeSubtitlesForFile(
+  file: NativeMediaFileRow,
+  prefs?: { subtitleLang?: string; subtitleMode?: string }
+): SubtitleTrack[] {
   const tracks: SubtitleTrack[] = [];
   const settings = getMediaEngineSettings();
   try {
@@ -328,15 +331,23 @@ export function listNativeSubtitlesForFile(file: NativeMediaFileRow): SubtitleTr
     // Ignore sidecar errors
   }
 
-  const { subtitleMode, defaultSubtitleLanguage } = getMediaEngineSettings();
-  if (subtitleMode === 'none') {
+  const settingsSub = getMediaEngineSettings();
+  const effectiveMode = prefs?.subtitleMode && ['default', 'forced', 'always', 'none'].includes(prefs.subtitleMode)
+    ? prefs.subtitleMode
+    : (prefs?.subtitleMode === 'auto' ? 'default' : settingsSub.subtitleMode);
+  const prefLang = (prefs?.subtitleLang || settingsSub.defaultSubtitleLanguage || '').toLowerCase();
+  if (effectiveMode === 'none') {
     for (const t of tracks) t.isDefault = false;
-  } else if (subtitleMode === 'forced') {
+  } else if (effectiveMode === 'forced') {
     for (const t of tracks) t.isDefault = Boolean(t.isForced);
-  } else if (subtitleMode === 'always' && tracks.length > 0 && !tracks.some((t) => t.isDefault)) {
-    const pref = defaultSubtitleLanguage.toLowerCase();
-    const match = tracks.find((t) => (t.language || '').toLowerCase() === pref) || tracks[0];
-    match.isDefault = true;
+  } else if (effectiveMode === 'always' && tracks.length > 0) {
+    const match = (prefLang ? tracks.find((t) => (t.language || '').toLowerCase().startsWith(prefLang)) : undefined)
+      || tracks.find((t) => t.isDefault)
+      || tracks[0];
+    for (const t of tracks) t.isDefault = t === match;
+  } else if (prefLang && tracks.length > 0 && !tracks.some((t) => t.isDefault)) {
+    const match = tracks.find((t) => (t.language || '').toLowerCase().startsWith(prefLang));
+    if (match) match.isDefault = true;
   }
 
   return tracks;
@@ -573,12 +584,15 @@ export async function negotiateNativePlayback(
   }
 
   const trickplayUrl = resolveTrickplayUrlForFile(file as NativeMediaFileRow & { source_revision?: number });
-  const subtitles = listNativeSubtitlesForFile(file);
-  const audioTracks = nativeAudioTracks(file);
   const epRow = file.episode_id
     ? (db.prepare('SELECT series_id FROM native_media_episodes WHERE id = ?').get(file.episode_id) as { series_id?: string } | undefined)
     : undefined;
   const profilePrefs = getProfileMediaPrefs(profileId, epRow?.series_id);
+  const subtitles = listNativeSubtitlesForFile(file, {
+    subtitleLang: profilePrefs.effective.subtitleLang,
+    subtitleMode: profilePrefs.effective.subtitleMode,
+  });
+  const audioTracks = nativeAudioTracks(file);
   const preferredAudioLang = profilePrefs.effective.audioLang || settings.defaultAudioLanguage;
   const preferredTrack = preferredAudioLang
     ? audioTracks.find(track => track.language?.toLowerCase().startsWith(preferredAudioLang.toLowerCase()))
@@ -657,4 +671,109 @@ export async function negotiateNativePlayback(
     subtitles,
     audioTracks,
   };
+}
+
+type OfflineExportJob = {
+  status: 'preparing' | 'ready' | 'failed';
+  targetPath?: string;
+  error?: string;
+  updatedAt: number;
+};
+
+const offlineExportJobs = new Map<string, OfflineExportJob>();
+const MAX_OFFLINE_CACHE_BYTES = 2 * 1024 * 1024 * 1024; // 2 GiB cap
+
+function pruneOfflineCache(offlineDir: string): void {
+  try {
+    if (!fs.existsSync(offlineDir)) return;
+    const entries = fs.readdirSync(offlineDir)
+      .filter((n) => n.endsWith('.mp4'))
+      .map((n) => {
+        const full = path.join(offlineDir, n);
+        const st = fs.statSync(full);
+        return { full, size: st.size, mtimeMs: st.mtimeMs };
+      })
+      .sort((a, b) => a.mtimeMs - b.mtimeMs);
+    let total = entries.reduce((sum, e) => sum + e.size, 0);
+    for (const e of entries) {
+      if (total <= MAX_OFFLINE_CACHE_BYTES) break;
+      try {
+        fs.unlinkSync(e.full);
+        total -= e.size;
+      } catch {}
+    }
+  } catch {}
+}
+
+export function prepareOfflineMp4(file: NativeMediaFileRow, maxHeight?: number): OfflineExportJob {
+  if (!fs.existsSync(file.file_path)) {
+    return { status: 'failed', error: 'Source file not found', updatedAt: Date.now() };
+  }
+  const ext = path.extname(file.file_path).toLowerCase();
+  const isSourceMp4 = ext === '.mp4' || ext === '.m4v';
+  if (!maxHeight && isSourceMp4) {
+    return { status: 'ready', targetPath: file.file_path, updatedAt: Date.now() };
+  }
+
+  const settings = getMediaEngineSettings();
+  const rev = (file as NativeMediaFileRow & { source_revision?: number }).source_revision || 1;
+  const heightTag = maxHeight ? `${maxHeight}p` : 'orig';
+  const offlineDir = path.join(settings.transcodeTempDir || '/tmp/homestream-transcode', 'offline');
+  fs.mkdirSync(offlineDir, { recursive: true });
+  const target = path.join(offlineDir, `${path.basename(file.id)}-r${rev}-${heightTag}.mp4`);
+  if (fs.existsSync(target) && fs.statSync(target).size > 0) {
+    const ready: OfflineExportJob = { status: 'ready', targetPath: target, updatedAt: Date.now() };
+    offlineExportJobs.set(target, ready);
+    return ready;
+  }
+
+  const existing = offlineExportJobs.get(target);
+  if (existing && existing.status === 'preparing') {
+    return existing;
+  }
+
+  const activePreparing = Array.from(offlineExportJobs.values()).filter((j) => j.status === 'preparing').length;
+  if (activePreparing >= 1 || getActiveTranscodeCount() >= 3) {
+    return { status: 'preparing', updatedAt: Date.now() };
+  }
+
+  const job: OfflineExportJob = { status: 'preparing', updatedAt: Date.now() };
+  offlineExportJobs.set(target, job);
+  pruneOfflineCache(offlineDir);
+
+  const tmp = `${target}.${process.pid}.tmp`;
+  void (async () => {
+    try {
+      const args = [
+        '-y', '-v', 'error',
+        '-i', file.file_path,
+        '-map', '0:v:0', '-map', '0:a:0?',
+      ];
+      if (maxHeight) {
+        args.push('-vf', `scale=-2:'min(${maxHeight},ih)'`, '-c:v', 'libx264', '-preset', 'fast', '-crf', '22', '-pix_fmt', 'yuv420p');
+      } else if ((file.video_codec || '').toLowerCase() === 'h264') {
+        args.push('-c:v', 'copy');
+      } else {
+        args.push('-c:v', 'libx264', '-preset', 'fast', '-crf', '22', '-pix_fmt', 'yuv420p');
+      }
+      args.push('-c:a', 'aac', '-b:a', '192k', '-ac', '2', '-f', 'mp4', '-movflags', '+faststart', tmp);
+      await execFileAsync('ffmpeg', args, { timeout: 600_000 });
+      if (fs.existsSync(tmp) && fs.statSync(tmp).size > 0) {
+        fs.renameSync(tmp, target);
+        offlineExportJobs.set(target, { status: 'ready', targetPath: target, updatedAt: Date.now() });
+      } else {
+        offlineExportJobs.set(target, { status: 'failed', error: 'Encoded output was empty', updatedAt: Date.now() });
+      }
+    } catch (err) {
+      offlineExportJobs.set(target, {
+        status: 'failed',
+        error: err instanceof Error ? err.message : 'Offline encode failed',
+        updatedAt: Date.now(),
+      });
+    } finally {
+      try { if (fs.existsSync(tmp)) fs.unlinkSync(tmp); } catch {}
+    }
+  })();
+
+  return job;
 }
