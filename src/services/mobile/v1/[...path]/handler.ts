@@ -229,6 +229,11 @@ async function dispatchContent(request: HttpRequest, context: Context) {
     return HttpResponse.json({ items: getNativeResumeItems((await resolveProfileId(profileId)) || 'default') });
   }
 
+  if ((route === 'profiles' || route.startsWith('profiles/')) &&
+      !session && !isLocallyPairedDeviceToken(request.headers.get('authorization')?.replace(/^Bearer /i, '') || '')) {
+    return HttpResponse.json({ error: 'Profiles are available only on signed-in sessions or locally paired household devices' }, { status: 403 });
+  }
+
   if (get && route === 'profiles') {
     const all = await getHomeflixProfiles();
     const profiles = session?.accountId ? profilesForAccount(all, session.accountId) : all;
