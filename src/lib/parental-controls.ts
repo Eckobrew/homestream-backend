@@ -5,7 +5,7 @@ import { peerIdentity } from '@/request-context';
 import { headers } from '@/request-context';
 import { HttpRequest, HttpResponse } from '@/http';
 import { getHomeflixProfiles } from './profiles';
-import { registeredDevice, selectDeviceProfile } from './devices';
+import { registeredDevice, selectDeviceProfile, selectedTokenProfile } from './devices';
 import { readSession } from './session';
 import { isKids, KIDS_LIMITS, kidsPolicyRevision, parentPinConfigured, requireParentPin } from './parental-store';
 import { requestParentalProfile, withParentalProfile } from './parental-runtime';
@@ -18,7 +18,18 @@ export async function activeProfile(request: HttpRequest): Promise<UserProfile |
   const profiles = await getHomeflixProfiles();
   const bearer = request.headers.get('authorization')?.replace(/^Bearer /i, '') || '';
   const session = await readSession(bearer || request.cookies.get('homeflix_session')?.value, bearer ? 'mobile' : 'web');
-  if (session) return profiles.find(p => p.id === session.id || p.jellyfinUserId === session.id) || { id: session.id, name: session.name, jellyfinUserId: session.id, avatarColor: '', avatarBg: '', initials: session.name.slice(0, 2) };
+  if (session) {
+    const candidateId =
+      (bearer ? selectedTokenProfile(bearer) : undefined) ||
+      request.nextUrl.searchParams.get('userId') ||
+      request.nextUrl.searchParams.get('profileId') ||
+      request.cookies.get('homeflix_profile_id')?.value;
+    if (candidateId) {
+      const chosen = profiles.find(p => p.id === candidateId || p.jellyfinUserId === candidateId);
+      if (chosen) return chosen;
+    }
+    return profiles.find(p => p.id === session.id || p.jellyfinUserId === session.id) || profiles[0] || { id: session.id, name: session.name, jellyfinUserId: session.id, avatarColor: '', avatarBg: '', initials: session.name.slice(0, 2) };
+  }
   const device = registeredDevice(bearer);
   const kids = profiles.filter(isKids).sort((a, b) => KIDS_LIMITS[a.kidsRating] - KIDS_LIMITS[b.kidsRating]);
   if (device) {

@@ -19,9 +19,12 @@ export function withJellyfinSession<Args extends unknown[], Result>(handler: (..
     const credentials = session?.accessToken ? { id: session.id, accessToken: session.accessToken } : null;
     const request = args[0];
     if (session && request instanceof HttpRequest && request.method === 'GET' && !(await isRequestLocalOrTailscale(request)).isLocalOrTailscale) {
-      const url = request.nextUrl.clone();
-      url.searchParams.set('userId', session.id);
-      args[0] = new HttpRequest(url, { headers: request.headers, signal: request.signal });
+      if (!request.nextUrl.searchParams.get('userId')) {
+        const effectiveProfileId = new RequestCookies(requestHeaders).get('homeflix_profile_id')?.value || session.id;
+        const url = request.nextUrl.clone();
+        url.searchParams.set('userId', effectiveProfileId);
+        args[0] = new HttpRequest(url, { headers: request.headers, signal: request.signal });
+      }
     }
     return sessions.run(credentials, () => handler(...args));
   };

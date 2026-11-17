@@ -30,8 +30,26 @@ export function isValidDeviceToken(token: string): boolean {
   return true;
 }
 export const isLocallyPairedDeviceToken = (token: string) => registeredDevice(token)?.pairedLocally === true;
+export function selectedTokenProfile(token: string): string | undefined {
+  if (!token) return undefined;
+  return loadDevices()[deviceHash(token)]?.activeProfileId;
+}
 export function selectDeviceProfile(token: string, profileId: string) {
-  const device = registeredDevice(token);
-  if (!device) throw new Error('Device not registered');
-  const devices = loadDevices(); device.activeProfileId = profileId; devices[deviceHash(token)] = device; saveDevices(devices);
+  if (!token) throw new Error('Device not registered');
+  const devices = loadDevices();
+  const key = deviceHash(token);
+  const existing = devices[key];
+  const now = new Date().toISOString();
+  devices[key] = existing
+    ? { ...existing, activeProfileId: profileId, lastSeen: now }
+    : {
+        deviceId: 'session-device',
+        deviceName: 'HomeStream Client',
+        client: 'android',
+        pairedAt: now,
+        lastSeen: now,
+        pairedLocally: true,
+        activeProfileId: profileId,
+      };
+  saveDevices(devices);
 }

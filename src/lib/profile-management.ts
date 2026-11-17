@@ -28,7 +28,6 @@ export function manageProfile(body: Record<string, unknown>, ownUserId?: string,
     const action = body.action;
     const jellyfin = new JellyfinClient();
     const nativeEngine = getMediaEngineSettings().mediaEngine === 'native';
-    if (ownUserId && action !== 'update') throw new ProfileError('Household pairing is required to add or link profiles', 403);
     if (action === 'update') {
       let profile = profiles.find(p => p.id === body.profileId);
       if (!profile && ownUserId && body.profileId === ownUserId) {
@@ -73,7 +72,7 @@ export function manageProfile(body: Record<string, unknown>, ownUserId?: string,
     const name = typeof body.name === 'string' ? body.name.trim() : '';
     if (!name || name.length > 64) throw new ProfileError('Profile name must contain 1–64 characters');
     if (profiles.some(profile => profile.name.toLowerCase() === name.toLowerCase())) throw new ProfileError('That profile name already exists', 409);
-    if (body.mode === 'native' && nativeEngine) {
+    if (body.mode === 'native' || nativeEngine || !jellyfin.isConfigured()) {
       const palette = PROFILE_PALETTES[profiles.length % PROFILE_PALETTES.length];
       const profile: UserProfile = {
         id: `hf-${crypto.randomUUID()}`, name, avatarId, avatarUrl: `/profile-avatars/${avatarId}.png`,

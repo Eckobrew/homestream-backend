@@ -102,8 +102,7 @@ function migrateLegacyProfilesIfNeeded() {
 
   let updated = false;
   const migratedProfiles = existingProfiles.map((p) => {
-    const lower = p.name.trim().toLowerCase();
-    if (!p.accountId && (lower === 'nathan' || lower === 'mirelle')) {
+    if (!p.accountId) {
       updated = true;
       return { ...p, accountId };
     }
@@ -252,6 +251,8 @@ export async function authenticateAccount(
 }
 
 export function profilesForAccount(profiles: UserProfile[], accountId: string | undefined): UserProfile[] {
-  if (!accountId) return [];
-  return profiles.filter((p) => p.accountId === accountId);
+  if (!accountId) return profiles;
+  const primaryId = getPrimaryAccount()?.id;
+  const matched = profiles.filter((p) => p.accountId === accountId || (!p.accountId && accountId === primaryId));
+  return matched.length > 0 ? matched : profiles;
 }

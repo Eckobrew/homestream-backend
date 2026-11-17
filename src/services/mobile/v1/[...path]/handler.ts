@@ -25,7 +25,7 @@ import { POST as progress } from '@/services/playback/progress/handler';
 import { GET as subtitles } from '@/services/subtitles/handler';
 import { GET as requestOptions, POST as requestMedia } from '@/services/request/handler';
 import { getHomeflixProfiles, saveHomeflixProfiles } from '@/lib/profiles';
-import { authenticateAccount, createAccount, profilesForAccount } from '@/lib/accounts';
+import { authenticateAccount, createAccount, listAccounts, profilesForAccount } from '@/lib/accounts';
 import { GET as search } from '@/services/search/handler';
 import { GET as downloads, POST as downloadsPost } from '@/services/downloads/handler';
 import { GET as categories } from '@/services/categories/[type]/handler';
@@ -95,7 +95,16 @@ async function dispatch(request: HttpRequest, context: Context) {
   if ((get || request.method === 'HEAD') && route === 'youtube/thumbnail') return youtubeService.GET(request);
   if ((get || request.method === 'HEAD') && route === 'music/artwork') return musicService.GET(request);
   if ((get || request.method === 'HEAD') && route === 'books/cover') return booksService.GET(request);
-  if (get && route === 'auth/users') return HttpResponse.json({ users: [] });
+  if (get && route === 'auth/users') {
+    const accs = listAccounts().map(a => ({
+      id: a.id,
+      name: a.displayName || a.username,
+      avatarColor: 'from-red-600 to-red-800',
+      avatarBg: 'bg-red-600',
+      initials: (a.displayName || a.username).slice(0, 2).toUpperCase(),
+    }));
+    return HttpResponse.json({ users: accs });
+  }
   if (!get && route === 'auth/login') {
     if (!await allowLogin(request)) return HttpResponse.json({ error: 'Too many login attempts. Try again in a minute.' }, { status: 429 });
     if ((process.env.HOMESTREAM_MOBILE_TOKEN || '').length < 32) return HttpResponse.json({ error: 'Mobile API disabled' }, { status: 503 });
@@ -111,7 +120,9 @@ async function dispatch(request: HttpRequest, context: Context) {
       const accountProfiles = profilesForAccount(await getHomeflixProfiles(), account.id);
       const defaultProfile = accountProfiles[0];
       const user = { id: defaultProfile?.id || account.id, accountId: account.id, name: account.displayName };
-      return HttpResponse.json({ user, token: await createSession({ ...user, admin: account.isAdmin }, 'mobile') });
+      const token = await createSession({ ...user, admin: account.isAdmin }, 'mobile');
+      if (defaultProfile?.id) selectDeviceProfile(token, defaultProfile.id);
+      return HttpResponse.json({ user, token });
     }
     const config = getServerConfig();
     if (!config.jellyfinUrl) return HttpResponse.json({ error: 'Invalid username or password' }, { status: 401 });
@@ -175,15 +186,17 @@ async function dispatchContent(request: HttpRequest, context: Context) {
   const get = request.method === 'GET';
   const session = await readSession(request.headers.get('authorization')?.replace(/^Bearer /i, ''), 'mobile');
   if (session) {
+    const activeProf = await activeProfile(request);
+    const effectiveUserId = activeProf?.id || request.nextUrl.searchParams.get('userId') || session.id;
     const url = request.nextUrl.clone();
-    url.searchParams.set('userId', session.id);
+    url.searchParams.set('userId', effectiveUserId);
     const headers = new Headers(request.headers);
     headers.delete('cookie');
     let body: string | undefined;
     if (!get && request.method !== 'HEAD' && request.body) {
       const payload = await request.json().catch(() => null);
       if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return HttpResponse.json({ error: 'JSON object required' }, { status: 400 });
-      body = JSON.stringify({ ...payload, userId: session.id });
+      body = JSON.stringify({ ...payload, userId: payload.userId || effectiveUserId });
     }
     request = new HttpRequest(url, { method: request.method, headers, body, signal: request.signal });
   }
@@ -235,14 +248,11 @@ async function dispatchContent(request: HttpRequest, context: Context) {
     try { return HttpResponse.json({ items: await jellyfin.getResumeItems(true) }); }
     catch { return HttpResponse.json({ error: 'Resume history temporarily unavailable' }, { status: 503 }); }
   }
-  if ((route === 'profiles' || route.startsWith('profiles/')) &&
-      (session || !isLocallyPairedDeviceToken(request.headers.get('authorization')?.replace(/^Bearer /i, '') || ''))) {
-    return HttpResponse.json({ error: 'Profiles are available only on locally paired household devices' }, { status: 403 });
-  }
   if (get && route === 'profiles') {
     const all = await getHomeflixProfiles();
-    const profiles = session ? [all.find(p => (p.jellyfinUserId || p.id) === session.id) || { id: session.id, name: session.name, jellyfinUserId: session.id }] : all;
-    return HttpResponse.json({ profiles, canManage: !session, avatars: STOCK_AVATARS, parentPinConfigured: parentPinConfigured(), activeProfileId: (await activeProfile(request))?.id || '' });
+    const profiles = session?.accountId ? profilesForAccount(all, session.accountId) : all;
+    const canManage = session ? Boolean(session.admin) : true;
+    return HttpResponse.json({ profiles, canManage, avatars: STOCK_AVATARS, parentPinConfigured: parentPinConfigured(), activeProfileId: (await activeProfile(request))?.id || profiles[0]?.id || '' });
   }
   if (get && route === 'profiles/status') {
     const profile = await activeProfile(request);
@@ -275,7 +285,7 @@ async function dispatchContent(request: HttpRequest, context: Context) {
     const body = await request.json().catch(() => null);
     if (!body || typeof body !== 'object' || Array.isArray(body)) return HttpResponse.json({ error: 'Profile details required' }, { status: 400 });
     if (!await allowLogin(request)) return HttpResponse.json({ error: 'Too many profile changes. Try again shortly.' }, { status: 429 });
-    try { return HttpResponse.json({ success: true, ...await manageProfile(body, session?.id, session?.name) }); }
+    try { return HttpResponse.json({ success: true, ...await manageProfile(body, session && !session.admin ? session.id : undefined, session?.name) }); }
     catch (error) {
       if (error instanceof Error && error.message === 'Kids profiles must use a non-administrator Jellyfin account') return HttpResponse.json({ error: error.message }, { status: 403 });
       if (error instanceof ProfileError) return HttpResponse.json({ error: error.message }, { status: error.status });

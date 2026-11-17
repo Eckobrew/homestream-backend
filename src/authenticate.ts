@@ -15,11 +15,13 @@ export async function authenticate(request: HttpRequest): Promise<HttpRequest | 
   if (!local && !session && !setup) return HttpResponse.json({ error: 'Authentication required' }, { status: 401 });
   if ((path === '/api/config' || path === '/api/integrations' || path === '/api/downloads/manager' || path === '/api/native/library' || path === '/api/accounts' || (path === '/api/profiles' && request.method !== 'GET')) && !local && !session?.admin && !setup) return HttpResponse.json({ error: 'Administrator access required' }, { status: 403 });
   if (!local && session) {
+    const existingProfileCookie = request.cookies.get('homeflix_profile_id')?.value;
+    const effectiveProfileId = existingProfileCookie || request.nextUrl.searchParams.get('userId') || session.id;
     const headers = new Headers(request.headers);
     const cookies = request.cookies.getAll().filter(cookie => cookie.name !== 'homeflix_profile_id');
-    headers.set('cookie', [...cookies.map(c => `${c.name}=${encodeURIComponent(c.value)}`), `homeflix_profile_id=${encodeURIComponent(session.id)}`].join('; '));
+    headers.set('cookie', [...cookies.map(c => `${c.name}=${encodeURIComponent(c.value)}`), `homeflix_profile_id=${encodeURIComponent(effectiveProfileId)}`].join('; '));
     const url = request.nextUrl.clone();
-    url.searchParams.set('userId', session.id);
+    if (!url.searchParams.get('userId')) url.searchParams.set('userId', effectiveProfileId);
     // Preserve the body when rebuilding a Fetch request.
     return new HttpRequest(url, { method: request.method, headers, signal: request.signal, body: ['GET', 'HEAD'].includes(request.method) ? undefined : await request.arrayBuffer() });
   }

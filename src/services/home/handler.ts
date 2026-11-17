@@ -295,11 +295,10 @@ async function handleGET(request: HttpRequest) {
         const recentWatched = stateDatabase()
           .prepare(
             `SELECT m.id, m.title, m.type, m.tmdb_id as tmdbId
-             FROM native_watch_progress p
-             JOIN native_media_items m ON m.id = p.item_id
-             WHERE p.profile_id = ?
-             ORDER BY p.updated_at DESC
-             LIMIT 10`
+             FROM native_watch_history p
+             JOIN native_media_items m ON m.id = COALESCE(p.series_id, p.item_id)
+             ORDER BY CASE WHEN p.profile_id = ? THEN 0 ELSE 1 END, p.last_played_at DESC
+             LIMIT 15`
           )
           .all(targetUserId || 'default') as Array<{ id: string; title: string; type: string; tmdbId?: number }>;
         for (const row of recentWatched) {
