@@ -53,36 +53,43 @@ export async function resolveTorrentSource(release: {
   infoHash?: string;
   title?: string;
 }): Promise<string | Buffer | null> {
-  // 1. Direct magnet in magnetUrl or guid
-  if (release.magnetUrl && release.magnetUrl.startsWith('magnet:')) {
-    return release.magnetUrl;
+  const magnet = [release.magnetUrl, release.guid].find(value => value?.startsWith('magnet:'));
+  // Fetch the torrent before falling back to a bare hash: its metadata and tracker
+  // list are essential for starting without waiting on DHT metadata discovery.
+  if (release.downloadUrl && /^https?:\/\//i.test(release.downloadUrl)) {
+    try {
+      let url = release.downloadUrl;
+      const signal = AbortSignal.timeout(15000);
+      for (let redirects = 0; redirects <= 5; redirects++) {
+        const res = await fetch(url, { redirect: 'manual', signal });
+        const location = res.headers.get('location');
+        if (res.status >= 300 && res.status < 400 && location) {
+          await res.body?.cancel();
+          if (location.startsWith('magnet:')) return location;
+          const next = new URL(location, url);
+          if (!['http:', 'https:'].includes(next.protocol)) break;
+          url = next.href;
+          continue;
+        }
+        if (res.ok) {
+          const data = Buffer.from(await res.arrayBuffer());
+          if (data[0] === 100) return data; // A bencoded torrent dictionary.
+          const magnet = data.toString('utf8').trim();
+          if (magnet.startsWith('magnet:')) return magnet;
+        } else {
+          await res.body?.cancel();
+        }
+        break;
+      }
+    } catch {
+      // Do not log indexer URLs: they can contain API keys.
+      console.warn('[torrent-stream] Torrent metadata download failed; trying hash discovery');
+    }
   }
-  if (release.guid && release.guid.startsWith('magnet:')) {
-    return release.guid;
-  }
-  // 2. Direct infoHash
+  if (magnet) return magnet;
   if (release.infoHash && /^[a-fA-F0-9]{40}$/.test(release.infoHash)) {
     const dn = release.title ? `&dn=${encodeURIComponent(release.title)}` : '';
     return `magnet:?xt=urn:btih:${release.infoHash}${dn}`;
-  }
-  // 3. Follow downloadUrl (which may redirect 301/302 to magnet: or return .torrent buffer)
-  if (release.downloadUrl && /^https?:\/\//i.test(release.downloadUrl)) {
-    try {
-      const res = await fetch(release.downloadUrl, {
-        redirect: 'manual',
-        signal: AbortSignal.timeout(15000),
-      });
-      const location = res.headers.get('location');
-      if (location && location.startsWith('magnet:')) {
-        return location;
-      }
-      if (res.status === 200) {
-        const arrayBuf = await res.arrayBuffer();
-        return Buffer.from(arrayBuf);
-      }
-    } catch (e) {
-      console.warn('[resolveTorrentSource] Failed to fetch downloadUrl:', e);
-    }
   }
   return null;
 }
@@ -127,9 +134,12 @@ export function getOrCreateTorrentEngine(source: string | Buffer): ActiveStreamE
   });
 
   let resolveReady: () => void;
-  const readyPromise = new Promise<void>((resolve) => {
+  let rejectReady: (error: Error) => void;
+  const readyPromise = new Promise<void>((resolve, reject) => {
     resolveReady = resolve;
+    rejectReady = reject;
   });
+  engine.on('error', (error: Error) => rejectReady(error));
 
   const entry: ActiveStreamEngine = {
     engine,

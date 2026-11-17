@@ -32,6 +32,8 @@ async function probeDuration(url: string): Promise<number> {
   });
 }
 
+const releaseLookups = new Map<string, { promise: Promise<string | Buffer | null>; expires: number }>();
+
 async function handleGET(request: HttpRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -48,28 +50,47 @@ async function handleGET(request: HttpRequest) {
 
     let torrentSource: string | Buffer | null = magnetParam || null;
 
-    // 1. If magnet not provided directly, query Radarr or Sonarr for top release
+    // Share release lookup between browser playback, duration probing and retries.
     if (!torrentSource && tmdbIdParam) {
-      const tmdbId = parseInt(tmdbIdParam, 10);
-      if (typeParam === 'movie') {
-        const radarr = new RadarrClient();
-        if (radarr.isConfigured()) {
-          const release = await radarr.getBestRelease(tmdbId);
-          if (release) {
-            torrentSource = await resolveTorrentSource(release);
+      const key = JSON.stringify([tmdbIdParam, typeParam, seasonParam, episodeParam, titleParam]);
+      let lookup = releaseLookups.get(key);
+      if (!lookup || lookup.expires <= Date.now()) {
+        const promise = (async (): Promise<string | Buffer | null> => {
+          const tmdbId = parseInt(tmdbIdParam, 10);
+          if (typeParam === 'movie') {
+            const radarr = new RadarrClient();
+            if (radarr.isConfigured()) {
+              const release = await radarr.getBestRelease(tmdbId);
+              if (release) {
+                return resolveTorrentSource(release);
+              }
+            }
+          } else {
+            const sonarr = new SonarrClient();
+            if (sonarr.isConfigured()) {
+              const season = seasonParam ? parseInt(seasonParam, 10) : 1;
+              const episode = episodeParam ? parseInt(episodeParam, 10) : 1;
+              const result = await sonarr.getBestRelease(titleParam || tmdbId, season, episode);
+              if (result?.release) {
+                return resolveTorrentSource(result.release);
+              }
+            }
           }
+          return null;
+        })();
+        lookup = { promise, expires: Date.now() + 60_000 };
+        releaseLookups.set(key, lookup);
+        // Bound cached indexer results without interrupting in-flight callers.
+        for (const [cachedKey, cached] of releaseLookups) {
+          if (cached.expires <= Date.now() || releaseLookups.size > 100) releaseLookups.delete(cachedKey);
         }
-      } else {
-        const sonarr = new SonarrClient();
-        if (sonarr.isConfigured()) {
-          const season = seasonParam ? parseInt(seasonParam, 10) : 1;
-          const episode = episodeParam ? parseInt(episodeParam, 10) : 1;
-          const result = await sonarr.getBestRelease(titleParam || tmdbId, season, episode);
-          if (result?.release) {
-            torrentSource = await resolveTorrentSource(result.release);
-          }
-        }
+        void promise.then(result => {
+          if (!result && releaseLookups.get(key)?.promise === promise) releaseLookups.delete(key);
+        }, () => {
+          if (releaseLookups.get(key)?.promise === promise) releaseLookups.delete(key);
+        });
       }
+      torrentSource = await lookup.promise;
     }
 
     if (!torrentSource) {
@@ -79,10 +100,10 @@ async function handleGET(request: HttpRequest) {
     // 2. Initialize in-process streaming engine
     const active = getOrCreateTorrentEngine(torrentSource);
 
-    // Wait up to 15s for torrent metadata / file list
+    // Allow a cold swarm time to return metadata before failing startup.
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<void>((_, reject) => {
-      timer = setTimeout(() => reject(new Error('Torrent metadata timeout')), 15000);
+      timer = setTimeout(() => reject(new Error('Torrent metadata is not available yet. Please retry shortly.')), 30000);
     });
     try {
       await Promise.race([active.ready, timeout]);
