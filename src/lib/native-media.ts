@@ -738,8 +738,8 @@ export async function scanNativeLibraries(libraryId?: string): Promise<ScanStatu
           const seen = new Set(files);
           const prefix = rootDir.endsWith(path.sep) ? rootDir : `${rootDir}${path.sep}`;
           const dbFiles = db
-            .prepare('SELECT id, item_id, episode_id, file_path FROM native_media_files WHERE file_path LIKE ?')
-            .all(`${prefix}%`) as Array<{ id: string; item_id: string; episode_id: string | null; file_path: string }>;
+            .prepare('SELECT id, item_id, episode_id, file_path FROM native_media_files WHERE substr(file_path, 1, ?) = ?')
+            .all(prefix.length, prefix) as Array<{ id: string; item_id: string; episode_id: string | null; file_path: string }>;
           for (const row of dbFiles) {
             if (seen.has(row.file_path)) continue;
             db.prepare('DELETE FROM native_media_files WHERE id = ?').run(row.id);

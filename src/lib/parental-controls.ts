@@ -67,29 +67,32 @@ export async function guardKidsRequest(request: HttpRequest, profile: UserProfil
   if (name === 'trailer' || (name === 'request' && request.method === 'GET')) return;
   if (name.startsWith('profiles')) return;
   if (name === 'native/stream') {
-    const artwork = request.nextUrl.searchParams.get('artwork');
+    const params = request.nextUrl.searchParams;
+    let checked = false;
+    const artwork = params.get('artwork');
     if (artwork) {
+      checked = true;
       const m = /^(nat-(?:m|s|e|sn|f)-[a-f0-9]+)/i.exec(path.basename(artwork));
-      if (m) await permit(m[1], profile);
-      return;
+      if (!m) throw new ParentalDenied('This title is not available for this kids profile');
+      await permit(m[1], profile);
     }
-    const targetFile = request.nextUrl.searchParams.get('fileId')
-      || request.nextUrl.searchParams.get('subtitle')
-      || request.nextUrl.searchParams.get('trickplay');
-    if (targetFile) {
-      const file = resolveNativeFileByItemOrFileId(targetFile);
+    for (const key of ['fileId', 'itemId', 'subtitle', 'trickplay'] as const) {
+      const target = params.get(key);
+      if (!target) continue;
+      checked = true;
+      const file = resolveNativeFileByItemOrFileId(target);
       if (!file) throw new ParentalDenied('This title is not available for this kids profile');
       await permit(file.item_id, profile);
-      return;
     }
-    const hlsId = request.nextUrl.searchParams.get('hls');
+    const hlsId = params.get('hls');
     if (hlsId) {
+      checked = true;
       const sess = getNativeTranscodeSession(hlsId);
       if (!sess) throw new ParentalDenied('This title is not available for this kids profile');
       await permit(sess.itemId, profile);
-      return;
     }
-    throw new ParentalDenied('Media identity required');
+    if (!checked) throw new ParentalDenied('Media identity required');
+    return;
   }
   const sourceId = request.nextUrl.searchParams.get('mediaSourceId');
   if (sourceId && !/^[a-zA-Z0-9_-]{1,128}$/.test(sourceId)) throw new ParentalDenied('Invalid media source');
