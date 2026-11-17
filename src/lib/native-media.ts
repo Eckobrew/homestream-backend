@@ -448,6 +448,7 @@ export async function generateTrickplayForFile(fileId: string): Promise<string |
     'ffmpeg',
     [
       '-y',
+      '-skip_frame', 'nokey',
       '-i', fileRow.file_path,
       '-vf', [
         `fps=1/${interval}:start_time=0:round=up`,
@@ -460,7 +461,7 @@ export async function generateTrickplayForFile(fileId: string): Promise<string |
       '-q:v', '6',
       spritePath,
     ],
-    { timeout: 120000 }
+    { timeout: 600000 }
   );
 
   const lines = ['WEBVTT', ''];
