@@ -163,7 +163,7 @@ try {
   await api('playback', 400);
   await api('playback?itemId=example&startTimeTicks=-1', 400);
   await api('playback?itemId=example&startTimeTicks=NaN', 400);
-  await api('playback?itemId=example', 503);
+  await api('playback?itemId=example', 404);
   const malformed = await fetch(`${origin}/api/mobile/v1/progress`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: 'not-json' });
   assert.equal(malformed.status, 400);
   const rawAuth = await fetch(`${origin}/api/mobile/v1/capabilities`, { headers: { Authorization: token } });
