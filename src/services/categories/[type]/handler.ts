@@ -5,7 +5,7 @@ import { TmdbClient } from '@/lib/tmdb';
 import { resolveProfileId } from '@/lib/profiles';
 import { SmartRecommendationEngine } from '@/lib/recommendations';
 import { getNativeCategoryRows, listNativeLibraryItems } from '@/lib/native-media';
-import { MediaRowSection } from '@/types';
+import { MediaItem, MediaRowSection } from '@/types';
 
 export const revalidate = 120;
 
@@ -56,17 +56,58 @@ const TV_CATEGORIES: CategoryDef[] = [
   { id: 'cat-tv-western', title: 'Westerns', tmdbGenreId: 37 },
 ];
 
-const REQUEST_CATEGORIES = [
-  ...MOVIE_CATEGORIES.map(category => ({ ...category, id: `request-${category.id}`, title: `Movies · ${category.title}`, mediaType: 'movie' as const })),
-  ...TV_CATEGORIES.map(category => ({ ...category, id: `request-${category.id}`, title: `TV · ${category.title}`, mediaType: 'tv' as const })),
-];
+const CATEGORY_ROW_LIMIT = 25;
 
-async function limitedMap<T, R>(values: T[], map: (value: T) => Promise<R>): Promise<R[]> {
+const REQUEST_CATEGORIES = (() => {
+  const movieCats = MOVIE_CATEGORIES.map((category) => ({
+    ...category,
+    id: `request-${category.id}`,
+    title: `Movies · ${category.title}`,
+    mediaType: 'movie' as const,
+  }));
+  const tvCats = TV_CATEGORIES.map((category) => ({
+    ...category,
+    id: `request-${category.id}`,
+    title: `TV · ${category.title}`,
+    mediaType: 'tv' as const,
+  }));
+  const interleaved: Array<CategoryDef & { mediaType: 'movie' | 'tv' }> = [];
+  const maxLen = Math.max(movieCats.length, tvCats.length);
+  for (let i = 0; i < maxLen; i++) {
+    if (i < movieCats.length) interleaved.push(movieCats[i]);
+    if (i < tvCats.length) interleaved.push(tvCats[i]);
+  }
+  return interleaved;
+})();
+
+async function limitedMap<T, R>(values: T[], map: (value: T) => Promise<R>, concurrency = 6): Promise<R[]> {
   const result: R[] = [];
-  for (let index = 0; index < values.length; index += 4) {
-    result.push(...await Promise.all(values.slice(index, index + 4).map(map)));
+  for (let index = 0; index < values.length; index += concurrency) {
+    result.push(...await Promise.all(values.slice(index, index + concurrency).map(map)));
   }
   return result;
+}
+
+async function discoverCategoryItems(
+  tmdb: TmdbClient,
+  mediaType: 'movie' | 'tv',
+  genreId: number,
+  targetCount = CATEGORY_ROW_LIMIT
+): Promise<MediaItem[]> {
+  const [page1, page2] = await Promise.all([
+    tmdb.discover({ type: mediaType, withGenres: [genreId], page: 1 }),
+    targetCount > 20 ? tmdb.discover({ type: mediaType, withGenres: [genreId], page: 2 }) : Promise.resolve([]),
+  ]);
+  const seen = new Set<string>();
+  const merged: MediaItem[] = [];
+  for (const item of [...page1, ...page2]) {
+    const key = String(item.tmdbId || item.id);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(item);
+    if (merged.length >= targetCount) break;
+  }
+  return merged;
 }
 
 async function handleGET(
@@ -93,15 +134,15 @@ async function handleGET(
     }
 
     try {
-      const discoveryDeadline = Date.now() + 8000;
+      const discoveryDeadline = Date.now() + 15000;
       const sections: MediaRowSection[] = await limitedMap(REQUEST_CATEGORIES, async (cat) => {
         try {
           if (Date.now() >= discoveryDeadline) return { id: cat.id, title: cat.title, items: [] };
-          const items = await tmdb.discover({ type: cat.mediaType, withGenres: [cat.tmdbGenreId] });
+          const items = await discoverCategoryItems(tmdb, cat.mediaType, cat.tmdbGenreId, CATEGORY_ROW_LIMIT);
           return {
             id: cat.id,
             title: cat.title,
-            items: items.slice(0, 20),
+            items,
           };
         } catch (e) {
           log.warn(`Error fetching request category ${cat.title}:`, e);
@@ -166,7 +207,38 @@ async function handleGET(
       ? [{ id: 'cat-short', title: 'Under 100 Minutes', items: allItems.filter(item => (item.durationMinutes || 0) > 0 && (item.durationMinutes || 0) <= 100).slice(0, 20) }]
       : []),
   ];
-  const genreRows = getNativeCategoryRows(isMovies ? 'movies' : 'series');
+  let genreRows: MediaRowSection[] = [];
+  if (tmdb.isConfigured()) {
+    const libraryByTmdb = new Map<number, MediaItem>();
+    const libraryByTitle = new Map<string, MediaItem>();
+    for (const item of allItems) {
+      if (item.tmdbId) libraryByTmdb.set(item.tmdbId, item);
+      libraryByTitle.set(item.title.toLowerCase().trim(), item);
+    }
+    const defs = isMovies ? MOVIE_CATEGORIES : TV_CATEGORIES;
+    const mediaType = isMovies ? 'movie' : 'tv';
+    const deadline = Date.now() + 12000;
+    genreRows = await limitedMap(defs, async (cat) => {
+      try {
+        if (Date.now() >= deadline) return { id: cat.id, title: cat.title, items: [] };
+        const tmdbItems = await discoverCategoryItems(tmdb, mediaType, cat.tmdbGenreId, CATEGORY_ROW_LIMIT);
+        const resolved = tmdbItems.map((item) => {
+          const local =
+            (item.tmdbId ? libraryByTmdb.get(item.tmdbId) : undefined) ||
+            libraryByTitle.get(item.title.toLowerCase().trim());
+          return local || item;
+        });
+        return { id: cat.id, title: cat.title, items: resolved };
+      } catch (e) {
+        log.warn(`Error fetching ${mediaType} category ${cat.title}:`, e);
+        return { id: cat.id, title: cat.title, items: [] };
+      }
+    });
+    genreRows = genreRows.filter((s) => s.items.length > 0);
+  }
+  if (genreRows.length === 0) {
+    genreRows = getNativeCategoryRows(isMovies ? 'movies' : 'series');
+  }
   return HttpResponse.json({
     type: isMovies ? 'movies' : 'series',
     sections: [...curated, ...genreRows].filter((s) => s.items.length > 0),
