@@ -1,5 +1,6 @@
 import { upstreamFailures } from '@/upstream';
 import { getServerConfig } from '@/lib/config';
+import { getStreamResumeItems } from '@/lib/stream-progress';
 import { log } from '@/log';
 import { withParentalControls } from '@/lib/parental-controls';
 import { HttpRequest, HttpResponse } from '@/http';
@@ -39,7 +40,7 @@ async function handleGET(request: HttpRequest) {
   const tmdb = new TmdbClient();
 
   try {
-    const resumeItems = getNativeResumeItems(targetUserId || 'default', 15);
+    const resumeItems = [...getNativeResumeItems(targetUserId || 'default', 15), ...await getStreamResumeItems(targetUserId || 'default', 15)];
     const latestMovies = listNativeLibraryItems({ type: 'Movie', sort: 'recent', limit: 15 });
     const latestSeries = listNativeLibraryItems({ type: 'Series', sort: 'recent', limit: 15 });
     const topRated = listNativeLibraryItems({ sort: 'rating', limit: 15 });

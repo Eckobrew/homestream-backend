@@ -388,6 +388,11 @@ export class TmdbClient {
     };
   }
 
+  async getTvdbId(tmdbId: number): Promise<number | undefined> {
+    const ids = await this.fetch<{ tvdb_id?: number }>(`/tv/${tmdbId}/external_ids`, {}, 24 * 60 * 60 * 1000);
+    return ids?.tvdb_id && ids.tvdb_id > 0 ? ids.tvdb_id : undefined;
+  }
+
   async getTvDetails(tmdbId: number): Promise<MediaItem | null> {
     const raw = await this.fetch<TmdbRawItem>(
       `/tv/${tmdbId}`,

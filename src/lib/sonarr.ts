@@ -7,6 +7,8 @@ export interface SonarrSeries {
   tvdbId?: number;
   year?: number;
   path?: string;
+  monitored?: boolean;
+  qualityProfileId?: number;
   seasons?: Array<{
     seasonNumber: number;
     monitored?: boolean;
@@ -120,7 +122,7 @@ export class SonarrClient {
     }
 
     const cleanInput = String(titleOrTvdb).toLowerCase().replace(/[^a-z0-9]/g, '');
-    const matched = all.find(s => {
+    const matched = typeof titleOrTvdb === 'number' ? undefined : all.find(s => {
       const cleanTitle = s.title.toLowerCase().replace(/[^a-z0-9]/g, '');
       return cleanTitle.includes(cleanInput) || cleanInput.includes(cleanTitle);
     });
@@ -129,7 +131,7 @@ export class SonarrClient {
 
     // Lookup series if not yet added
     try {
-      const res = await fetch(`${this.baseUrl}/api/v3/series/lookup?term=${encodeURIComponent(String(titleOrTvdb))}`, {
+      const res = await fetch(`${this.baseUrl}/api/v3/series/lookup?term=${encodeURIComponent(typeof titleOrTvdb === 'number' ? `tvdb:${titleOrTvdb}` : titleOrTvdb)}`, {
         headers: this.getHeaders(),
         signal: AbortSignal.timeout(15000),
       });
@@ -162,60 +164,36 @@ export class SonarrClient {
 
   async requestSeries(
     titleOrTvdb: string | number,
-    _seasons?: number[] | 'all',
+    seasons?: number[] | 'all',
     qualityProfileId?: number
   ): Promise<{ success: boolean; error?: string; series?: SonarrSeries }> {
     if (!this.isConfigured()) return { success: false, error: 'Sonarr is not configured' };
-
-    let series = await this.findSeries(titleOrTvdb);
-    if (!series) {
-      const lookupRes = await fetch(`${this.baseUrl}/api/v3/series/lookup?term=${encodeURIComponent(String(titleOrTvdb))}`, {
-        headers: this.getHeaders(),
-        signal: AbortSignal.timeout(15000),
+    const series = await this.findSeries(titleOrTvdb);
+    if (!series?.id) return { success: false, error: 'Series not found in Sonarr' };
+    const selected = Array.isArray(seasons) ? [...new Set(seasons.filter(n => Number.isInteger(n) && n >= 0))] : undefined;
+    if (selected && !selected.length) return { success: false, error: 'Choose at least one season' };
+    const updatedSeasons = series.seasons?.map(season => ({
+      ...season,
+      monitored: (selected ? selected.includes(season.seasonNumber) : season.seasonNumber > 0) ||
+        (series.monitored !== false && season.monitored === true),
+    }));
+    const update = await fetch(`${this.baseUrl}/api/v3/series/${series.id}`, {
+      method: 'PUT', headers: this.getHeaders(),
+      body: JSON.stringify({ ...series, monitored: true, seasons: updatedSeasons,
+        qualityProfileId: qualityProfileId || series.qualityProfileId || getServerConfig().sonarrQualityProfileId || 1 }),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!update.ok) return { success: false, error: `Sonarr could not monitor this series (HTTP ${update.status})` };
+    const updated: SonarrSeries = await update.json();
+    const commands = selected ? selected.map(seasonNumber => ({ name: 'SeasonSearch', seriesId: series.id, seasonNumber }))
+      : [{ name: 'SeriesSearch', seriesId: series.id }];
+    for (const command of commands) {
+      const search = await fetch(`${this.baseUrl}/api/v3/command`, {
+        method: 'POST', headers: this.getHeaders(), body: JSON.stringify(command), signal: AbortSignal.timeout(10000),
       });
-      if (!lookupRes.ok) return { success: false, error: 'Series lookup failed' };
-      const lookupList = await lookupRes.json();
-      if (!Array.isArray(lookupList) || lookupList.length === 0) {
-        return { success: false, error: 'Series not found in Sonarr indexers' };
-      }
-      const found = lookupList[0];
-
-      const payload = {
-        ...found,
-        monitored: true,
-        addOptions: {
-          searchForMissingEpisodes: true,
-        },
-        rootFolderPath: found.rootFolderPath || '/tv',
-        qualityProfileId: qualityProfileId || getServerConfig().sonarrQualityProfileId || found.qualityProfileId || 1,
-      };
-
-      const addRes = await fetch(`${this.baseUrl}/api/v3/series`, {
-        method: 'POST',
-        headers: this.getHeaders(),
-        body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(15000),
-      });
-
-      if (!addRes.ok) {
-        const errData = await addRes.json().catch(() => null);
-        return { success: false, error: errData?.[0]?.errorMessage || `HTTP ${addRes.status}` };
-      }
-      series = await addRes.json();
-    } else {
-      // Trigger search command for series
-      await fetch(`${this.baseUrl}/api/v3/command`, {
-        method: 'POST',
-        headers: this.getHeaders(),
-        body: JSON.stringify({
-          name: 'SeriesSearch',
-          seriesId: series.id,
-        }),
-        signal: AbortSignal.timeout(10000),
-      }).catch(() => {});
+      if (!search.ok) return { success: false, error: `Sonarr search failed (HTTP ${search.status})` };
     }
-
-    return { success: true, series: series || undefined };
+    return { success: true, series: updated };
   }
 
   async getEpisodes(seriesId: number, seasonNumber?: number): Promise<any[]> {

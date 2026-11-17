@@ -7,6 +7,7 @@ import { HttpRequest, HttpResponse } from '@/http';
 import { withParentalControls } from '@/lib/parental-controls';
 import { RadarrClient } from '@/lib/radarr';
 import { SonarrClient } from '@/lib/sonarr';
+import { TmdbClient } from '@/lib/tmdb';
 import { getOrCreateTorrentEngine, resolveTorrentSource, TorrentStreamFile } from '@/lib/torrent-stream-engine';
 import { torrentStreamFileResponse } from '@/lib/torrent-stream-reader';
 import { isVideoFile } from '@/lib/qbittorrent';
@@ -70,7 +71,9 @@ async function handleGET(request: HttpRequest) {
             if (sonarr.isConfigured()) {
               const season = seasonParam ? parseInt(seasonParam, 10) : 1;
               const episode = episodeParam ? parseInt(episodeParam, 10) : 1;
-              const result = await sonarr.getBestRelease(titleParam || tmdbId, season, episode);
+              const tvdbId = await new TmdbClient().getTvdbId(tmdbId);
+              if (!tvdbId && !titleParam) return null;
+              const result = await sonarr.getBestRelease(tvdbId || titleParam, season, episode);
               if (result?.release) {
                 return resolveTorrentSource(result.release);
               }
@@ -108,6 +111,7 @@ async function handleGET(request: HttpRequest) {
     try {
       await Promise.race([active.ready, timeout]);
     } catch (err: any) {
+      active.destroy(); // Retry discovery instead of retaining a failed tracker lookup.
       return HttpResponse.json({ error: err?.message || 'Failed connecting to swarm metadata' }, { status: 504 });
     } finally {
       clearTimeout(timer);
@@ -174,7 +178,7 @@ async function handleGET(request: HttpRequest) {
       );
     }
 
-    const nativeRequest = searchParams.get('native') === '1' && !forceTranscode;
+    const nativeRequest = searchParams.get('native') === '1' && !forceTranscode && startSec === 0;
 
     if (!probeParam && nativeRequest) {
       return torrentStreamFileResponse(
@@ -214,7 +218,11 @@ async function handleGET(request: HttpRequest) {
       });
     }
 
-    const videoStrategy = streamVideoStrategy(sourceVideo, searchParams);
+    const videoQuery = new URLSearchParams(searchParams);
+    // Copying from a preceding keyframe can replay many seconds before the seek.
+    // Decode from that keyframe and encode from the requested timestamp instead.
+    if (startSec > 0) videoQuery.set('forceTranscode', 'true');
+    const videoStrategy = streamVideoStrategy(sourceVideo, videoQuery);
 
     const ffmpegArgs: string[] = ['-hide_banner', '-loglevel', 'error'];
 

@@ -8,6 +8,7 @@ export interface RadarrMovie {
   year?: number;
   path?: string;
   monitored?: boolean;
+  qualityProfileId?: number;
 }
 
 export interface RadarrRelease {
@@ -188,16 +189,21 @@ export class RadarrClient {
       }
       movie = await res.json();
     } else {
-      // Trigger search command if already added
-      await fetch(`${this.baseUrl}/api/v3/command`, {
-        method: 'POST',
-        headers: this.getHeaders(),
-        body: JSON.stringify({
-          name: 'MoviesSearch',
-          movieIds: [movie.id],
-        }),
+      // Stream discovery adds titles unmonitored; a library request must enable them.
+      const update = await fetch(`${this.baseUrl}/api/v3/movie/${movie.id}`, {
+        method: 'PUT', headers: this.getHeaders(),
+        body: JSON.stringify({ ...movie, monitored: true,
+          qualityProfileId: qualityProfileId || movie.qualityProfileId || getServerConfig().radarrQualityProfileId || 1 }),
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!update.ok) return { success: false, error: `Radarr could not monitor this movie (HTTP ${update.status})` };
+      movie = await update.json();
+      const search = await fetch(`${this.baseUrl}/api/v3/command`, {
+        method: 'POST', headers: this.getHeaders(),
+        body: JSON.stringify({ name: 'MoviesSearch', movieIds: [movie!.id] }),
         signal: AbortSignal.timeout(10000),
-      }).catch(() => {});
+      });
+      if (!search.ok) return { success: false, error: `Radarr search failed (HTTP ${search.status})` };
     }
 
     return { success: true, movie: movie || undefined };

@@ -79,7 +79,7 @@ async function handlePOST(request: HttpRequest) {
       status = 'processing';
     } else if (mediaType === 'tv' && sonarr.isConfigured()) {
       const res = await sonarr.requestSeries(
-        tmdbDetails?.title || String(numericId),
+        (tmdb.isConfigured() ? await tmdb.getTvdbId(numericId) : undefined) || tmdbDetails?.title || String(numericId),
         Array.isArray(seasons) ? seasons : seasons === 'all' ? 'all' : undefined,
         resolvedProfileId
       );

@@ -9,7 +9,9 @@ import assert from 'node:assert/strict';
 import { createApp } from '../src/app';
 import { saveMediaEngineSettings } from '../src/lib/media-settings';
 import { listActiveNativeStreams, stopNativeStreamSession } from '../src/lib/native-transcode';
-import { getOrCreateTorrentEngine } from '../src/lib/torrent-stream-engine';
+import { getOrCreateTorrentEngine, resolveTorrentSource } from '../src/lib/torrent-stream-engine';
+import { createServer } from 'node:http';
+import { once } from 'node:events';
 
 test('the in-process torrent route preserves season-pack selection and reads real torrent pieces', { timeout: 30000 }, async () => {
   const directory = await mkdtemp(join(tmpdir(), 'homestream-torrent-engine-'));
@@ -40,6 +42,17 @@ test('the in-process torrent route preserves season-pack selection and reads rea
       Buffer.from('7:privatei1eee'),
     ]);
 
+    const indexer = createServer((request, reply) => {
+      if (request.url === '/download') { reply.writeHead(302, { location: '/metadata' }); reply.end(); }
+      else { reply.setHeader('content-type', 'application/x-bittorrent'); reply.end(metadata); }
+    });
+    indexer.listen(0, '127.0.0.1'); await once(indexer, 'listening');
+    try {
+      const url = `http://127.0.0.1:${(indexer.address() as import('node:net').AddressInfo).port}/download`;
+      assert.deepEqual(await resolveTorrentSource({ downloadUrl: url, infoHash: 'a'.repeat(40) }), metadata,
+        'Indexer redirects must preserve torrent metadata instead of discarding it for a bare hash');
+    } finally { indexer.closeAllConnections(); await new Promise<void>(resolve => indexer.close(() => resolve())); }
+
     active = getOrCreateTorrentEngine(metadata);
     const cache = join(active.engine.path, 'Fixture');
     mkdirSync(cache, { recursive: true });
@@ -68,6 +81,15 @@ test('the in-process torrent route preserves season-pack selection and reads rea
       '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=nw=1:nk=1', rendered,
     ], { encoding: 'utf8' });
     assert.ok(Number(duration) > 2);
+    // Seeking a season-pack episode must retain the selected file and start offset.
+    const seeked = await fetch(`${url}&start=1`, { headers: { Connection: 'close' } });
+    assert.equal(seeked.status, 200);
+    const seekedFile = join(directory, 'seeked.mp4');
+    writeFileSync(seekedFile, Buffer.from(await seeked.arrayBuffer()));
+    const seekedDuration = Number(execFileSync('ffprobe', [
+      '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=nw=1:nk=1', seekedFile,
+    ], { encoding: 'utf8' }));
+    assert.ok(seekedDuration > 1.5 && seekedDuration < 2.5, `Expected episode 2 from one second, got ${seekedDuration}s`);
     // Cast gets independently addressable fMP4 HLS fragments for both remux and conversion.
     for (const force of [false, true]) {
       const castUrl = `${url}&receiver=cast&forceTranscode=${force}&videoCapabilities=${encodeURIComponent(JSON.stringify([

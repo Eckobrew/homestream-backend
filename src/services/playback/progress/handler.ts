@@ -4,7 +4,7 @@ import { HttpRequest, HttpResponse } from '@/http';
 import { resolveProfileId } from '@/lib/profiles';
 import { readSession } from '@/lib/session';
 import { isRequestLocalOrTailscale } from '@/lib/network';
-import { saveStreamProgress } from '@/lib/stream-progress';
+import { saveStreamProgress, saveCatalogStreamProgress, isCatalogStreamId, streamResumeAction } from '@/lib/stream-progress';
 import { hideFromContinueWatching, recordNativeWatchProgress, startOverNativeItem } from '@/lib/native-media';
 import { resolveNativeFileByItemOrFileId, touchNativeTranscodeSessionByItem } from '@/lib/native-transcode';
 
@@ -37,6 +37,10 @@ async function handlePOST(request: HttpRequest) {
     const nativeProfileId = (await resolveProfileId(effectiveProfileId)) || 'default';
 
     if (action === 'startOver' || action === 'hideContinueWatching') {
+      if (isCatalogStreamId(itemId)) {
+        streamResumeAction(nativeProfileId, itemId, action);
+        return HttpResponse.json({ success: true, updated: true });
+      }
       const updated = action === 'startOver'
         ? startOverNativeItem(nativeProfileId, itemId)
         : hideFromContinueWatching(nativeProfileId, itemId);
@@ -70,7 +74,7 @@ async function handlePOST(request: HttpRequest) {
       return HttpResponse.json({ success: true, ...(res.skippedStale ? { skippedStale: true } : {}) });
     }
 
-    saveStreamProgress(effectiveProfileId, itemId, positionTicks);
+    await saveCatalogStreamProgress(nativeProfileId, itemId, positionTicks, recordedAtMs);
     return HttpResponse.json({ success: true });
   } catch (err) {
     log.error('Error reporting playback progress:', err);

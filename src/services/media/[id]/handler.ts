@@ -3,7 +3,7 @@ import { withParentalControls } from '@/lib/parental-controls';
 import { HttpRequest, HttpResponse } from '@/http';
 import { TmdbClient } from '@/lib/tmdb';
 import { resolveProfileId } from '@/lib/profiles';
-import { getStreamProgressMap } from '@/lib/stream-progress';
+import { getStreamProgressMap, getCatalogStreamDetails } from '@/lib/stream-progress';
 import { getNativeItemById, getNativeTmdbIdMap } from '@/lib/native-media';
 import {
   MOCK_HERO_ITEM,
@@ -36,6 +36,12 @@ async function handleGET(
       return HttpResponse.json({ item: nativeItem }, { headers: { 'Cache-Control': 'no-store' } });
     }
     return HttpResponse.json({ error: 'Native media item not found' }, { status: 404 });
+  }
+
+  if (/^(?:tmdb|seerr)-(?:ep|tv)-\d+-\d+-\d+$/.test(id)) {
+    const item = await getCatalogStreamDetails(effectiveProfile, id);
+    return item ? HttpResponse.json({ item }, { headers: { 'Cache-Control': 'no-store' } })
+      : HttpResponse.json({ error: 'Episode not found' }, { status: 404 });
   }
 
   const tmdb = new TmdbClient();
