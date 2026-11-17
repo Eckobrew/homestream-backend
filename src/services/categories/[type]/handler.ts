@@ -2,6 +2,8 @@ import { log } from '@/log';
 import { withParentalControls } from '@/lib/parental-controls';
 import { HttpRequest, HttpResponse } from '@/http';
 import { TmdbClient } from '@/lib/tmdb';
+import { resolveProfileId } from '@/lib/profiles';
+import { SmartRecommendationEngine } from '@/lib/recommendations';
 import { getNativeCategoryRows, listNativeLibraryItems } from '@/lib/native-media';
 import { MediaRowSection } from '@/types';
 
@@ -68,7 +70,7 @@ async function limitedMap<T, R>(values: T[], map: (value: T) => Promise<R>): Pro
 }
 
 async function handleGET(
-  _request: HttpRequest,
+  request: HttpRequest,
   { params }: { params: Promise<{ type: string }> }
 ) {
   const typeParam = ((await params).type || '').toLowerCase();
@@ -117,9 +119,34 @@ async function handleGET(
     }
   }
 
+  const profileId =
+    request.nextUrl?.searchParams.get('userId') ||
+    request.cookies?.get('homeflix_profile_id')?.value;
+  const targetUserId = await resolveProfileId(profileId);
   const allItems = listNativeLibraryItems({ type: isMovies ? 'Movie' : 'Series' });
   const recentYear = new Date().getFullYear() - 3;
+  let dynamicRecSection: MediaRowSection | null = null;
+  try {
+    const engine = new SmartRecommendationEngine(tmdb);
+    const dyn = await Promise.race([
+      engine.getDynamicRecommendations(targetUserId),
+      new Promise<null>((r) => setTimeout(() => r(null), 2500)),
+    ]);
+    if (dyn) {
+      const recItems = isMovies ? dyn.movies : dyn.tvShows;
+      if (recItems.length > 0) {
+        dynamicRecSection = {
+          id: isMovies ? 'recommended-movies' : 'recommended-tv-shows',
+          title: isMovies ? 'Recommended Movies' : 'Recommended TV Shows',
+          items: recItems,
+        };
+      }
+    }
+  } catch (err) {
+    log.warn('Failed loading dynamic category recommendations:', err);
+  }
   const curated: MediaRowSection[] = [
+    ...(dynamicRecSection ? [dynamicRecSection] : []),
     {
       id: 'cat-recent',
       title: isMovies ? 'Recent Movie Releases in Your Library' : 'Newer Series in Your Library',

@@ -37,19 +37,23 @@ async function handleGET(request: HttpRequest) {
   }
 
   const cacheKey = `${mediaType}-${tmdbId}`;
+  const withStreamUrl = (t: { key: string; name: string; site: string; type: string } | null | undefined) =>
+    t?.key ? { ...t, streamUrl: `/api/youtube/stream-video?videoId=${encodeURIComponent(t.key)}` } : null;
+
   if (trailerCache.has(cacheKey)) {
-    const cached = trailerCache.get(cacheKey);
+    const cached = withStreamUrl(trailerCache.get(cacheKey));
     return HttpResponse.json(
-      { success: true, trailer: cached },
+      { success: true, trailer: cached, streamUrl: cached?.streamUrl || null },
       { headers: { 'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800' } }
     );
   }
 
-  const trailer = await new TmdbClient().getTrailers(tmdbId, mediaType);
-  trailerCache.set(cacheKey, trailer);
+  const rawTrailer = await new TmdbClient().getTrailers(tmdbId, mediaType);
+  trailerCache.set(cacheKey, rawTrailer);
+  const trailer = withStreamUrl(rawTrailer);
 
   return HttpResponse.json(
-    { success: true, trailer },
+    { success: true, trailer, streamUrl: trailer?.streamUrl || null },
     { headers: { 'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800' } }
   );
 }

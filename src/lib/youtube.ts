@@ -299,10 +299,52 @@ export async function searchYouTube(query: string): Promise<YouTubeSearchResult[
   }
 }
 
+async function runYtDlpJson(args: string[], timeoutMs = 15000): Promise<any | null> {
+  return new Promise((resolve) => {
+    const child = spawn('yt-dlp', [...args, '--dump-single-json', '--no-warnings'], { timeout: timeoutMs });
+    let stdout = '';
+    child.stdout.on('data', (d) => { stdout += d.toString(); });
+    child.on('error', () => resolve(null));
+    child.on('close', (code) => {
+      if (code !== 0 || !stdout.trim()) {
+        resolve(null);
+        return;
+      }
+      try {
+        resolve(JSON.parse(stdout));
+      } catch {
+        resolve(null);
+      }
+    });
+  });
+}
+
 /**
- * Fast lookup of a single video's details
+ * Fast lookup of a single video's details via yt-dlp with HTML metadata fallback
  */
 export async function getVideoDetails(videoId: string): Promise<YouTubeSearchResult | null> {
+  const downloadedIds = getDownloadedVideoIds();
+  const data = await runYtDlpJson(['--no-playlist', `https://www.youtube.com/watch?v=${videoId}`], 12000);
+  if (data && (data.id || data.title)) {
+    const durationSeconds = Number(data.duration) || 0;
+    const thumbs = Array.isArray(data.thumbnails) ? data.thumbnails : [];
+    const thumbUrl = data.thumbnail || thumbs[thumbs.length - 1]?.url || `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`;
+    return {
+      id: String(data.id || videoId),
+      title: String(data.title || `YouTube Video [${videoId}]`),
+      channelId: String(data.channel_id || ''),
+      channelTitle: String(data.channel || data.uploader || ''),
+      durationSeconds,
+      durationFormatted: formatDuration(durationSeconds),
+      thumbnailUrl: String(thumbUrl).startsWith('//') ? `https:${thumbUrl}` : String(thumbUrl),
+      uploadDate: data.upload_date ? String(data.upload_date) : undefined,
+      viewCount: data.view_count ? String(data.view_count) : undefined,
+      description: data.description ? String(data.description) : undefined,
+      isShort: durationSeconds > 0 && durationSeconds <= 60,
+      isDownloaded: downloadedIds.has(videoId),
+    };
+  }
+
   try {
     const res = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
       headers: {
@@ -328,7 +370,6 @@ export async function getVideoDetails(videoId: string): Promise<YouTubeSearchRes
     const durationSeconds = parseIsoDurationToSeconds(durationMatch?.[1]);
 
     const isShort = html.includes('"isShort":true') || html.includes('/shorts/');
-    const downloadedIds = getDownloadedVideoIds();
 
     return {
       id: videoId,
@@ -346,23 +387,35 @@ export async function getVideoDetails(videoId: string): Promise<YouTubeSearchRes
   }
 }
 
+const STREAM_URL_CACHE_TTL_MS = 10 * 60 * 1000;
+const streamUrlCache = new Map<string, { url: string; expiresAt: number }>();
+
 /**
- * Resolves a direct playable stream URL using yt-dlp
+ * Resolves and caches a direct playable stream URL using yt-dlp
  */
-export async function resolveStreamUrl(videoId: string): Promise<string | null> {
+export async function resolveStreamUrl(videoId: string, cookieFile?: string): Promise<string | null> {
+  const cacheKey = cookieFile ? `${videoId}:${cookieFile}` : videoId;
+  const cached = streamUrlCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.url;
+  }
+
   return new Promise((resolve) => {
-    const child = spawn(
-      'yt-dlp',
-      [
-        '--extractor-args',
-        'youtube:player_client=ios,android,mweb',
-        '-g',
-        '-f',
-        'best[ext=mp4]/best',
-        `https://www.youtube.com/watch?v=${videoId}`,
-      ],
-      { timeout: 15000 }
-    );
+    const args = [
+      '--extractor-args',
+      'youtube:player_client=ios,android,mweb',
+      '--no-playlist',
+      '--no-warnings',
+      '-g',
+      '-f',
+      'best[ext=mp4]/best',
+    ];
+    if (cookieFile && fs.existsSync(cookieFile)) {
+      args.push('--cookies', cookieFile);
+    }
+    args.push(`https://www.youtube.com/watch?v=${videoId}`);
+
+    const child = spawn('yt-dlp', args, { timeout: 15000 });
 
     let output = '';
     child.stdout.on('data', (d) => {
@@ -377,6 +430,7 @@ export async function resolveStreamUrl(videoId: string): Promise<string | null> 
     child.on('close', (code) => {
       if (code === 0 && output.trim()) {
         const streamUrl = output.trim().split('\n')[0];
+        streamUrlCache.set(cacheKey, { url: streamUrl, expiresAt: Date.now() + STREAM_URL_CACHE_TTL_MS });
         resolve(streamUrl);
       } else {
         resolve(null);
@@ -386,7 +440,7 @@ export async function resolveStreamUrl(videoId: string): Promise<string | null> 
 }
 
 /**
- * Resolves channel ID and basic metadata from a handle or URL e.g. "@joerogan"
+ * Resolves channel ID and basic metadata from a handle or URL via yt-dlp with HTML fallback
  */
 export async function resolveChannel(input: string): Promise<{
   id: string;
@@ -398,6 +452,29 @@ export async function resolveChannel(input: string): Promise<{
 } | null> {
   const cleanInput = input.trim().replace(/^https?:\/\/(www\.)?youtube\.com\//, '');
   let handle = cleanInput.startsWith('@') ? cleanInput : `@${cleanInput}`;
+
+  const ytdlpTarget = cleanInput.startsWith('channel/')
+    ? `https://www.youtube.com/${cleanInput}/videos`
+    : input.trim().startsWith('http')
+      ? input.trim()
+      : `https://www.youtube.com/${handle}/videos`;
+
+  const ytdlpData = await runYtDlpJson(['--flat-playlist', '--playlist-items', '1', ytdlpTarget], 15000);
+  if (ytdlpData) {
+    const firstEntry = Array.isArray(ytdlpData.entries) ? ytdlpData.entries[0] : undefined;
+    const channelId = String(ytdlpData.channel_id || firstEntry?.channel_id || ytdlpData.id || '');
+    if (channelId.startsWith('UC') || cleanInput.startsWith('channel/')) {
+      const thumbs = Array.isArray(ytdlpData.thumbnails) ? ytdlpData.thumbnails : [];
+      const avatarUrl = thumbs[thumbs.length - 1]?.url;
+      return {
+        id: channelId || cleanInput.replace('channel/', ''),
+        title: String(ytdlpData.channel || ytdlpData.uploader || ytdlpData.title || handle).replace(/ - Videos$/, ''),
+        handle: String(ytdlpData.uploader_id || handle),
+        avatarUrl,
+        description: ytdlpData.description ? String(ytdlpData.description) : undefined,
+      };
+    }
+  }
 
   if (cleanInput.startsWith('channel/')) {
     const channelId = cleanInput.replace('channel/', '');
@@ -747,9 +824,39 @@ export async function checkChannelNewUploads(channelId: string): Promise<{
 }
 
 /**
- * Fetches the latest published videos from a channel RSS feed
+ * Fetches the latest published videos from a channel via yt-dlp with RSS fallback
  */
 export async function fetchChannelLatestVideos(channelId: string, limit = 5): Promise<YouTubeSearchResult[]> {
+  const downloadedIds = getDownloadedVideoIds();
+  const data = await runYtDlpJson(
+    ['--flat-playlist', '--playlist-end', String(limit), `https://www.youtube.com/channel/${channelId}/videos`],
+    15000
+  );
+  if (data && Array.isArray(data.entries) && data.entries.length > 0) {
+    const channelTitle = String(data.channel || data.uploader || data.title || 'YouTube Channel').replace(/ - Videos$/, '');
+    const results: YouTubeSearchResult[] = [];
+    for (const e of data.entries.slice(0, limit)) {
+      if (!e || !e.id) continue;
+      const vidId = String(e.id);
+      const durationSec = Number(e.duration) || 0;
+      const thumbs = Array.isArray(e.thumbnails) ? e.thumbnails : [];
+      const thumbUrl = thumbs[thumbs.length - 1]?.url || `https://i.ytimg.com/vi/${vidId}/hqdefault.jpg`;
+      results.push({
+        id: vidId,
+        title: String(e.title || ''),
+        channelId,
+        channelTitle: String(e.channel || e.uploader || channelTitle),
+        durationSeconds: durationSec,
+        durationFormatted: durationSec > 0 ? formatDuration(durationSec) : 'Video',
+        thumbnailUrl: String(thumbUrl).startsWith('//') ? `https:${thumbUrl}` : String(thumbUrl),
+        uploadDate: e.upload_date ? String(e.upload_date) : undefined,
+        isShort: durationSec > 0 && durationSec <= 60,
+        isDownloaded: downloadedIds.has(vidId),
+      });
+    }
+    if (results.length > 0) return results;
+  }
+
   try {
     const feedUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
     const res = await fetch(feedUrl, { signal: AbortSignal.timeout(8000) });
@@ -757,7 +864,6 @@ export async function fetchChannelLatestVideos(channelId: string, limit = 5): Pr
     const xml = await res.text();
     const entryBlocks = xml.split('<entry>').slice(1, limit + 1);
     const results: YouTubeSearchResult[] = [];
-    const downloadedIds = getDownloadedVideoIds();
 
     for (const block of entryBlocks) {
       const videoIdMatch = block.match(/<yt:videoId>([^<]+)<\/yt:videoId>/);
@@ -1223,22 +1329,37 @@ export function deleteYouTubeAuth(profileId: string): boolean {
  * Proxies the video stream from YouTube upstream directly to the client with full HTTP 206 Range support
  */
 export async function fetchProxyStream(videoId: string, rangeHeader: string | null, signal?: AbortSignal): Promise<Response> {
-  const streamUrl = await resolveStreamUrl(videoId);
+  const buildHeaders = () => {
+    const h: Record<string, string> = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    };
+    if (rangeHeader) h['Range'] = rangeHeader;
+    return h;
+  };
+
+  let streamUrl = await resolveStreamUrl(videoId);
   if (!streamUrl) {
     throw new Error('Could not resolve stream URL from YouTube');
   }
 
-  const headers: Record<string, string> = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  };
-  if (rangeHeader) {
-    headers['Range'] = rangeHeader;
-  }
-
-  return fetch(streamUrl, {
-    headers,
+  let res = await fetch(streamUrl, {
+    headers: buildHeaders(),
     signal: signal || AbortSignal.timeout(30000),
   });
+
+  if (res.status === 403 || res.status === 410) {
+    streamUrlCache.delete(videoId);
+    const refreshed = await resolveStreamUrl(videoId);
+    if (refreshed && refreshed !== streamUrl) {
+      streamUrl = refreshed;
+      res = await fetch(streamUrl, {
+        headers: buildHeaders(),
+        signal: signal || AbortSignal.timeout(30000),
+      });
+    }
+  }
+
+  return res;
 }
 
 interface CachedRecommendations {

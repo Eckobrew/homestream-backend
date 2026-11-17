@@ -230,7 +230,7 @@ export class TmdbClient {
                       raw.videos.results.find(v => v.site === 'YouTube');
       if (trailer?.key) {
         trailerKey = trailer.key;
-        trailerUrl = `https://www.youtube.com/watch?v=${trailer.key}`;
+        trailerUrl = `/api/youtube/stream-video?videoId=${encodeURIComponent(trailer.key)}`;
       }
     }
 

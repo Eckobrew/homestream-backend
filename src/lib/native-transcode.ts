@@ -409,7 +409,7 @@ export async function extractNativeSubtitleVtt(file: NativeMediaFileRow, index?:
   return job;
 }
 
-function evaluateNativeFit(
+export function evaluateNativeFit(
   candidate: NativeMediaFileRow,
   options: {
     forceTranscode?: boolean;
@@ -452,7 +452,7 @@ function evaluateNativeFit(
   const supportedVideo = (!options?.videoCodecs || options.videoCodecs.includes(vCodec)) && profileSupported;
   const supportedAudio = !aCodec || !options?.audioCodecs || options.audioCodecs.includes(aCodec);
   const containerSupported = ext === '.mp4' || ext === '.m4v' || ext === '.webm'
-    || (ext === '.mkv' && vCodec === 'h264' && options?.receiver !== 'browser' && options?.receiver !== 'cast');
+    || (ext === '.mkv' && options?.receiver !== 'browser' && options?.receiver !== 'cast');
 
   const sourceMaxW = [options?.maxWidth, sourceCap?.width].filter((v): v is number => typeof v === 'number' && v > 0).reduce((a, b) => Math.min(a, b), Infinity);
   const sourceMaxH = [options?.maxHeight, sourceCap?.height].filter((v): v is number => typeof v === 'number' && v > 0).reduce((a, b) => Math.min(a, b), Infinity);
@@ -592,6 +592,13 @@ export async function negotiateNativePlayback(
     subtitleLang: profilePrefs.effective.subtitleLang,
     subtitleMode: profilePrefs.effective.subtitleMode,
   });
+  // Pre-warm the default/forced text subtitle cache in the background while playback negotiates.
+  const warmupSub = subtitles.find((s) => !s.burnIn && (s.isDefault || s.isForced) && s.src);
+  if (warmupSub) {
+    const sidecarMatch = /[?&]sidecar=([^&]+)/.exec(warmupSub.src);
+    const sidecarName = sidecarMatch ? decodeURIComponent(sidecarMatch[1]) : undefined;
+    void extractNativeSubtitleVtt(file, sidecarName ? undefined : warmupSub.index, sidecarName).catch(() => {});
+  }
   const audioTracks = nativeAudioTracks(file);
   const preferredAudioLang = profilePrefs.effective.audioLang || settings.defaultAudioLanguage;
   const preferredTrack = preferredAudioLang

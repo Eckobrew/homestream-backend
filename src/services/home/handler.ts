@@ -202,87 +202,13 @@ async function handleGET(request: HttpRequest) {
       });
     }
 
-    // Multiple "Because You Watched <Title>" sections directly below Continue Watching, pulling from TMDB
-    const bywSeeds: Array<{ id: string; title: string; type: 'Movie' | 'Series'; tmdbId?: number }> = [];
-    const seenSeedTitles = new Set<string>();
-    const pushSeed = (item: { id: string; title?: string; type?: string; tmdbId?: number; seriesId?: string; seriesName?: string }) => {
-      const isEp = item.type === 'Episode';
-      const seedId = isEp && item.seriesId ? item.seriesId : item.id;
-      const rawTitle = (isEp && item.seriesName ? item.seriesName : item.title) || '';
-      const key = rawTitle.trim().toLowerCase();
-      if (!key || seenSeedTitles.has(key)) return;
-      seenSeedTitles.add(key);
-      let resolvedTmdbId = typeof item.tmdbId === 'number' && item.tmdbId > 0 ? item.tmdbId : undefined;
-      if (!resolvedTmdbId && isEp && seedId.startsWith('nat-')) {
-        try {
-          const row = stateDatabase().prepare('SELECT tmdb_id FROM native_media_items WHERE id = ?').get(seedId) as { tmdb_id?: number } | undefined;
-          if (typeof row?.tmdb_id === 'number' && row.tmdb_id > 0) resolvedTmdbId = row.tmdb_id;
-        } catch {}
-      }
-      bywSeeds.push({
-        id: seedId,
-        title: rawTitle.trim(),
-        type: item.type === 'Series' || item.type === 'Episode' ? 'Series' : 'Movie',
-        tmdbId: resolvedTmdbId,
-      });
-    };
-
-    for (const item of safeResume) {
-      pushSeed(item);
-      if (bywSeeds.length >= 3) break;
-    }
-
-    if (bywSeeds.length < 3) {
-      try {
-        const recentWatched = stateDatabase()
-          .prepare(
-            `SELECT m.id, m.title, m.type, m.tmdb_id as tmdbId
-             FROM native_watch_history p
-             JOIN native_media_items m ON m.id = COALESCE(p.series_id, p.item_id)
-             ORDER BY CASE WHEN p.profile_id = ? THEN 0 ELSE 1 END, p.last_played_at DESC
-             LIMIT 15`
-          )
-          .all(targetUserId || 'default') as Array<{ id: string; title: string; type: string; tmdbId?: number }>;
-        for (const row of recentWatched) {
-          pushSeed(row);
-          if (bywSeeds.length >= 3) break;
-        }
-      } catch {}
-    }
-
-    if (tmdb.isConfigured() && bywSeeds.length > 0) {
-      const tmdbBywResults = await Promise.all(
-        bywSeeds.map(async (seed) => {
-          let tmdbId = seed.tmdbId;
-          let recType: 'movie' | 'tv' = seed.type === 'Series' ? 'tv' : 'movie';
-          if (!tmdbId) {
-            const matches = await Promise.race([
-              tmdb.search(seed.title),
-              new Promise<MediaItem[]>((r) => setTimeout(() => r([]), 2000)),
-            ]).catch(() => [] as MediaItem[]);
-            const hit = matches.find((m) => typeof m.tmdbId === 'number' && m.tmdbId > 0);
-            if (hit?.tmdbId) {
-              tmdbId = hit.tmdbId;
-              recType = hit.type === 'Series' ? 'tv' : 'movie';
-            }
-          }
-          if (!tmdbId) return { seed, items: [] as MediaItem[] };
-          const recs = await Promise.race([
-            tmdb.getRecommendations(tmdbId, recType),
-            new Promise<MediaItem[]>((r) => setTimeout(() => r([]), 2500)),
-          ]).catch(() => [] as MediaItem[]);
-          return { seed, items: recs.filter(isReleasedItem).slice(0, 15) };
-        })
-      );
-      for (const entry of tmdbBywResults) {
-        if (entry.items.length > 0) {
-          sections.push({
-            id: `because-you-watched-${entry.seed.id}`,
-            title: `Because You Watched ${entry.seed.title}`,
-            items: entry.items,
-          });
-        }
-      }
+    const recommendationEngine = new SmartRecommendationEngine(tmdb);
+    const dynamicRecSections = await Promise.race([
+      recommendationEngine.getDynamicSections(targetUserId),
+      new Promise<MediaRowSection[]>((r) => setTimeout(() => r([]), 2800)),
+    ]).catch(() => [] as MediaRowSection[]);
+    for (const recSection of dynamicRecSections) {
+      sections.push(recSection);
     }
 
     const safeTopRated = topRated.filter((i) => i.source !== 'youtube');

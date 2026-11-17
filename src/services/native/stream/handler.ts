@@ -66,9 +66,25 @@ async function handleGET(request: HttpRequest) {
     if (!fileRow) return HttpResponse.json({ error: 'Subtitle source not found' }, { status: 404 });
     const idxParam = searchParams.get('index');
     const sidecar = searchParams.get('sidecar') || undefined;
-    const vtt = await extractNativeSubtitleVtt(fileRow, idxParam !== null ? Number(idxParam) : undefined, sidecar);
-    if (!vtt) return HttpResponse.json({ error: 'Subtitle track not found' }, { status: 404 });
-    return new HttpResponse(vtt, {
+    // Race uncached ffmpeg extraction against a short deadline so mobile/web players do not stall startup.
+    const extractPromise = extractNativeSubtitleVtt(
+      fileRow,
+      idxParam !== null ? Number(idxParam) : undefined,
+      sidecar
+    );
+    const vtt = await Promise.race([
+      extractPromise.then((res) => ({ kind: 'done' as const, vtt: res })),
+      new Promise<{ kind: 'pending' }>((resolve) => setTimeout(() => resolve({ kind: 'pending' }), 1500)),
+    ]);
+    if (vtt.kind === 'pending') {
+      void extractPromise.catch(() => {});
+      return new HttpResponse('WEBVTT\n\n', {
+        status: 200,
+        headers: { 'Content-Type': 'text/vtt; charset=utf-8', 'Cache-Control': 'no-store' },
+      });
+    }
+    if (!vtt.vtt) return HttpResponse.json({ error: 'Subtitle track not found' }, { status: 404 });
+    return new HttpResponse(vtt.vtt, {
       status: 200,
       headers: { 'Content-Type': 'text/vtt; charset=utf-8', 'Cache-Control': 'public, max-age=3600' },
     });

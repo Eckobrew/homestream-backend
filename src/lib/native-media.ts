@@ -189,6 +189,127 @@ export function ensureNativeMediaTables() {
   if (!watchCols.has('updated_at_ms')) {
     db.exec('ALTER TABLE native_watch_history ADD COLUMN updated_at_ms INTEGER NOT NULL DEFAULT 0');
   }
+  if (!runningRetroSkipPromotion) {
+    runningRetroSkipPromotion = true;
+    try {
+      autoApproveHighConfidenceSkipsInDb(db, 0.9);
+    } finally {
+      runningRetroSkipPromotion = false;
+    }
+  }
+}
+
+export type SkipPreviewItem = {
+  confidence: number;
+  detectedAt: string;
+  segment: {
+    type: SkipSegment['type'];
+    startSeconds: number;
+    endSeconds: number;
+  };
+};
+
+let runningRetroSkipPromotion = false;
+
+export function parseSkipPreviewItems(raw: string | null | undefined): SkipPreviewItem[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    const list = Array.isArray(parsed) ? parsed : [parsed];
+    const items: SkipPreviewItem[] = [];
+    for (const entry of list) {
+      if (!entry || typeof entry !== 'object') continue;
+      const obj = entry as {
+        confidence?: unknown;
+        detectedAt?: unknown;
+        segment?: { type?: unknown; startSeconds?: unknown; endSeconds?: unknown };
+      };
+      const startSeconds = Number(obj.segment?.startSeconds);
+      const endSeconds = Number(obj.segment?.endSeconds);
+      if (!Number.isFinite(startSeconds) || !Number.isFinite(endSeconds) || endSeconds <= startSeconds) continue;
+      const rawType = String(obj.segment?.type || 'intro');
+      const segType: SkipSegment['type'] =
+        rawType === 'recap' || rawType === 'credits' ? rawType : 'intro';
+      items.push({
+        confidence: Number.isFinite(Number(obj.confidence)) ? Number(obj.confidence) : 0,
+        detectedAt: typeof obj.detectedAt === 'string' && obj.detectedAt ? obj.detectedAt : new Date().toISOString(),
+        segment: { type: segType, startSeconds, endSeconds },
+      });
+    }
+    return items;
+  } catch {
+    return [];
+  }
+}
+
+export function serializeSkipPreviewItems(items: SkipPreviewItem[]): string | null {
+  if (items.length === 0) return null;
+  return JSON.stringify(items.length === 1 ? items[0] : items);
+}
+
+function sanitizeSkipSegments(segments: SkipSegment[], durationTicks: number): SkipSegment[] {
+  const maxDur = durationTicks > 0 ? durationTicks / 10_000_000 : Infinity;
+  return segments
+    .filter((s) => (s.type === 'intro' || s.type === 'recap' || s.type === 'credits') && Number.isFinite(s.startSeconds) && Number.isFinite(s.endSeconds))
+    .map((s) => ({
+      type: s.type,
+      startSeconds: Math.max(0, s.startSeconds),
+      endSeconds: Math.min(maxDur, s.endSeconds),
+      title: s.title ? String(s.title).slice(0, 80) : undefined,
+    }))
+    .filter((s) => s.endSeconds > s.startSeconds)
+    .sort((a, b) => a.startSeconds - b.startSeconds);
+}
+
+function autoApproveHighConfidenceSkipsInDb(db: ReturnType<typeof stateDatabase>, minConfidence = 0.9): number {
+  const rows = db
+    .prepare('SELECT id, duration_ticks, manual_skip_json, chapters_json, skip_preview_json FROM native_media_files WHERE skip_preview_json IS NOT NULL')
+    .all() as Array<{
+      id: string;
+      duration_ticks: number;
+      manual_skip_json: string | null;
+      chapters_json: string | null;
+      skip_preview_json: string;
+    }>;
+
+  let approvedCount = 0;
+  for (const row of rows) {
+    const items = parseSkipPreviewItems(row.skip_preview_json);
+    if (items.length === 0) continue;
+    const toApprove = items.filter((item) => item.confidence >= minConfidence);
+    if (toApprove.length === 0) continue;
+    const remaining = items.filter((item) => item.confidence < minConfidence);
+
+    let existing: SkipSegment[] = [];
+    const baseRaw = row.manual_skip_json || row.chapters_json;
+    if (baseRaw) {
+      try { existing = JSON.parse(baseRaw) as SkipSegment[]; } catch {}
+    }
+
+    const approvedTypes = new Set(toApprove.map((item) => item.segment.type));
+    const merged = existing.filter((s) => !approvedTypes.has(s.type));
+    for (const item of toApprove) {
+      merged.push({
+        type: item.segment.type,
+        startSeconds: item.segment.startSeconds,
+        endSeconds: item.segment.endSeconds,
+      });
+    }
+    const clean = sanitizeSkipSegments(merged, row.duration_ticks);
+    db.prepare('UPDATE native_media_files SET manual_skip_json = ?, skip_preview_json = ? WHERE id = ?').run(
+      JSON.stringify(clean),
+      serializeSkipPreviewItems(remaining),
+      row.id
+    );
+    approvedCount += toApprove.length;
+  }
+  if (approvedCount > 0) bumpNativeLibraryRevision();
+  return approvedCount;
+}
+
+export function autoApproveHighConfidenceSkips(minConfidence = 0.9): number {
+  ensureNativeMediaTables();
+  return autoApproveHighConfidenceSkipsInDb(stateDatabase(), minConfidence);
 }
 
 function stableId(prefix: string, seed: string): string {
