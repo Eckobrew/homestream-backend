@@ -342,15 +342,6 @@ async function handleGET(request: HttpRequest) {
           });
         }
       }
-    } else if (useNative) {
-      const byw = getNativeBecauseYouWatched(targetUserId || 'default', 15);
-      if (byw && byw.items.length > 0) {
-        sections.push({
-          id: 'because-you-watched',
-          title: `Because You Watched ${byw.seedTitle}`,
-          items: byw.items,
-        });
-      }
     }
 
     const safeTopRated = topRated.filter((i) => i.source !== 'youtube' && !isYouTubeItem(i));
