@@ -1,3 +1,4 @@
+import { reserveVideoEncode, videoEncodeMetrics, videoEncodeSlotsFromStreams } from '../media/encode-capacity';
 import { h264OutputProfile } from './stream-capabilities';
 import fs from 'fs';
 import path from 'path';
@@ -9,7 +10,7 @@ import { getMediaEngineSettings } from '@/lib/media-settings';
 import { activeLibraryFileClause, ensureNativeMediaTables, NativeMediaFileRow, resolveTrickplayUrlForFile } from '@/lib/native-media';
 import { MediaAudioTrack, MediaVersion, SkipSegment, SubtitleTrack } from '@/types';
 import { log } from '@/log';
-import { getNativeHardwareAcceleration, hardwareDeviceArgs, hardwareEncoders, hardwareVideoFilters } from './native-hardware';
+import { prepareHardwareEncoding, getNativeHardwareAcceleration, hardwareDeviceArgs, hardwareEncoders, hardwareVideoFilters } from './native-hardware';
 import { getProfileMediaPrefs } from './profile-features';
 import type { TvVideoCapability } from './tv-playback-profile';
 
@@ -141,12 +142,6 @@ export async function startNativeHlsTranscode(options: {
   }
   if (existing) stopNativeStreamSession(sessionId);
 
-  const running = [...activeSessions.values()].filter((s) => s.process && s.process.exitCode === null && !s.process.killed);
-  if (running.length >= 4) {
-    running.sort((a, b) => a.lastAccessAt - b.lastAccessAt);
-    stopNativeStreamSession(running[0].id);
-  }
-
   const dir = path.join(settings.transcodeTempDir || '/tmp/homestream-transcode', sessionId);
   fs.mkdirSync(dir, { recursive: true });
   const playlistPath = path.join(dir, 'master.m3u8');
@@ -238,7 +233,10 @@ export async function startNativeHlsTranscode(options: {
       '-hls_segment_filename', path.join(dir, 'seg_%05d.ts'), playlistPath,
     );
 
+    const releaseEncode = encoder === 'copy' ? undefined : reserveVideoEncode(videoEncodeSlotsFromStreams(options.file.streams_json));
     const proc = spawn('ffmpeg', args, { stdio: ['ignore', 'ignore', 'pipe'] });
+    proc.once('error', () => releaseEncode?.());
+    proc.once('close', () => releaseEncode?.());
     session.process = proc;
     session.videoCodec = encoder;
     proc.stderr?.on('data', chunk => {
@@ -253,7 +251,7 @@ export async function startNativeHlsTranscode(options: {
       if (activeSessions.get(sessionId) !== session || session.startupFailed || fs.existsSync(playlistPath)) return;
       if (code !== 0 && encoder !== 'copy' && encoder !== 'libx264') {
         log.warn(`[native-ffmpeg ${sessionId}] ${encoder} failed before publishing HLS; retrying with libx264`);
-        launch('libx264');
+        try { launch('libx264'); } catch { session.startupFailed = true; }
       } else {
         session.startupFailed = true;
       }
@@ -261,7 +259,8 @@ export async function startNativeHlsTranscode(options: {
   }
 
   activeSessions.set(sessionId, session);
-  launch(videoCodec);
+  try { launch(videoCodec); }
+  catch (error) { activeSessions.delete(sessionId); fs.rmSync(dir, { recursive: true, force: true }); throw error; }
   return session;
 }
 
@@ -755,7 +754,7 @@ export function prepareOfflineMp4(file: NativeMediaFileRow, maxHeight?: number):
   }
 
   const activePreparing = Array.from(offlineExportJobs.values()).filter((j) => j.status === 'preparing').length;
-  if (activePreparing >= 1 || getActiveTranscodeCount() >= 3) {
+  if (activePreparing >= 1 || videoEncodeMetrics().active >= getMediaEngineSettings().maxConcurrentTranscodes) {
     return { status: 'preparing', updatedAt: Date.now() };
   }
 
@@ -765,6 +764,7 @@ export function prepareOfflineMp4(file: NativeMediaFileRow, maxHeight?: number):
 
   const tmp = `${target}.${process.pid}.tmp`;
   void (async () => {
+    let releaseEncode: (() => void) | undefined;
     try {
       const args = [
         '-y', '-v', 'error',
@@ -779,7 +779,9 @@ export function prepareOfflineMp4(file: NativeMediaFileRow, maxHeight?: number):
         args.push('-c:v', 'libx264', '-preset', 'fast', '-crf', '22', '-pix_fmt', 'yuv420p');
       }
       args.push('-c:a', 'aac', '-b:a', '192k', '-ac', '2', '-f', 'mp4', '-movflags', '+faststart', tmp);
-      await execFileAsync('ffmpeg', args, { timeout: 600_000 });
+      const encodingArgs = await prepareHardwareEncoding(args, settings);
+      if (encodingArgs[encodingArgs.indexOf('-c:v') + 1] !== 'copy') releaseEncode = reserveVideoEncode(videoEncodeSlotsFromStreams(file.streams_json));
+      await execFileAsync('ffmpeg', encodingArgs, { timeout: 600_000 });
       if (fs.existsSync(tmp) && fs.statSync(tmp).size > 0) {
         fs.renameSync(tmp, target);
         offlineExportJobs.set(target, { status: 'ready', targetPath: target, updatedAt: Date.now() });
@@ -793,6 +795,7 @@ export function prepareOfflineMp4(file: NativeMediaFileRow, maxHeight?: number):
         updatedAt: Date.now(),
       });
     } finally {
+      releaseEncode?.();
       try { if (fs.existsSync(tmp)) fs.unlinkSync(tmp); } catch {}
     }
   })();

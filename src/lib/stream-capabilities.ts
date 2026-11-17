@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { type TvVideoCapability, parseTvCapabilities } from './tv-playback-profile';
 
-export interface StreamVideo { codec_name?: string; profile?: string; width?: number; height?: number; codec_type?: string; audio_codec?: string; }
+export interface StreamVideo { codec_name?: string; profile?: string; width?: number; height?: number; codec_type?: string; audio_codec?: string; r_frame_rate?: string; }
 export function streamVideoStrategy(video: StreamVideo | undefined, query: URLSearchParams) {
   const capabilities = parseTvCapabilities(query.get('videoCapabilities'));
   const codecs = capabilities.length ? capabilities.map(c => c.codec)
@@ -39,7 +39,7 @@ export function streamVideoStrategy(video: StreamVideo | undefined, query: URLSe
 export async function probeStreamVideo(source: string, headers?: string): Promise<StreamVideo | undefined> {
   return new Promise(resolve => {
     const proc = spawn('ffprobe', ['-v', 'error', '-show_entries',
-      'stream=codec_type,codec_name,profile,width,height', '-of', 'json', '-rw_timeout', '10000000',
+      'stream=codec_type,codec_name,profile,width,height,r_frame_rate', '-of', 'json', '-rw_timeout', '10000000',
       ...(headers ? ['-headers', headers] : []), source]);
     let output = '';
     proc.stdout.on('data', data => { if (output.length < 100000) output += data.toString(); });

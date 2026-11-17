@@ -23,6 +23,7 @@ export interface MediaEngineSettings {
   vaapiDevice: string;
   transcodeTempDir: string;
   maxTranscodeBitrateMbps: number;
+  maxConcurrentTranscodes: number;
   transcodePreset: TranscodePreset;
   hdrToneMapping: boolean;
   allowDirectPlay: boolean;
@@ -76,6 +77,7 @@ export const DEFAULT_MEDIA_ENGINE_SETTINGS: MediaEngineSettings = {
   vaapiDevice: '/dev/dri/renderD128',
   transcodeTempDir: '/tmp/homestream-transcode',
   maxTranscodeBitrateMbps: 20,
+  maxConcurrentTranscodes: 2,
   transcodePreset: 'veryfast',
   hdrToneMapping: true,
   allowDirectPlay: true,
@@ -124,6 +126,7 @@ export function saveMediaEngineSettings(patch: Partial<MediaEngineSettings>): Me
     ...patch,
     mediaEngine: 'native',
     libraries: Array.isArray(patch.libraries) ? patch.libraries : current.libraries,
+    maxConcurrentTranscodes: Math.max(1, Math.min(32, Math.floor(Number(patch.maxConcurrentTranscodes ?? current.maxConcurrentTranscodes) || 2))),
     maxTranscodeBitrateMbps: Math.max(0, Math.min(200, Number(patch.maxTranscodeBitrateMbps ?? current.maxTranscodeBitrateMbps) || 0)),
     transcodeIdleTimeoutSeconds: Math.max(30, Math.min(3600, Number(patch.transcodeIdleTimeoutSeconds ?? current.transcodeIdleTimeoutSeconds) || 120)),
     hlsSegmentSeconds: Math.max(2, Math.min(15, Number(patch.hlsSegmentSeconds ?? current.hlsSegmentSeconds) || 4)),

@@ -1,3 +1,4 @@
+import { VideoEncodeCapacityError } from '@/media/encode-capacity';
 import { withParentalControls } from '@/lib/parental-controls';
 import { forwardStreamCapabilities } from '@/lib/stream-capabilities';
 import { parseTvCapabilities } from '@/lib/tv-playback-profile';
@@ -133,4 +134,10 @@ async function handleGET(request: HttpRequest) {
   return HttpResponse.json({ error: nativeResult.error || 'Media file is not available' }, { status: 404 });
 }
 
-export const GET = withParentalControls(handleGET);
+export const GET = withParentalControls(async (request: HttpRequest) => {
+  try { return await handleGET(request); }
+  catch (error) {
+    if (error instanceof VideoEncodeCapacityError) return HttpResponse.json({ error: error.message }, { status: 503, headers: { 'Retry-After': '5' } });
+    throw error;
+  }
+});

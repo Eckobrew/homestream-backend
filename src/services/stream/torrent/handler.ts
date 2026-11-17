@@ -1,3 +1,6 @@
+import { videoEncodeSlotsFromStreams } from '@/media/encode-capacity';
+import { prepareHardwareEncoding } from '@/lib/native-hardware';
+import { getMediaEngineSettings } from '@/lib/media-settings';
 import { probeStreamVideo, streamVideoStrategy, canDirectStreamSource, streamAudioArguments } from '@/lib/stream-capabilities';
 import { HttpRequest, HttpResponse } from '@/http';
 import { withParentalControls } from '@/lib/parental-controls';
@@ -213,7 +216,7 @@ async function handleGET(request: HttpRequest) {
 
     let ffmpegProc: ReturnType<typeof startConversion>;
     try {
-      ffmpegProc = startConversion(ffmpegArgs, request.signal);
+      ffmpegProc = startConversion(await prepareHardwareEncoding(ffmpegArgs, getMediaEngineSettings()), request.signal, 'ffmpeg', videoEncodeSlotsFromStreams(JSON.stringify(sourceVideo ? [sourceVideo] : [])));
     } catch (error) {
       if (error instanceof ConversionCapacityError) {
         return HttpResponse.json({ error: 'Server is busy converting other streams. Try again shortly.' }, { status: 503, headers: { 'Retry-After': '5' } });

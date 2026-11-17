@@ -1,3 +1,5 @@
+import { getMediaEngineSettings } from '../lib/media-settings';
+import { reserveVideoEncode, VideoEncodeCapacityError } from './encode-capacity';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 export type Conversion = { id: string; startedAt: number; stop: () => void };
@@ -8,13 +10,22 @@ let failed = 0;
 export class ConversionCapacityError extends Error {}
 export function conversionMetrics() { return { active: active.size, completed, rejected, failed }; }
 export function shutdownConversions() { for (const conversion of active.values()) conversion.stop(); }
-export function startConversion(args: string[], signal: AbortSignal, executable = 'ffmpeg'): ChildProcessWithoutNullStreams {
-  const configured = Number(process.env.HOMESTREAM_MAX_CONVERSIONS || '2');
+export function startConversion(args: string[], signal: AbortSignal, executable = 'ffmpeg', encodeSlots = 1): ChildProcessWithoutNullStreams {
+  const configured = Number(process.env.HOMESTREAM_MAX_CONVERSIONS || Math.max(4, getMediaEngineSettings().maxConcurrentTranscodes * 2));
   const limit = Number.isInteger(configured) && configured > 0 ? configured : 2;
   if (signal.aborted) throw new Error('Conversion cancelled');
   if (active.size >= limit) { rejected++; throw new ConversionCapacityError('Conversion capacity reached'); }
   const id = randomUUID();
   const startedAt = Date.now();
+  const videoCodec = args[args.indexOf('-c:v') + 1];
+  let releaseEncode: (() => void) | undefined;
+  if (args.includes('-c:v') && videoCodec !== 'copy') {
+    try { releaseEncode = reserveVideoEncode(encodeSlots); }
+    catch (error) {
+      if (error instanceof VideoEncodeCapacityError) { rejected++; throw new ConversionCapacityError(error.message); }
+      throw error;
+    }
+  }
   const child = spawn(executable, args);
   let finished = false;
   const stop = () => { if (!finished) child.kill('SIGKILL'); };
@@ -24,6 +35,7 @@ export function startConversion(args: string[], signal: AbortSignal, executable 
   const finish = (success: boolean) => {
     if (finished) return;
     finished = true;
+    releaseEncode?.();
     clearTimeout(timer); signal.removeEventListener('abort', stop); active.delete(id);
     if (success) completed++; else failed++;
     console.info('conversion.finished', { id, durationMs: Date.now() - startedAt, success });
