@@ -486,9 +486,17 @@ export async function generateTrickplayForFile(fileId: string): Promise<string |
   return vttPath;
 }
 
-function walkVideoFiles(dirPath: string): string[] {
-  const results: string[] = [];
-  if (!dirPath || !fs.existsSync(dirPath)) return results;
+function walkVideoFiles(dirPath: string): { files: string[]; unreadableRoot: boolean; unreadablePrefixes: string[] } {
+  const files: string[] = [];
+  const unreadablePrefixes: string[] = [];
+  if (!dirPath || !fs.existsSync(dirPath)) return { files, unreadableRoot: false, unreadablePrefixes };
+  try {
+    if (!fs.statSync(dirPath).isDirectory()) {
+      return { files, unreadableRoot: true, unreadablePrefixes };
+    }
+  } catch {
+    return { files, unreadableRoot: true, unreadablePrefixes };
+  }
   const stack = [dirPath];
   while (stack.length > 0) {
     const current = stack.pop()!;
@@ -496,6 +504,8 @@ function walkVideoFiles(dirPath: string): string[] {
     try {
       entries = fs.readdirSync(current, { withFileTypes: true });
     } catch {
+      if (current === dirPath) return { files, unreadableRoot: true, unreadablePrefixes };
+      unreadablePrefixes.push(current.endsWith(path.sep) ? current : `${current}${path.sep}`);
       continue;
     }
     for (const entry of entries) {
@@ -504,11 +514,11 @@ function walkVideoFiles(dirPath: string): string[] {
       if (entry.isDirectory()) {
         stack.push(full);
       } else if (entry.isFile() && VIDEO_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
-        results.push(full);
+        files.push(full);
       }
     }
   }
-  return results;
+  return { files, unreadableRoot: false, unreadablePrefixes };
 }
 
 export async function scanNativeLibraries(libraryId?: string): Promise<ScanStatus> {
@@ -535,7 +545,11 @@ export async function scanNativeLibraries(libraryId?: string): Promise<ScanStatu
     for (const lib of libs) {
       lastLibraryScan.set(lib.id, Date.now());
       for (const rootDir of lib.paths) {
-        const files = walkVideoFiles(rootDir);
+        const { files, unreadableRoot, unreadablePrefixes } = walkVideoFiles(rootDir);
+        if (unreadableRoot) {
+          currentScanStatus.errors.push(`${rootDir}: Directory is unreadable`);
+          continue;
+        }
         for (const filePath of files) {
           currentScanStatus.scannedFiles += 1;
           try {
@@ -742,6 +756,7 @@ export async function scanNativeLibraries(libraryId?: string): Promise<ScanStatu
             .all(prefix.length, prefix) as Array<{ id: string; item_id: string; episode_id: string | null; file_path: string }>;
           for (const row of dbFiles) {
             if (seen.has(row.file_path)) continue;
+            if (unreadablePrefixes.some((p) => row.file_path.startsWith(p))) continue;
             db.prepare('DELETE FROM native_media_files WHERE id = ?').run(row.id);
             if (row.episode_id) {
               const epRemaining = db.prepare('SELECT count(*) as c FROM native_media_files WHERE episode_id = ?').get(row.episode_id) as { c: number };
