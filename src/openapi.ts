@@ -14,7 +14,7 @@ function describe(operation: Operation, native: boolean) {
   if (operation.path === 'preview-stream') for (const status of ['302','307']) responses[status] = {description:'Negotiated stream redirect',headers:{Location:{schema:{type:'string'}}}};
   return {
     operationId:`${native ? 'mobile' : 'web'}_${operation.method.toLowerCase()}_${operation.path.replace(/[^a-zA-Z0-9]+/g,'_')}`,
-    description: operation.public ? 'Public endpoint. Pairing additionally requires a direct private-network connection.' : native ? 'Bearer household token, paired device credential, or signed mobile session. Profile policy is enforced on the server.' : 'Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.',
+    description: operation.public ? 'Public endpoint. Pairing additionally requires a direct private-network connection.' : native ? 'Bearer household token, paired device credential, or signed mobile session. Profile policy is enforced on the server.' : 'Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.',
     security: operation.public ? [] : native ? [{bearer:[]}] : [{session:[]},{bearer:[]},{}],
     parameters:[
       ...[...operation.path.matchAll(/\{([^}]+)\}/g)].map(match => ({name:match[1],in:'path',required:true,schema:{type:'string',minLength:1}})),

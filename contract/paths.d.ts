@@ -24,10 +24,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_config"];
         put?: never;
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         post: operations["web_post_config"];
         delete?: never;
         options?: never;
@@ -42,7 +42,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_home"];
         put?: never;
         post?: never;
@@ -59,7 +59,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_library_type_"];
         put?: never;
         post?: never;
@@ -76,7 +76,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_categories_type_"];
         put?: never;
         post?: never;
@@ -93,7 +93,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_media_id_"];
         put?: never;
         post?: never;
@@ -110,7 +110,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_media_id_recommendations"];
         put?: never;
         post?: never;
@@ -127,10 +127,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_profiles"];
         put?: never;
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         post: operations["web_post_profiles"];
         delete?: never;
         options?: never;
@@ -145,10 +145,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_accounts"];
         put?: never;
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         post: operations["web_post_accounts"];
         delete?: never;
         options?: never;
@@ -163,10 +163,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_native_library"];
         put?: never;
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         post: operations["web_post_native_library"];
         delete?: never;
         options?: never;
@@ -181,7 +181,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_native_stream"];
         put?: never;
         post?: never;
@@ -198,10 +198,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_syncplay"];
         put?: never;
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         post: operations["web_post_syncplay"];
         delete?: never;
         options?: never;
@@ -216,7 +216,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_search"];
         put?: never;
         post?: never;
@@ -233,7 +233,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_downloads"];
         put?: never;
         post?: never;
@@ -250,10 +250,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_downloads_manager"];
         put?: never;
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         post: operations["web_post_downloads_manager"];
         delete?: never;
         options?: never;
@@ -268,7 +268,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_playback"];
         put?: never;
         post?: never;
@@ -287,7 +287,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         post: operations["web_post_playback_progress"];
         delete?: never;
         options?: never;
@@ -302,10 +302,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_request"];
         put?: never;
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         post: operations["web_post_request"];
         delete?: never;
         options?: never;
@@ -320,7 +320,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_preview_stream"];
         put?: never;
         post?: never;
@@ -337,7 +337,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_subtitles"];
         put?: never;
         post?: never;
@@ -354,7 +354,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_trailer"];
         put?: never;
         post?: never;
@@ -371,7 +371,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_stream_download"];
         put?: never;
         post?: never;
@@ -388,7 +388,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_stream_torrent"];
         put?: never;
         post?: never;
@@ -405,10 +405,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_webhook_arr"];
         put?: never;
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         post: operations["web_post_webhook_arr"];
         delete?: never;
         options?: never;
@@ -423,7 +423,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_catalog_links"];
         put?: never;
         post?: never;
@@ -440,7 +440,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_books"];
         put?: never;
         post?: never;
@@ -457,7 +457,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_books_search"];
         put?: never;
         post?: never;
@@ -474,7 +474,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_books_book"];
         put?: never;
         post?: never;
@@ -508,7 +508,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_books_file"];
         put?: never;
         post?: never;
@@ -525,7 +525,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_books_queue"];
         put?: never;
         post?: never;
@@ -542,10 +542,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_books_progress"];
         put?: never;
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         post: operations["web_post_books_progress"];
         delete?: never;
         options?: never;
@@ -562,7 +562,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         post: operations["web_post_books_request"];
         delete?: never;
         options?: never;
@@ -579,9 +579,9 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         post: operations["web_post_books_profile_book"];
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         delete: operations["web_delete_books_profile_book"];
         options?: never;
         head?: never;
@@ -595,7 +595,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_music"];
         put?: never;
         post?: never;
@@ -612,11 +612,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_music_album"];
         put?: never;
         post?: never;
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         delete: operations["web_delete_music_album"];
         options?: never;
         head?: never;
@@ -647,7 +647,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_music_stream"];
         put?: never;
         post?: never;
@@ -664,7 +664,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_music_download"];
         put?: never;
         post?: never;
@@ -681,7 +681,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_music_import_status"];
         put?: never;
         post?: never;
@@ -700,7 +700,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         post: operations["web_post_music_request"];
         delete?: never;
         options?: never;
@@ -717,9 +717,9 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         post: operations["web_post_music_profile_album"];
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         delete: operations["web_delete_music_profile_album"];
         options?: never;
         head?: never;
@@ -733,10 +733,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_music_playlists"];
         put?: never;
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         post: operations["web_post_music_playlists"];
         delete?: never;
         options?: never;
@@ -753,7 +753,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         post: operations["web_post_music_playlists_import"];
         delete?: never;
         options?: never;
@@ -770,7 +770,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         post: operations["web_post_music_playlists_import_spotify"];
         delete?: never;
         options?: never;
@@ -787,7 +787,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         post: operations["web_post_music_playlists_import_exportify"];
         delete?: never;
         options?: never;
@@ -802,11 +802,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_music_playlist"];
         put?: never;
         post?: never;
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         delete: operations["web_delete_music_playlist"];
         options?: never;
         head?: never;
@@ -822,9 +822,9 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         post: operations["web_post_music_playlist_track"];
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         delete: operations["web_delete_music_playlist_track"];
         options?: never;
         head?: never;
@@ -838,7 +838,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_requested"];
         put?: never;
         post?: never;
@@ -855,10 +855,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_integrations"];
         put?: never;
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         post: operations["web_post_integrations"];
         delete?: never;
         options?: never;
@@ -873,7 +873,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_youtube_search"];
         put?: never;
         post?: never;
@@ -890,7 +890,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_youtube_stream"];
         put?: never;
         post?: never;
@@ -907,7 +907,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_youtube_stream_video"];
         put?: never;
         post?: never;
@@ -926,9 +926,9 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         post: operations["web_post_youtube_progress"];
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         delete: operations["web_delete_youtube_progress"];
         options?: never;
         head?: never;
@@ -942,11 +942,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_youtube_continue_watching"];
         put?: never;
         post?: never;
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         delete: operations["web_delete_youtube_continue_watching"];
         options?: never;
         head?: never;
@@ -960,12 +960,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_youtube_auth"];
         put?: never;
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         post: operations["web_post_youtube_auth"];
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         delete: operations["web_delete_youtube_auth"];
         options?: never;
         head?: never;
@@ -979,7 +979,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_youtube_recommendations"];
         put?: never;
         post?: never;
@@ -998,7 +998,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         post: operations["web_post_youtube_download"];
         delete?: never;
         options?: never;
@@ -1013,13 +1013,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_youtube_subscriptions"];
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         put: operations["web_put_youtube_subscriptions"];
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         post: operations["web_post_youtube_subscriptions"];
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         delete: operations["web_delete_youtube_subscriptions"];
         options?: never;
         head?: never;
@@ -1035,7 +1035,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         post: operations["web_post_youtube_subscriptions_check"];
         delete?: never;
         options?: never;
@@ -1050,11 +1050,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_youtube_queue"];
         put?: never;
         post?: never;
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         delete: operations["web_delete_youtube_queue"];
         options?: never;
         head?: never;
@@ -1068,7 +1068,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_youtube_archive"];
         put?: never;
         post?: never;
@@ -1085,7 +1085,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_youtube_stream_local"];
         put?: never;
         post?: never;
@@ -1119,7 +1119,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_sessions"];
         put?: never;
         post?: never;
@@ -1138,7 +1138,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         post: operations["web_post_sessions_heartbeat"];
         delete?: never;
         options?: never;
@@ -1155,7 +1155,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         post: operations["web_post_sessions_command"];
         delete?: never;
         options?: never;
@@ -1170,7 +1170,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_sessions_commands"];
         put?: never;
         post?: never;
@@ -1187,12 +1187,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_watchlist"];
         put?: never;
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         post: operations["web_post_watchlist"];
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         delete: operations["web_delete_watchlist"];
         options?: never;
         head?: never;
@@ -1206,12 +1206,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_profile_prefs"];
         put?: never;
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         post: operations["web_post_profile_prefs"];
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         delete: operations["web_delete_profile_prefs"];
         options?: never;
         head?: never;
@@ -1225,12 +1225,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         get: operations["web_get_collections"];
         put?: never;
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         post: operations["web_post_collections"];
-        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account. */
+        /** @description Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account. */
         delete: operations["web_delete_collections"];
         options?: never;
         head?: never;
@@ -2687,7 +2687,7 @@ export interface components {
             genres: string[];
             seasonsCount?: number;
             /** @enum {string} */
-            source: "demo" | "jellyfin" | "native" | "seerr" | "youtube";
+            source: "demo" | "jellyfin" | "native" | "seerr" | "tmdb" | "youtube";
             jellyfinId?: string;
             seerrId?: number;
             tmdbId?: number;

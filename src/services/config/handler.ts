@@ -1,37 +1,33 @@
 import { withParentalControls } from '@/lib/parental-controls';
 import { HttpRequest, HttpResponse } from '@/http';
-import { JellyfinClient } from '@/lib/jellyfin';
-import { SeerrClient } from '@/lib/seerr';
 import { QBittorrentClient } from '@/lib/qbittorrent';
 import { RadarrClient } from '@/lib/radarr';
 import { SonarrClient } from '@/lib/sonarr';
 import { TmdbClient } from '@/lib/tmdb';
 import { getServerConfig, saveServerConfig } from '@/lib/config';
 import { getHomeflixProfiles } from '@/lib/profiles';
-import { getMediaEngineSettings } from '@/lib/media-settings';
+import { listNativeLibraryItems } from '@/lib/native-media';
 
 async function handleGET(_request: HttpRequest) {
   const config = getServerConfig();
   const profiles = await getHomeflixProfiles();
 
-  const isJellyfinConfigured = Boolean(config.jellyfinUrl && config.jellyfinApiKey);
-  const isSeerrConfigured = Boolean(config.seerrUrl && config.seerrApiKey);
   const isTmdbConfigured = Boolean(config.tmdbApiKey);
   const isQbittorrentConfigured = Boolean(config.qbittorrentUrl);
   const isRadarrConfigured = Boolean(config.radarrUrl && config.radarrApiKey);
   const isSonarrConfigured = Boolean(config.sonarrUrl && config.sonarrApiKey);
-  const mediaEngine = getMediaEngineSettings().mediaEngine;
-  const isConfigured = mediaEngine === 'native' || config.isConfigured;
-  const isSetupNeeded = (mediaEngine !== 'native' && !isJellyfinConfigured) || profiles.length === 0;
+  const hasNativeMedia = listNativeLibraryItems({ limit: 1 }).length > 0;
+  const isConfigured = config.isConfigured || hasNativeMedia || profiles.length > 0;
+  const isSetupNeeded = profiles.length === 0;
 
   return HttpResponse.json({
     appName: config.appName || 'HomeStream',
-    jellyfinUrl: config.jellyfinUrl,
-    hasJellyfinKey: Boolean(config.jellyfinApiKey),
-    jellyfinUserId: config.jellyfinUserId,
-    seerrUrl: config.seerrUrl,
-    hasSeerrKey: Boolean(config.seerrApiKey),
-    hasTmdbKey: Boolean(config.tmdbApiKey),
+    jellyfinUrl: '',
+    hasJellyfinKey: false,
+    jellyfinUserId: '',
+    seerrUrl: '',
+    hasSeerrKey: false,
+    hasTmdbKey: isTmdbConfigured,
     isTmdbConfigured,
     qbittorrentUrl: config.qbittorrentUrl,
     qbittorrentUsername: config.qbittorrentUsername,
@@ -42,9 +38,9 @@ async function handleGET(_request: HttpRequest) {
     sonarrUrl: config.sonarrUrl,
     hasSonarrKey: Boolean(config.sonarrApiKey),
     isConfigured,
-    mediaEngine,
-    isJellyfinConfigured,
-    isSeerrConfigured,
+    mediaEngine: 'native',
+    isJellyfinConfigured: false,
+    isSeerrConfigured: false,
     isQbittorrentConfigured,
     isRadarrConfigured,
     isSonarrConfigured,
@@ -60,12 +56,7 @@ async function handlePOST(request: HttpRequest) {
 
     if (action === 'save') {
       const saved = saveServerConfig({
-        jellyfinUrl: body.jellyfinUrl,
-        jellyfinApiKey: body.jellyfinApiKey,
-        seerrUrl: body.seerrUrl,
-        seerrApiKey: body.seerrApiKey,
         tmdbApiKey: body.tmdbApiKey,
-        jellyfinUserId: body.jellyfinUserId,
         qbittorrentUrl: body.qbittorrentUrl,
         qbittorrentUsername: body.qbittorrentUsername,
         qbittorrentPassword: body.qbittorrentPassword,
@@ -79,10 +70,6 @@ async function handlePOST(request: HttpRequest) {
       return HttpResponse.json({
         success: true,
         config: {
-          jellyfinUrl: saved.jellyfinUrl,
-          hasJellyfinKey: Boolean(saved.jellyfinApiKey),
-          seerrUrl: saved.seerrUrl,
-          hasSeerrKey: Boolean(saved.seerrApiKey),
           hasTmdbKey: Boolean(saved.tmdbApiKey),
           qbittorrentUrl: saved.qbittorrentUrl,
           hasQbittorrentPassword: Boolean(saved.qbittorrentPassword),
@@ -94,18 +81,6 @@ async function handlePOST(request: HttpRequest) {
           isConfigured: saved.isConfigured,
         },
       });
-    }
-
-    if (action === 'test-jellyfin') {
-      const client = new JellyfinClient(body.url, body.apiKey, body.userId);
-      const res = await client.testConnection();
-      return HttpResponse.json(res);
-    }
-
-    if (action === 'test-seerr') {
-      const client = new SeerrClient(body.url, body.apiKey);
-      const res = await client.testConnection();
-      return HttpResponse.json(res);
     }
 
     if (action === 'test-tmdb') {

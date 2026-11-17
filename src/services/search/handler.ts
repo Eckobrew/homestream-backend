@@ -1,17 +1,16 @@
 import { log } from '@/log';
-import { JellyfinClient } from '@/lib/jellyfin';
-import { withJellyfinSession } from '@/lib/jellyfin-session';
 import { withParentalControls } from '@/lib/parental-controls';
 import { HttpRequest, HttpResponse } from '@/http';
-import { SeerrClient } from '@/lib/seerr';
 import { TmdbClient } from '@/lib/tmdb';
 import { QBittorrentClient } from '@/lib/qbittorrent';
-import { MOCK_SEERR_SEARCH_RESULTS, MOCK_RECENT_MOVIES, MOCK_RECENT_SERIES, MOCK_CONTINUE_WATCHING } from '@/lib/mock-data';
-import { getMediaEngineSettings } from '@/lib/media-settings';
-import { searchNativeMedia } from '@/lib/native-media';
+import {
+  MOCK_DISCOVERY_SEARCH_RESULTS,
+  MOCK_RECENT_MOVIES,
+  MOCK_RECENT_SERIES,
+  MOCK_CONTINUE_WATCHING,
+} from '@/lib/mock-data';
+import { listNativeLibraryItems, searchNativeMedia } from '@/lib/native-media';
 import { MediaItem } from '@/types';
-
-
 
 async function handleGET(request: HttpRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -22,42 +21,39 @@ async function handleGET(request: HttpRequest) {
   }
 
   const tmdb = new TmdbClient();
-  const seerr = new SeerrClient();
   const qb = new QBittorrentClient();
-  const jellyfin = new JellyfinClient();
-  const useNative = getMediaEngineSettings().mediaEngine === 'native';
-  const localSearch = useNative
-    ? Promise.resolve(searchNativeMedia(query))
-    : jellyfin.searchMedia(query);
+  const localResults = searchNativeMedia(query);
   const deduplicate = (items: MediaItem[]) => {
     const seen = new Set<string>();
-    return items.filter(item => { const key = `${item.type}:${item.tmdbId || `${item.title.toLowerCase().trim()}|${item.year || ''}`}`; if (seen.has(key)) return false; seen.add(key); return true; });
+    return items.filter(item => {
+      const key = `${item.type}:${item.tmdbId || `${item.title.toLowerCase().trim()}|${item.year || ''}`}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   };
 
-  const hasDiscovery = tmdb.isConfigured() || seerr.isConfigured();
-
-  if (!hasDiscovery) {
-    if (useNative || jellyfin.isConfigured()) return HttpResponse.json({ results: await localSearch, isDemoMode: false });
-    if (process.env.HOMESTREAM_DEMO_MODE !== 'true') return HttpResponse.json({ error: 'Configure a media server to search.' }, { status: 503 });
-    // Search mock database
+  if (!tmdb.isConfigured()) {
+    if (localResults.length > 0 || listNativeLibraryItems({ limit: 1 }).length > 0) {
+      return HttpResponse.json({ results: localResults, isDemoMode: false });
+    }
+    if (process.env.HOMESTREAM_DEMO_MODE !== 'true') {
+      return HttpResponse.json({ error: 'Configure TMDB or add local media libraries to search.' }, { status: 503 });
+    }
     const allMock: MediaItem[] = [
-      ...MOCK_SEERR_SEARCH_RESULTS,
+      ...MOCK_DISCOVERY_SEARCH_RESULTS,
       ...MOCK_CONTINUE_WATCHING,
       ...MOCK_RECENT_MOVIES,
       ...MOCK_RECENT_SERIES,
     ];
-
     const lowerQ = query.toLowerCase();
     const results = allMock.filter((item) =>
       item.title.toLowerCase().includes(lowerQ) ||
       item.overview.toLowerCase().includes(lowerQ) ||
       item.genres.some((g) => g.toLowerCase().includes(lowerQ))
     );
-
-    // Remove duplicates by title
     const uniqueMap = new Map<string, MediaItem>();
     results.forEach((item) => uniqueMap.set(item.title, item));
-
     return HttpResponse.json({
       results: Array.from(uniqueMap.values()),
       isDemoMode: true,
@@ -65,25 +61,21 @@ async function handleGET(request: HttpRequest) {
   }
 
   try {
-    const discoveryPromise = tmdb.isConfigured() ? tmdb.search(query) : seerr.search(query);
-    const [library, discovery] = await Promise.all([localSearch, discoveryPromise]);
-    const results = deduplicate([...library, ...discovery]);
+    const discovery = await tmdb.search(query);
+    const results = deduplicate([...localResults, ...discovery]);
 
-    // Cross-reference active qBittorrent downloads
     if (qb.isConfigured()) {
       try {
         const dlList = await qb.getStreamableDownloads();
         if (dlList.length > 0) {
           results.forEach((item) => {
-            if (item.source === 'jellyfin' || item.jellyfinId || item.status === 'available') return;
+            if (item.source === 'native' || item.status === 'available') return;
             const cleanTitle = (item.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-            const matchedDl = dlList.find(
-              (d) => {
-                if (!d.streamUrl || (!d.streamable && d.progressPercent === 0)) return false;
-                const cleanD = (d.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-                return cleanD === cleanTitle || (cleanD.startsWith(cleanTitle) && cleanTitle.length >= 3);
-              }
-            );
+            const matchedDl = dlList.find((d) => {
+              if (!d.streamUrl || (!d.streamable && d.progressPercent === 0)) return false;
+              const cleanD = (d.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+              return cleanD === cleanTitle || (cleanD.startsWith(cleanTitle) && cleanTitle.length >= 3);
+            });
             if (matchedDl && matchedDl.streamUrl) {
               item.isDownloading = true;
               item.downloadProgress = matchedDl.progressPercent;
@@ -108,10 +100,10 @@ async function handleGET(request: HttpRequest) {
   } catch (err: unknown) {
     log.error('Search error:', err);
     return HttpResponse.json({
-      results: [],
-      error: 'Failed to search media in Seerr',
-    }, { status: 500 });
+      results: localResults,
+      error: 'Failed to search media via TMDB',
+    }, { status: localResults.length > 0 ? 200 : 500 });
   }
 }
 
-export const GET = withJellyfinSession(withParentalControls(handleGET));
+export const GET = withParentalControls(handleGET);

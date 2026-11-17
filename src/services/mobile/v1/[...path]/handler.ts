@@ -4,16 +4,14 @@ import * as booksService from '@/services/books/handler';
 import * as youtubeService from '@/services/youtube/handler';
 import * as requestedService from '@/services/requested/handler';
 import { validateApiRequest } from '@/api-schema';
-import { fetch } from '@/upstream';
 import { log } from '@/log';
 import { peerIdentity } from '@/request-context';
 import { activeProfile, pinProfileRequest, guardKidsRequest, parentalResponse, ParentalDenied } from '@/lib/parental-controls';
 import { withParentalProfile } from '@/lib/parental-runtime';
 import { parentalResource } from '@/lib/parental-resource';
 import { denyPasswordlessAdultLogin, isKids, KIDS_LIMITS, kidsPolicyRevision, parentPinConfigured, requireParentPin } from '@/lib/parental-store';
-import { selectDeviceProfile } from '@/lib/devices';
+import { selectDeviceProfile, isValidDeviceToken, isLocallyPairedDeviceToken, registerDevice } from '@/lib/devices';
 import { manageProfile, ProfileError, STOCK_AVATARS } from '@/lib/profile-management';
-import { withJellyfinSession } from '@/lib/jellyfin-session';
 import { timingSafeEqual } from 'crypto';
 import { HttpRequest, HttpResponse } from '@/http';
 import { MediaItem } from '@/types';
@@ -24,8 +22,8 @@ import { GET as playback } from '@/services/playback/handler';
 import { POST as progress } from '@/services/playback/progress/handler';
 import { GET as subtitles } from '@/services/subtitles/handler';
 import { GET as requestOptions, POST as requestMedia } from '@/services/request/handler';
-import { getHomeflixProfiles, saveHomeflixProfiles } from '@/lib/profiles';
-import { authenticateAccount, createAccount, listAccounts, profilesForAccount } from '@/lib/accounts';
+import { getHomeflixProfiles, resolveProfileId } from '@/lib/profiles';
+import { authenticateAccount, listAccounts, profilesForAccount } from '@/lib/accounts';
 import { GET as search } from '@/services/search/handler';
 import { GET as downloads, POST as downloadsPost } from '@/services/downloads/handler';
 import { GET as categories } from '@/services/categories/[type]/handler';
@@ -36,26 +34,20 @@ import { GET as nativeStream } from '@/services/native/stream/handler';
 import * as nativeLibrary from '@/services/native/library/handler';
 import * as accounts from '@/services/accounts/handler';
 import { getServerConfig } from '@/lib/config';
-import { JellyfinClient } from '@/lib/jellyfin';
 import { getNativeEpisodeQueue, getNativeItemById, getNativeMovieCollection, getNativeResumeItems, recordNativeWatchProgress } from '@/lib/native-media';
-import { getMediaEngineSettings } from '@/lib/media-settings';
 import * as syncplayService from '@/services/syncplay/handler';
 import * as nativeLibraryService from '@/services/native/library/handler';
 import * as watchlistService from '@/services/watchlist/handler';
 import * as profilePrefsService from '@/services/profile-prefs/handler';
 import * as collectionsService from '@/services/collections/handler';
 import * as accountsService from '@/services/accounts/handler';
-import { resolveJellyfinUserId } from '@/lib/profiles';
 import { createSession, readSession } from '@/lib/session';
 import { allowLogin } from '@/lib/login-limit';
-import { isValidDeviceToken, isLocallyPairedDeviceToken, registerDevice } from '@/lib/devices';
 import { handleImage } from '@/lib/image-proxy';
 import { isLocalOrTailscaleIp } from '@/lib/network';
-import { SeerrClient } from '@/lib/seerr';
 import { TmdbClient } from '@/lib/tmdb';
 import { GET as trailer } from '@/services/trailer/handler';
 import * as sessionsService from '@/services/sessions/handler';
-
 
 export const runtime = 'nodejs';
 
@@ -88,13 +80,21 @@ async function dispatch(request: HttpRequest, context: Context) {
   const route = params.path.join('/');
   const get = request.method === 'GET';
   if (get && route === 'discovery') {
-    return HttpResponse.json({ apiVersion: 1, appName: getServerConfig().appName || 'HomeStream', cast: true, pairing: 'local', localPairing: directLocal(request), jellyfinLogin: true });
+    return HttpResponse.json({
+      apiVersion: 1,
+      appName: getServerConfig().appName || 'HomeStream',
+      cast: true,
+      pairing: 'local',
+      localPairing: directLocal(request),
+      jellyfinLogin: false,
+    });
   }
   if ((get || request.method === 'HEAD') && route === 'parental-resource') return parentalResource(request);
   if ((get || request.method === 'HEAD') && route === 'image') return handleImage(request);
   if ((get || request.method === 'HEAD') && route === 'youtube/thumbnail') return youtubeService.GET(request);
   if ((get || request.method === 'HEAD') && route === 'music/artwork') return musicService.GET(request);
   if ((get || request.method === 'HEAD') && route === 'books/cover') return booksService.GET(request);
+
   if (get && route === 'auth/users') {
     const accs = listAccounts().map(a => ({
       id: a.id,
@@ -105,6 +105,7 @@ async function dispatch(request: HttpRequest, context: Context) {
     }));
     return HttpResponse.json({ users: accs });
   }
+
   if (!get && route === 'auth/login') {
     if (!await allowLogin(request)) return HttpResponse.json({ error: 'Too many login attempts. Try again in a minute.' }, { status: 429 });
     if ((process.env.HOMESTREAM_MOBILE_TOKEN || '').length < 32) return HttpResponse.json({ error: 'Mobile API disabled' }, { status: 503 });
@@ -113,55 +114,36 @@ async function dispatch(request: HttpRequest, context: Context) {
       return HttpResponse.json({ error: 'Username and password required' }, { status: 400 });
     }
     const account = await authenticateAccount(body.username.trim(), body.password);
-    if (account) {
-      if (await denyPasswordlessAdultLogin(account.id, body.password, account.username)) {
-        return HttpResponse.json({ error: 'Adult accounts need a password different from their username when Kids profiles are enabled.' }, { status: 403 });
-      }
-      const accountProfiles = profilesForAccount(await getHomeflixProfiles(), account.id);
-      const defaultProfile = accountProfiles[0];
-      const user = { id: defaultProfile?.id || account.id, accountId: account.id, name: account.displayName };
-      const token = await createSession({ ...user, admin: account.isAdmin }, 'mobile');
-      if (defaultProfile?.id) selectDeviceProfile(token, defaultProfile.id);
-      return HttpResponse.json({ user, token });
+    if (!account) {
+      return HttpResponse.json({ error: 'Invalid username or password' }, { status: 401 });
     }
-    const config = getServerConfig();
-    if (!config.jellyfinUrl) return HttpResponse.json({ error: 'Invalid username or password' }, { status: 401 });
-    const result = await fetch(`${config.jellyfinUrl.replace(/\/+$/, '')}/Users/AuthenticateByName`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'MediaBrowser Client="HomeStream", Device="Android", DeviceId="homestream-android", Version="1.0"' },
-      body: JSON.stringify({ Username: body.username.trim(), Pw: body.password }), signal: AbortSignal.timeout(15000),
-    });
-    if (!result.ok) return HttpResponse.json({ error: 'Invalid username or password' }, { status: 401 });
-    const auth = await result.json();
-    if (!auth.User?.Id || !auth.User?.Name) return HttpResponse.json({ error: 'Invalid authentication response' }, { status: 502 });
-    if (await denyPasswordlessAdultLogin(auth.User.Id, body.password, auth.User.Name)) return HttpResponse.json({ error: 'Adult accounts need a password different from their username when Kids profiles are enabled.' }, { status: 403 });
-    const migrated = createAccount({ username: auth.User.Name, password: body.password, displayName: auth.User.Name, isAdmin: auth.User.Policy?.IsAdministrator === true });
-    const existingProfiles = await getHomeflixProfiles();
-    if (!existingProfiles.some((p) => p.id === auth.User.Id)) {
-      await saveHomeflixProfiles([...existingProfiles, {
-        id: auth.User.Id,
-        name: auth.User.Name,
-        accountId: migrated.id,
-        jellyfinUserId: auth.User.Id,
-        isAdministrator: migrated.isAdmin,
-        avatarColor: 'from-red-600 to-red-800',
-        avatarBg: 'bg-red-600',
-        initials: auth.User.Name.slice(0, 2).toUpperCase(),
-      }]);
+    if (await denyPasswordlessAdultLogin(account.id, body.password, account.username)) {
+      return HttpResponse.json({ error: 'Adult accounts need a password different from their username when Kids profiles are enabled.' }, { status: 403 });
     }
-    const user = { id: auth.User.Id, accountId: migrated.id, name: auth.User.Name };
-    return HttpResponse.json({ user, token: await createSession({ ...user, admin: migrated.isAdmin, accessToken: auth.AccessToken }, 'mobile') });
+    const accountProfiles = profilesForAccount(await getHomeflixProfiles(), account.id);
+    const defaultProfile = accountProfiles[0];
+    const user = { id: defaultProfile?.id || account.id, accountId: account.id, name: account.displayName };
+    const token = await createSession({ ...user, admin: account.isAdmin }, 'mobile');
+    if (defaultProfile?.id) selectDeviceProfile(token, defaultProfile.id);
+    return HttpResponse.json({ user, token });
   }
+
   if (!get && route === 'auth/pair') {
-    if (!directLocal(request)) return HttpResponse.json({ error: 'Automatic pairing requires a direct connection on your home network. Use Jellyfin sign-in remotely.' }, { status: 403 });
+    if (!directLocal(request)) {
+      return HttpResponse.json({ error: 'Automatic pairing requires a direct connection on your home network. Sign in with your account remotely.' }, { status: 403 });
+    }
     if (!await allowLogin(request)) return HttpResponse.json({ error: 'Too many pairing attempts. Try again shortly.' }, { status: 429 });
     const body = await request.json().catch(() => null);
-    if (!body || typeof body.deviceId !== 'string' || !body.deviceId || body.deviceId.length > 200) return HttpResponse.json({ error: 'Device identity required' }, { status: 400 });
+    if (!body || typeof body.deviceId !== 'string' || !body.deviceId || body.deviceId.length > 200) {
+      return HttpResponse.json({ error: 'Device identity required' }, { status: 400 });
+    }
     const externalUrl = process.env.HOMESTREAM_EXTERNAL_URL || '';
     if (!externalUrl) return HttpResponse.json({ error: 'Set HOMESTREAM_EXTERNAL_URL on the server so local pairing also works away from home.' }, { status: 503 });
     const device = registerDevice(body.deviceId, typeof body.deviceName === 'string' ? body.deviceName.slice(0, 200) : 'Android', 'android', true, true);
     console.info('[mobile] Local device paired');
     return HttpResponse.json({ token: device.token, externalUrl, serverName: 'HomeStream' });
   }
+
   const denied = await authorize(request);
   if (denied) return denied;
   const invalid = await validateApiRequest(request);
@@ -180,6 +162,7 @@ async function dispatch(request: HttpRequest, context: Context) {
     return output;
   }, request.headers.get('authorization')?.slice(7));
 }
+
 async function dispatchContent(request: HttpRequest, context: Context) {
   const params = await context.params;
   const route = params.path.join('/');
@@ -200,9 +183,10 @@ async function dispatchContent(request: HttpRequest, context: Context) {
     }
     request = new HttpRequest(url, { method: request.method, headers, body, signal: request.signal });
   }
+
   if (route === 'integrations') {
-    if(!session?.admin)return HttpResponse.json({error:'Administrator sign-in required'},{status:403});
-    return get?integrationsService.GET(request):integrationsService.POST(request);
+    if (!session?.admin) return HttpResponse.json({ error: 'Administrator sign-in required' }, { status: 403 });
+    return get ? integrationsService.GET(request) : integrationsService.POST(request);
   }
   if (get && route === 'requested') return requestedService.GET(request);
   if (route === 'books' || route.startsWith('books/')) {
@@ -222,6 +206,7 @@ async function dispatchContent(request: HttpRequest, context: Context) {
     if (request.method === 'DELETE') return youtubeService.DELETE(request);
   }
   if (get && route === 'trailer') return trailer(request);
+
   const adminService = route === 'native/library' ? nativeLibrary : route === 'accounts' ? accounts : null;
   if (adminService || (get && (route === 'capabilities' || route === 'session/status'))) {
     const profile = await activeProfile(request);
@@ -234,102 +219,97 @@ async function dispatchContent(request: HttpRequest, context: Context) {
       return HttpResponse.json({ error: 'Method not allowed' }, { status: 405 });
     }
     if (route === 'capabilities') {
-      return HttpResponse.json({ apiVersion: 1, appName: getServerConfig().appName || 'HomeStream', cast: true, jellyfinLogin: true, canManageIntegrations: isAdmin });
+      return HttpResponse.json({ apiVersion: 1, appName: getServerConfig().appName || 'HomeStream', cast: true, jellyfinLogin: false, canManageIntegrations: isAdmin });
     }
     return HttpResponse.json({ profile, revision: profile ? kidsPolicyRevision(profile) : '', canManageIntegrations: isAdmin });
   }
+
   if (get && route === 'continue-watching') {
     const profileId = session?.id || request.nextUrl.searchParams.get('userId') || 'default';
-    if (getMediaEngineSettings().mediaEngine === 'native') {
-      return HttpResponse.json({ items: getNativeResumeItems(await resolveJellyfinUserId(profileId)) });
-    }
-    const uid = await resolveJellyfinUserId(session?.id || request.nextUrl.searchParams.get('userId') || undefined);
-    const jellyfin = new JellyfinClient(undefined, undefined, uid);
-    try { return HttpResponse.json({ items: await jellyfin.getResumeItems(true) }); }
-    catch { return HttpResponse.json({ error: 'Resume history temporarily unavailable' }, { status: 503 }); }
+    return HttpResponse.json({ items: getNativeResumeItems((await resolveProfileId(profileId)) || 'default') });
   }
+
   if (get && route === 'profiles') {
     const all = await getHomeflixProfiles();
     const profiles = session?.accountId ? profilesForAccount(all, session.accountId) : all;
     const canManage = session ? Boolean(session.admin) : true;
-    return HttpResponse.json({ profiles, canManage, avatars: STOCK_AVATARS, parentPinConfigured: parentPinConfigured(), activeProfileId: (await activeProfile(request))?.id || profiles[0]?.id || '' });
+    return HttpResponse.json({
+      profiles,
+      canManage,
+      avatars: STOCK_AVATARS,
+      parentPinConfigured: parentPinConfigured(),
+      activeProfileId: (await activeProfile(request))?.id || profiles[0]?.id || '',
+    });
   }
+
   if (get && route === 'profiles/status') {
     const profile = await activeProfile(request);
     return HttpResponse.json({ profile, revision: profile ? kidsPolicyRevision(profile) : '', parentPinConfigured: parentPinConfigured() });
   }
+
   if (!get && route === 'profiles/select') {
     const body = await request.json().catch(() => null);
     const target = (await getHomeflixProfiles()).find(p => p.id === body?.profileId);
     if (!target) return HttpResponse.json({ error: 'Profile not found' }, { status: 404 });
     const current = await activeProfile(request);
     if (isKids(current) && (!isKids(target) || KIDS_LIMITS[target.kidsRating] > KIDS_LIMITS[current.kidsRating])) {
-      try { await requireParentPin(body?.parentPin); }
-      catch (error) { return HttpResponse.json({ error: error instanceof Error ? error.message : 'Parent PIN required', pinRequired: true }, { status: 403 }); }
+      try {
+        await requireParentPin(body?.parentPin);
+      } catch (error) {
+        return HttpResponse.json({ error: error instanceof Error ? error.message : 'Parent PIN required', pinRequired: true }, { status: 403 });
+      }
     }
     selectDeviceProfile(request.headers.get('authorization')!.slice(7), target.id);
     return HttpResponse.json({ profile: target, revision: kidsPolicyRevision(target) });
   }
+
   if (route === 'profiles/users') {
-    try { await requireParentPin(get ? undefined : (await request.json().catch(() => null))?.parentPin); }
-    catch (error) { return HttpResponse.json({ error: error instanceof Error ? error.message : 'Parent PIN required' }, { status: 403 }); }
-    const mediaEngine = getMediaEngineSettings().mediaEngine;
-    const jellyfin = new JellyfinClient();
-    const users = jellyfin.isConfigured() && mediaEngine === 'jellyfin' ? await jellyfin.getUsers() : [];
-    return HttpResponse.json({
-      mediaEngine,
-      users: users.map(user => ({ id: user.id, name: user.name, isAdministrator: user.isAdministrator })),
-    });
+    try {
+      await requireParentPin(get ? undefined : (await request.json().catch(() => null))?.parentPin);
+    } catch (error) {
+      return HttpResponse.json({ error: error instanceof Error ? error.message : 'Parent PIN required' }, { status: 403 });
+    }
+    return HttpResponse.json({ mediaEngine: 'native', users: [] });
   }
+
   if (!get && route === 'profiles') {
     const body = await request.json().catch(() => null);
     if (!body || typeof body !== 'object' || Array.isArray(body)) return HttpResponse.json({ error: 'Profile details required' }, { status: 400 });
     if (!await allowLogin(request)) return HttpResponse.json({ error: 'Too many profile changes. Try again shortly.' }, { status: 429 });
-    try { return HttpResponse.json({ success: true, ...await manageProfile(body, session && !session.admin ? session.id : undefined, session?.name) }); }
-    catch (error) {
-      if (error instanceof Error && error.message === 'Kids profiles must use a non-administrator Jellyfin account') return HttpResponse.json({ error: error.message }, { status: 403 });
+    try {
+      return HttpResponse.json({ success: true, ...await manageProfile(body, session && !session.admin ? session.id : undefined, session?.name) });
+    } catch (error) {
       if (error instanceof ProfileError) return HttpResponse.json({ error: error.message }, { status: error.status });
       log.error('Could not save profile');
-      return HttpResponse.json({ error: 'Could not save profile. Check server storage and Jellyfin configuration.' }, { status: 500 });
+      return HttpResponse.json({ error: 'Could not save profile.' }, { status: 500 });
     }
   }
+
   if (!get && route === 'watched') {
     const body = await request.json().catch(() => null);
-    if (!body || typeof body.itemId !== 'string' || !body.itemId || typeof body.played !== 'boolean') return HttpResponse.json({ error: 'itemId and played required' }, { status: 400 });
-    if (body.itemId.startsWith('nat-')) {
-      recordNativeWatchProgress(await resolveJellyfinUserId(session?.id || body.userId || 'default'), body.itemId, 0, 0, body.played);
-      return HttpResponse.json({ success: true });
+    if (!body || typeof body.itemId !== 'string' || !body.itemId || typeof body.played !== 'boolean') {
+      return HttpResponse.json({ error: 'itemId and played required' }, { status: 400 });
     }
-    const uid = await resolveJellyfinUserId(session?.id || body.userId || undefined);
-    const jellyfin = new JellyfinClient(undefined, undefined, uid);
-    if (!jellyfin.isConfigured()) return HttpResponse.json({ error: 'Jellyfin not configured' }, { status: 503 });
-    const success = await jellyfin.setWatched(body.itemId, body.played);
-    return HttpResponse.json({ success }, { status: success ? 200 : 502 });
+    const uid = (await resolveProfileId(session?.id || body.userId || 'default')) || 'default';
+    recordNativeWatchProgress(uid, body.itemId, 0, 0, body.played);
+    return HttpResponse.json({ success: true });
   }
+
   if (get && route === 'episodes') {
     const itemId = request.nextUrl.searchParams.get('itemId');
     if (!itemId) return HttpResponse.json({ error: 'itemId required' }, { status: 400 });
     if (itemId.startsWith('nat-')) {
       const profileId = session?.id || request.nextUrl.searchParams.get('userId') || 'default';
-      return HttpResponse.json({ items: getNativeEpisodeQueue(itemId, await resolveJellyfinUserId(profileId)) });
-    }
-    const uid = await resolveJellyfinUserId(request.nextUrl.searchParams.get('userId') || undefined);
-    const jellyfin = new JellyfinClient(undefined, undefined, uid);
-    if (!itemId.startsWith('seerr-') && !itemId.startsWith('tmdb-') && jellyfin.isConfigured()) {
-      try {
-        const queue = await jellyfin.getEpisodeQueue(itemId);
-        if (queue && queue.length > 0) return HttpResponse.json({ items: queue });
-      } catch {}
+      return HttpResponse.json({ items: getNativeEpisodeQueue(itemId, (await resolveProfileId(profileId)) || 'default') });
     }
 
     const tmdb = new TmdbClient();
-    const seerr = new SeerrClient();
     let tmdbId = 0;
     const match = /^(?:seerr|tmdb)-(?:tv-|ep-)?(\d+)/.exec(itemId) || (/^\d+$/.test(itemId) ? [null, itemId] : null);
     if (match) tmdbId = Number(match[1]);
 
-    if (tmdbId > 0) {
-      const show = tmdb.isConfigured() ? await tmdb.getTvDetails(tmdbId) : await seerr.getTvDetails(tmdbId);
+    if (tmdbId > 0 && tmdb.isConfigured()) {
+      const show = await tmdb.getTvDetails(tmdbId);
       if (show && show.seasons) {
         const allEpisodes: MediaItem[] = show.seasons.flatMap(s => (s.episodes || []).map(ep => ({
           id: ep.id,
@@ -354,35 +334,34 @@ async function dispatchContent(request: HttpRequest, context: Context) {
 
     return HttpResponse.json({ items: [] });
   }
+
   if (get && route === 'search') return search(request);
   if (get && route === 'downloads') return downloads(request);
   if (route === 'downloads/manager') return get ? downloads(request) : downloadsPost(request);
-  if (get && /^categories\/(movies|tv|series|requests)$/.test(route)) return categories(request, { params: Promise.resolve({ type: params.path[1] }) });
+  if (get && /^categories\/(movies|tv|series|requests)$/.test(route)) {
+    return categories(request, { params: Promise.resolve({ type: params.path[1] }) });
+  }
+
   if (get && params.path.length === 3 && params.path[0] === 'media' && params.path[2] === 'collection') {
     const id = params.path[1];
-    const uid = await resolveJellyfinUserId(session?.id || request.nextUrl.searchParams.get('userId') || undefined);
-    const jellyfin = new JellyfinClient(undefined, undefined, uid);
+    const uid = (await resolveProfileId(session?.id || request.nextUrl.searchParams.get('userId') || 'default')) || 'default';
     let tmdbId = /^(?:seerr|tmdb)-(?:movie-)?(\d+)$/.exec(id)?.[1] || (/^\d+$/.test(id) ? id : '');
     if (!tmdbId && id.startsWith('nat-')) {
       const collection = getNativeMovieCollection(id, uid);
       if (collection) return HttpResponse.json({ collection });
-      const natItem = getNativeItemById(id, session?.id || request.nextUrl.searchParams.get('userId') || undefined);
+      const natItem = getNativeItemById(id, uid);
       tmdbId = natItem?.tmdbId ? String(natItem.tmdbId) : '';
-    }
-    if (!tmdbId && !id.startsWith('nat-') && jellyfin.isConfigured()) {
-      const parts = await jellyfin.getMovieCollection(id);
-      if (parts.length) return HttpResponse.json({ collection: { name: 'Movie Collection', parts } });
-      const item = await jellyfin.getItemDetails(id);
-      tmdbId = item?.tmdbId ? String(item.tmdbId) : '';
     }
     const tmdbClient = new TmdbClient();
     if (tmdbId && tmdbClient.isConfigured()) {
       return HttpResponse.json({ collection: await tmdbClient.getMovieCollection(Number(tmdbId)) });
     }
-    const seerr = new SeerrClient();
-    return HttpResponse.json({ collection: tmdbId && seerr.isConfigured() ? await seerr.getMovieCollection(Number(tmdbId)) : null });
+    return HttpResponse.json({ collection: null });
   }
-  if (get && params.path.length === 3 && params.path[0] === 'media' && params.path[2] === 'recommendations') return recommendations(request, { params: Promise.resolve({ id: params.path[1] }) });
+
+  if (get && params.path.length === 3 && params.path[0] === 'media' && params.path[2] === 'recommendations') {
+    return recommendations(request, { params: Promise.resolve({ id: params.path[1] }) });
+  }
   if ((get || request.method === 'HEAD') && route === 'stream/download') return downloadStream(request);
   if ((get || request.method === 'HEAD') && route === 'stream/torrent') return torrentStream(request);
   if ((get || request.method === 'HEAD') && route === 'native/stream') return nativeStream(request);
@@ -406,12 +385,8 @@ async function dispatchContent(request: HttpRequest, context: Context) {
     try { body = await request.clone().json(); } catch {
       return HttpResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
-    if (!body || typeof body !== 'object') {
-      return HttpResponse.json({ error: 'JSON object required' }, { status: 400 });
-    }
-    if (typeof body.itemId !== 'string' || !body.itemId) {
-      return HttpResponse.json({ error: 'Valid itemId required' }, { status: 400 });
-    }
+    if (!body || typeof body !== 'object') return HttpResponse.json({ error: 'JSON object required' }, { status: 400 });
+    if (typeof body.itemId !== 'string' || !body.itemId) return HttpResponse.json({ error: 'Valid itemId required' }, { status: 400 });
     const isViewerAction = body.action === 'startOver' || body.action === 'hideContinueWatching';
     if (!isViewerAction && (!Number.isSafeInteger(body.positionTicks) || body.positionTicks < 0)) {
       return HttpResponse.json({ error: 'Valid itemId and nonnegative positionTicks required' }, { status: 400 });
@@ -442,8 +417,12 @@ async function dispatchContent(request: HttpRequest, context: Context) {
     if (request.method === 'DELETE') return collectionsService.DELETE(request);
     return get ? collectionsService.GET(request) : collectionsService.POST(request);
   }
-  if (route === 'sessions' || route === 'sessions/commands') return get ? sessionsService.GET(request) : HttpResponse.json({ error: 'Method not allowed' }, { status: 405 });
-  if (route === 'sessions/heartbeat' || route === 'sessions/command') return !get ? sessionsService.POST(request) : HttpResponse.json({ error: 'Method not allowed' }, { status: 405 });
+  if (route === 'sessions' || route === 'sessions/commands') {
+    return get ? sessionsService.GET(request) : HttpResponse.json({ error: 'Method not allowed' }, { status: 405 });
+  }
+  if (route === 'sessions/heartbeat' || route === 'sessions/command') {
+    return !get ? sessionsService.POST(request) : HttpResponse.json({ error: 'Method not allowed' }, { status: 405 });
+  }
   return HttpResponse.json({ error: 'Unknown mobile endpoint' }, { status: 404 });
 }
 
@@ -458,15 +437,24 @@ async function handle(request: HttpRequest, context: Context) {
       response = HttpResponse.json({ error: 'Mobile API request failed' }, { status: 500 });
     }
   }
-  // Never cache profile history or URLs containing Jellyfin stream credentials.
   if ((await context.params).path.join('/') !== 'image') response.headers.set('Cache-Control', 'no-store');
   response.headers.set('X-Content-Type-Options', 'nosniff');
   return response;
 }
 
-export const GET = withJellyfinSession(handle);
-export const POST = withJellyfinSession(handle);
-export const PUT = withJellyfinSession(handle);
-export const DELETE = withJellyfinSession(handle);
+export const GET = handle;
+export const POST = handle;
+export const PUT = handle;
+export const DELETE = handle;
 export const HEAD = GET;
-export function OPTIONS() { return new HttpResponse(null, { status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,HEAD,OPTIONS', 'Access-Control-Allow-Headers': 'Range,Content-Type', 'Access-Control-Max-Age': '600' } }); }
+export function OPTIONS() {
+  return new HttpResponse(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET,HEAD,OPTIONS',
+      'Access-Control-Allow-Headers': 'Range,Content-Type',
+      'Access-Control-Max-Age': '600',
+    },
+  });
+}

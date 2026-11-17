@@ -1,12 +1,8 @@
-import { log } from '@/log';
 import { withParentalControls } from '@/lib/parental-controls';
 import { parseTvCapabilities } from '@/lib/tv-playback-profile';
-import { withJellyfinSession } from '@/lib/jellyfin-session';
 import { HttpRequest, HttpResponse } from '@/http';
-import { JellyfinClient } from '@/lib/jellyfin';
-import { resolveJellyfinUserId } from '@/lib/profiles';
+import { resolveProfileId } from '@/lib/profiles';
 import { TmdbClient } from '@/lib/tmdb';
-import { getMediaEngineSettings } from '@/lib/media-settings';
 import { negotiateNativePlayback } from '@/lib/native-transcode';
 
 async function handleGET(request: HttpRequest) {
@@ -25,7 +21,6 @@ async function handleGET(request: HttpRequest) {
   const nativeTv = searchParams.get('receiver') === 'native-tv';
   const cast = searchParams.get('receiver') === 'cast';
 
-  // 1. Check if itemId or params represent a torrent stream or downloading file
   const isDl = itemId.startsWith('dl-');
   const isVirtual = itemId.startsWith('seerr-') || itemId.startsWith('tmdb-') || Boolean(searchParams.get('tmdbId'));
 
@@ -34,7 +29,7 @@ async function handleGET(request: HttpRequest) {
       const hash = itemId.slice(3);
       const season = searchParams.get('season');
       const episode = searchParams.get('episode');
-      const streamUrl = `/api/stream/download?hash=${encodeURIComponent(hash)}${season ? `&season=${season}` : ''}${episode ? `&episode=${episode}` : ''}${cast ? `&receiver=cast` : nativeTv ? `&receiver=native-tv` : ''}${canPlayHevc ? `&canPlayHevc=true` : ''}${forceTranscode ? `&forceTranscode=true` : ''}`;
+      const streamUrl = `/api/stream/download?hash=${encodeURIComponent(hash)}${season ? `&season=${season}` : ''}${episode ? `&episode=${episode}` : ''}${cast ? '&receiver=cast' : nativeTv ? '&receiver=native-tv' : ''}${canPlayHevc ? '&canPlayHevc=true' : ''}${forceTranscode ? '&forceTranscode=true' : ''}`;
       return HttpResponse.json({
         streamUrl,
         transport: 'file',
@@ -53,7 +48,7 @@ async function handleGET(request: HttpRequest) {
     const title = searchParams.get('title') || '';
 
     if (!tmdbId) {
-      const epMatch = /^seerr-(?:tv|ep)-(\d+)-(\d+)-(\d+)$/.exec(itemId);
+      const epMatch = /^(?:seerr|tmdb)-(?:tv|ep)-(\d+)-(\d+)-(\d+)$/.exec(itemId);
       if (epMatch) {
         tmdbId = Number(epMatch[1]);
         type = 'tv';
@@ -67,7 +62,7 @@ async function handleGET(request: HttpRequest) {
         }
       }
     }
-    if (!type) type = (season || episode) ? 'tv' : 'movie';
+    if (!type) type = season || episode ? 'tv' : 'movie';
 
     let durationSeconds = type === 'tv' ? 2700 : 7200;
     try {
@@ -78,7 +73,7 @@ async function handleGET(request: HttpRequest) {
       }
     } catch {}
 
-    const streamUrl = `/api/stream/torrent?tmdbId=${tmdbId}&type=${type}${season ? `&season=${season}` : ''}${episode ? `&episode=${episode}` : ''}${title ? `&title=${encodeURIComponent(title)}` : ''}${cast ? `&receiver=cast` : nativeTv ? `&receiver=native-tv` : ''}${canPlayHevc ? `&canPlayHevc=true` : ''}${forceTranscode ? `&forceTranscode=true` : ''}`;
+    const streamUrl = `/api/stream/torrent?tmdbId=${tmdbId}&type=${type}${season ? `&season=${season}` : ''}${episode ? `&episode=${episode}` : ''}${title ? `&title=${encodeURIComponent(title)}` : ''}${cast ? '&receiver=cast' : nativeTv ? '&receiver=native-tv' : ''}${canPlayHevc ? '&canPlayHevc=true' : ''}${forceTranscode ? '&forceTranscode=true' : ''}`;
 
     return HttpResponse.json({
       streamUrl,
@@ -91,9 +86,7 @@ async function handleGET(request: HttpRequest) {
     });
   }
 
-  const profileId = searchParams.get('userId') || request.cookies.get('homeflix_profile_id')?.value;
-  const targetUserId = await resolveJellyfinUserId(profileId);
-  const jellyfin = new JellyfinClient(undefined, undefined, targetUserId);
+  const profileId = (await resolveProfileId(searchParams.get('userId') || request.cookies.get('homeflix_profile_id')?.value)) || 'default';
   const receiver = nativeTv ? 'native-tv' : cast ? 'cast' : searchParams.get('receiver') === 'browser' ? 'browser' : undefined;
   const tvCapabilities = nativeTv || cast ? parseTvCapabilities(searchParams.get('videoCapabilities')) : [];
   if ((cast || nativeTv) && !tvCapabilities.some(capability => capability.codec === 'h264')) {
@@ -107,71 +100,36 @@ async function handleGET(request: HttpRequest) {
     : searchParams.get('videoCodecs')?.split(',').filter(codec => ['h264', 'hevc', 'vp8', 'vp9', 'av1'].includes(codec));
   const audioCodecs = (searchParams.get('audioCodecs') || 'aac,mp3').split(',').filter(codec => ['aac', 'mp3', 'opus', 'flac', 'vorbis', 'ac3', 'eac3', 'dts'].includes(codec));
 
-  if (itemId.startsWith('nat-') || getMediaEngineSettings().mediaEngine === 'native') {
-    const profileId = searchParams.get('userId') || request.cookies.get('homeflix_profile_id')?.value || 'default';
-    const rawAudio = searchParams.get('audioIndex');
-    const rawBurn = searchParams.get('burnSubtitleIndex');
-    const rawMaxWidth = searchParams.get('maxWidth');
-    const rawMaxHeight = searchParams.get('maxHeight');
-    const parsedAudio = rawAudio !== null && /^\d+$/.test(rawAudio) ? Number(rawAudio) : undefined;
-    const parsedBurn = rawBurn !== null && /^\d+$/.test(rawBurn) ? Number(rawBurn) : undefined;
-    const parsedMaxWidth = rawMaxWidth !== null && /^\d+$/.test(rawMaxWidth) && Number(rawMaxWidth) > 0 ? Number(rawMaxWidth) : undefined;
-    const parsedMaxHeight = rawMaxHeight !== null && /^\d+$/.test(rawMaxHeight) && Number(rawMaxHeight) > 0 ? Number(rawMaxHeight) : undefined;
-    const nativeResult = await negotiateNativePlayback(itemId, profileId, {
-      versionId: searchParams.get('versionId') || undefined,
-      forceTranscode,
-      receiver,
-      videoCodecs,
-      videoCapabilities: nativeTv || cast ? tvCapabilities : undefined,
-      audioCodecs,
-      maxWidth: parsedMaxWidth,
-      maxHeight: parsedMaxHeight,
-      audioIndex: parsedAudio,
-      burnSubtitleIndex: parsedBurn,
-      startSeconds: startTimeTicks && startTimeTicks > 0 ? Math.floor(startTimeTicks / 10_000_000) : undefined,
-    });
-    if (nativeResult.streamUrl) {
-      const transport = nativeResult.isTranscoding ? 'HLS' : 'file';
-      const contentType = nativeResult.contentType || (nativeResult.isTranscoding ? 'application/x-mpegURL' : 'video/mp4');
-      return HttpResponse.json({ ...nativeResult, transport, contentType });
-    }
-    if (itemId.startsWith('nat-') || !jellyfin.isConfigured()) {
-      return HttpResponse.json({ error: nativeResult.error || 'Media file is not available' }, { status: 404 });
-    }
+  const rawAudio = searchParams.get('audioIndex');
+  const rawBurn = searchParams.get('burnSubtitleIndex');
+  const rawMaxWidth = searchParams.get('maxWidth');
+  const rawMaxHeight = searchParams.get('maxHeight');
+  const parsedAudio = rawAudio !== null && /^\d+$/.test(rawAudio) ? Number(rawAudio) : undefined;
+  const parsedBurn = rawBurn !== null && /^\d+$/.test(rawBurn) ? Number(rawBurn) : undefined;
+  const parsedMaxWidth = rawMaxWidth !== null && /^\d+$/.test(rawMaxWidth) && Number(rawMaxWidth) > 0 ? Number(rawMaxWidth) : undefined;
+  const parsedMaxHeight = rawMaxHeight !== null && /^\d+$/.test(rawMaxHeight) && Number(rawMaxHeight) > 0 ? Number(rawMaxHeight) : undefined;
+
+  const nativeResult = await negotiateNativePlayback(itemId, profileId, {
+    versionId: searchParams.get('versionId') || undefined,
+    forceTranscode,
+    receiver,
+    videoCodecs,
+    videoCapabilities: nativeTv || cast ? tvCapabilities : undefined,
+    audioCodecs,
+    maxWidth: parsedMaxWidth,
+    maxHeight: parsedMaxHeight,
+    audioIndex: parsedAudio,
+    burnSubtitleIndex: parsedBurn,
+    startSeconds: startTimeTicks && startTimeTicks > 0 ? Math.floor(startTimeTicks / 10_000_000) : undefined,
+  });
+
+  if (nativeResult.streamUrl) {
+    const transport = nativeResult.isTranscoding ? 'HLS' : 'file';
+    const contentType = nativeResult.contentType || (nativeResult.isTranscoding ? 'application/x-mpegURL' : 'video/mp4');
+    return HttpResponse.json({ ...nativeResult, transport, contentType });
   }
 
-  if (!jellyfin.isConfigured()) {
-    return HttpResponse.json(
-      { error: 'Jellyfin is not configured' },
-      { status: 503 }
-    );
-  }
-
-  try {
-    const result = await jellyfin.getPlaybackStream(itemId, {
-      canPlayHevc,
-      receiver,
-      tvCapabilities,
-      videoCodecs: videoCodecs ?? [],
-      maxWidth: searchParams.get('maxWidth') === '3840' ? 3840 : 1920,
-      maxHeight: searchParams.get('maxHeight') === '2160' ? 2160 : 1080,
-      audioCodecs,
-      forceTranscode,
-      startTimeTicks,
-    });
-    if (!result.streamUrl) return HttpResponse.json({ error: result.error || 'Media file is not available' }, { status: 404 });
-    const path = new URL(result.streamUrl).pathname.toLowerCase();
-    const transport = path.endsWith('.m3u8') ? 'HLS' : 'file';
-    const contentType = transport === 'HLS' ? 'application/x-mpegURL' : path.endsWith('.webm') ? 'video/webm' : 'video/mp4';
-    // Preserve delivery metadata before parental tickets hide the URL extension.
-    return HttpResponse.json({ ...result, transport, contentType });
-  } catch (error) {
-    log.error('Failed to get playback stream:', error);
-    return HttpResponse.json(
-      { error: 'Failed to negotiate playback' },
-      { status: 500 }
-    );
-  }
+  return HttpResponse.json({ error: nativeResult.error || 'Media file is not available' }, { status: 404 });
 }
 
-export const GET = withJellyfinSession(withParentalControls(handleGET));
+export const GET = withParentalControls(handleGET);

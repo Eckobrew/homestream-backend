@@ -11,11 +11,8 @@ import { runRequest } from './request-context';
 import { resolvePeer } from './identity';
 import { authenticate } from './authenticate';
 import { routes } from './routes';
-import { JellyfinClient } from './lib/jellyfin';
 import { getServerConfig } from './lib/config';
-import { getMediaEngineSettings } from './lib/media-settings';
 import { listNativeLibraryItems } from './lib/native-media';
-import { withJellyfinSession } from './lib/jellyfin-session';
 import { withParentalControls } from './lib/parental-controls';
 import { handleOpenSubsonicRequest } from './lib/opensubsonic';
 import openapi from '../contract/openapi.json';
@@ -43,27 +40,10 @@ export function createApp() {
   });
   app.get('/openapi.json', async () => openapi);
 
-  const catalogLinks = withJellyfinSession(withParentalControls(async (_request: HttpRequest) => {
-    const items: Array<Record<string, unknown>> = [];
-    const seenIds = new Set<string>();
-    const addItems = (list: Array<Record<string, unknown>>) => {
-      for (const item of list) {
-        const key = String(item.id || '');
-        if (!key || seenIds.has(key)) continue;
-        seenIds.add(key);
-        items.push(item);
-      }
-    };
-    if (getMediaEngineSettings().mediaEngine === 'native') {
-      addItems(listNativeLibraryItems({ sort: 'recent', limit: 60 }) as unknown as Array<Record<string, unknown>>);
-    }
-    const jellyfin = new JellyfinClient();
-    if (jellyfin.isConfigured()) {
-      const [movies, series] = await Promise.all([jellyfin.getLatestMedia('Movie', 30), jellyfin.getLatestMedia('Series', 30)]);
-      addItems([...(movies as unknown as Array<Record<string, unknown>>), ...(series as unknown as Array<Record<string, unknown>>)]);
-    }
+  const catalogLinks = withParentalControls(async (_request: HttpRequest) => {
+    const items = listNativeLibraryItems({ sort: 'recent', limit: 60 });
     return HttpResponse.json({ items });
-  }));
+  });
 
   function register(path: string, methods: string[], service: Record<string, unknown>, legacyPath = path) {
     for (const method of methods.includes('GET') && !methods.includes('HEAD') ? [...methods, 'HEAD'] : methods) app.route({

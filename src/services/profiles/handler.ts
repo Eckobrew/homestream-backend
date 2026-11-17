@@ -1,26 +1,21 @@
 import { log } from '@/log';
 import { withParentalControls } from '@/lib/parental-controls';
-import { withJellyfinSession } from '@/lib/jellyfin-session';
 import { HttpRequest, HttpResponse } from '@/http';
 import {
   getHomeflixProfiles,
   addHomeflixProfile,
   deleteHomeflixProfile,
-  getAvailableJellyfinUsers,
-  importProfilesFromJellyfin,
+  getAvailableAccountsAsProfiles,
 } from '@/lib/profiles';
-import { getServerConfig } from '@/lib/config';
 import { getPrimaryAccount, profilesForAccount } from '@/lib/accounts';
 import { isRequestLocalOrTailscale } from '@/lib/network';
 import { readSession } from '@/lib/session';
-
 
 export const revalidate = 0;
 
 async function handleGET(request: HttpRequest) {
   try {
     const profiles = await getHomeflixProfiles();
-    const config = getServerConfig();
     const cookieProfileId = request.cookies.get('homeflix_profile_id')?.value;
     const includeAvailable = request.nextUrl.searchParams.get('includeAvailable') === 'true';
 
@@ -42,20 +37,14 @@ async function handleGET(request: HttpRequest) {
       });
     }
 
-    // Both LAN and authenticated external accounts get full profile switching within their account
     const needsSetup = scopedProfiles.length === 0;
-
-    let availableJellyfinUsers: any[] = [];
-    if ((netCheck.isLocalOrTailscale && (needsSetup || includeAvailable))) {
-      availableJellyfinUsers = await getAvailableJellyfinUsers();
-    }
+    const availableAccounts = netCheck.isLocalOrTailscale && (needsSetup || includeAvailable)
+      ? await getAvailableAccountsAsProfiles()
+      : [];
 
     let activeProfileId = '';
-
     if (cookieProfileId && scopedProfiles.some((p) => p.id === cookieProfileId)) {
       activeProfileId = cookieProfileId;
-    } else if (config.jellyfinUserId && scopedProfiles.some((p) => p.id === config.jellyfinUserId)) {
-      activeProfileId = config.jellyfinUserId;
     } else if (scopedProfiles.length > 0) {
       activeProfileId = scopedProfiles[0].id;
     }
@@ -66,7 +55,7 @@ async function handleGET(request: HttpRequest) {
       needsSetup,
       canSwitchProfile: true,
       isExternal: !netCheck.isLocalOrTailscale,
-      availableJellyfinUsers,
+      availableJellyfinUsers: availableAccounts,
     });
 
     if (activeProfileId && !cookieProfileId) {
@@ -91,40 +80,30 @@ async function handlePOST(request: HttpRequest) {
     const netCheck = await isRequestLocalOrTailscale(request);
     const sessionUser = await readSession(request.cookies.get('homeflix_session')?.value, 'web');
     if (!netCheck.isLocalOrTailscale && !sessionUser) {
-      return HttpResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
-      );
+      return HttpResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
     const body = await request.json();
     const { action = 'select', profileId, name, paletteIndex, userIds, userId, accountId } = body;
-    const activeAccountId = (sessionUser?.admin || netCheck.isLocalOrTailscale) && typeof accountId === 'string' && accountId
-      ? accountId
-      : sessionUser?.accountId || getPrimaryAccount()?.id;
+    const activeAccountId =
+      (sessionUser?.admin || netCheck.isLocalOrTailscale) && typeof accountId === 'string' && accountId
+        ? accountId
+        : sessionUser?.accountId || getPrimaryAccount()?.id;
 
-    // 1. Import profiles from Jellyfin
     if (action === 'import') {
-      const idsToImport = Array.isArray(userIds) ? userIds : userId ? [userId] : [];
-      if (idsToImport.length === 0) {
-        return HttpResponse.json(
-          { error: 'At least one userId is required to import' },
-          { status: 400 }
-        );
+      const ids = Array.isArray(userIds) ? userIds : userId ? [userId] : [];
+      const available = await getAvailableAccountsAsProfiles();
+      for (const acct of available.filter(a => ids.length === 0 || ids.includes(a.id))) {
+        await addHomeflixProfile(acct.name, undefined, acct.accountId || activeAccountId);
       }
-
-      const updatedProfiles = await importProfilesFromJellyfin(idsToImport);
-      const firstImported =
-        updatedProfiles.find((p) => idsToImport.includes(p.id)) || updatedProfiles[0];
-      const newActiveId = firstImported?.id || '';
-
+      const updatedProfiles = await getHomeflixProfiles();
+      const newActiveId = updatedProfiles[0]?.id || '';
       const response = HttpResponse.json({
         success: true,
         profiles: updatedProfiles,
         activeProfileId: newActiveId,
-        needsSetup: false,
+        needsSetup: updatedProfiles.length === 0,
       });
-
       if (newActiveId) {
         response.cookies.set({
           name: 'homeflix_profile_id',
@@ -135,11 +114,9 @@ async function handlePOST(request: HttpRequest) {
           httpOnly: false,
         });
       }
-
       return response;
     }
 
-    // 2. Create a new decoupled profile
     if (action === 'create') {
       if (!name || typeof name !== 'string' || !name.trim()) {
         return HttpResponse.json({ error: 'Profile name is required' }, { status: 400 });
@@ -169,7 +146,6 @@ async function handlePOST(request: HttpRequest) {
       return response;
     }
 
-    // 3. Delete a profile
     if (action === 'delete') {
       if (!profileId) {
         return HttpResponse.json({ error: 'profileId is required to delete' }, { status: 400 });
@@ -177,10 +153,7 @@ async function handlePOST(request: HttpRequest) {
 
       const deleted = await deleteHomeflixProfile(profileId);
       if (!deleted) {
-        return HttpResponse.json(
-          { error: 'Cannot delete the only remaining profile' },
-          { status: 400 }
-        );
+        return HttpResponse.json({ error: 'Cannot delete the only remaining profile' }, { status: 400 });
       }
 
       const allProfiles = await getHomeflixProfiles();
@@ -209,7 +182,6 @@ async function handlePOST(request: HttpRequest) {
       return response;
     }
 
-    // 4. Default: Select existing profile
     const targetProfileId = profileId;
     if (!targetProfileId || typeof targetProfileId !== 'string') {
       return HttpResponse.json({ error: 'Valid profileId is required' }, { status: 400 });
@@ -236,6 +208,5 @@ async function handlePOST(request: HttpRequest) {
   }
 }
 
-export const GET = withJellyfinSession(withParentalControls(handleGET));
-
-export const POST = withJellyfinSession(withParentalControls(handlePOST));
+export const GET = withParentalControls(handleGET);
+export const POST = withParentalControls(handlePOST);

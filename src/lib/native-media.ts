@@ -506,22 +506,13 @@ async function fetchTmdbSeasonEpisodes(
   if (hit) return hit;
 
   const map = new Map<number, { name: string; overview?: string }>();
-  const { tmdbApiKey, seerrUrl, seerrApiKey } = getServerConfig();
+  const { tmdbApiKey } = getServerConfig();
   const settings = getMediaEngineSettings();
   try {
     let episodes: Array<{ episode_number?: number; episodeNumber?: number; name?: string; overview?: string }> = [];
     if (tmdbApiKey) {
       const params = new URLSearchParams({ api_key: tmdbApiKey, language: settings.metadataLanguage || 'en-US' });
       const res = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}/season/${seasonNumber}?${params}`, {
-        signal: AbortSignal.timeout(8000),
-      });
-      if (res.ok) {
-        const data = (await res.json()) as { episodes?: typeof episodes };
-        episodes = data.episodes || [];
-      }
-    } else if (seerrUrl && seerrApiKey) {
-      const res = await fetch(`${seerrUrl.replace(/\/+$/, '')}/api/v1/tv/${tmdbId}/season/${seasonNumber}`, {
-        headers: { 'X-Api-Key': seerrApiKey },
         signal: AbortSignal.timeout(8000),
       });
       if (res.ok) {

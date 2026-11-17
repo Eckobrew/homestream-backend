@@ -70,7 +70,7 @@ const DEFAULT_LIBRARIES: MediaLibraryConfig[] = [
 ];
 
 export const DEFAULT_MEDIA_ENGINE_SETTINGS: MediaEngineSettings = {
-  mediaEngine: process.env.MEDIA_ENGINE === 'native' ? 'native' : 'jellyfin',
+  mediaEngine: 'native',
   libraries: DEFAULT_LIBRARIES,
   hwAccel: 'auto',
   vaapiDevice: '/dev/dri/renderD128',
@@ -110,6 +110,7 @@ export function getMediaEngineSettings(): MediaEngineSettings {
   return {
     ...DEFAULT_MEDIA_ENGINE_SETTINGS,
     ...stored,
+    mediaEngine: 'native',
     libraries: Array.isArray(stored.libraries)
       ? stored.libraries
       : DEFAULT_LIBRARIES,
@@ -121,6 +122,7 @@ export function saveMediaEngineSettings(patch: Partial<MediaEngineSettings>): Me
   const next: MediaEngineSettings = {
     ...current,
     ...patch,
+    mediaEngine: 'native',
     libraries: Array.isArray(patch.libraries) ? patch.libraries : current.libraries,
     maxTranscodeBitrateMbps: Math.max(0, Math.min(200, Number(patch.maxTranscodeBitrateMbps ?? current.maxTranscodeBitrateMbps) || 0)),
     transcodeIdleTimeoutSeconds: Math.max(30, Math.min(3600, Number(patch.transcodeIdleTimeoutSeconds ?? current.transcodeIdleTimeoutSeconds) || 120)),

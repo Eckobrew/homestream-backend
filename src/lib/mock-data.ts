@@ -373,9 +373,9 @@ export const MOCK_TOP_10: MediaItem[] = [
   ...MOCK_RECENT_MOVIES.slice(0, 5),
 ];
 
-export const MOCK_SEERR_SEARCH_RESULTS: MediaItem[] = [
+export const MOCK_DISCOVERY_SEARCH_RESULTS: MediaItem[] = [
   {
-    id: 'seerr-1',
+    id: 'tmdb-movie-558449',
     title: 'Gladiator II',
     overview: 'Years after witnessing the death of the revered hero Maximus at the hands of his uncle, Lucius must enter the Colosseum after his home is conquered by the tyrannical Emperors.',
     type: 'Movie',
@@ -386,12 +386,12 @@ export const MOCK_SEERR_SEARCH_RESULTS: MediaItem[] = [
     matchPercentage: 92,
     communityRating: 7.8,
     genres: ['Action', 'Adventure', 'Drama'],
-    source: 'seerr',
+    source: 'tmdb',
     tmdbId: 558449,
     status: 'not_requested',
   },
   {
-    id: 'seerr-2',
+    id: 'tmdb-movie-533535',
     title: 'Deadpool & Wolverine',
     overview: 'A listless Wade Wilson toils away in civilian life with his days as the morally flexible mercenary, Deadpool, behind him. But when his homeworld faces an existential threat, he reluctantly suits-up again.',
     type: 'Movie',
@@ -402,12 +402,12 @@ export const MOCK_SEERR_SEARCH_RESULTS: MediaItem[] = [
     matchPercentage: 96,
     communityRating: 8.3,
     genres: ['Action', 'Comedy', 'Sci-Fi'],
-    source: 'seerr',
+    source: 'tmdb',
     tmdbId: 533535,
     status: 'requested',
   },
   {
-    id: 'seerr-3',
+    id: 'tmdb-movie-945961',
     title: 'Alien: Romulus',
     overview: 'While scavenging the deep ends of a derelict space station, a group of young space colonizers come face to face with the most terrifying life form in the universe.',
     type: 'Movie',
@@ -418,13 +418,13 @@ export const MOCK_SEERR_SEARCH_RESULTS: MediaItem[] = [
     matchPercentage: 91,
     communityRating: 7.9,
     genres: ['Horror', 'Sci-Fi'],
-    source: 'seerr',
+    source: 'tmdb',
     tmdbId: 945961,
     status: 'available',
     videoStreamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4',
   },
   {
-    id: 'seerr-4',
+    id: 'tmdb-tv-95396',
     title: 'Severance',
     overview: 'Mark leads a team of office workers whose memories have been surgically divided between their work and personal lives.',
     type: 'Series',
@@ -436,7 +436,7 @@ export const MOCK_SEERR_SEARCH_RESULTS: MediaItem[] = [
     communityRating: 8.7,
     genres: ['Sci-Fi', 'Drama', 'Thriller'],
     seasonsCount: 2,
-    source: 'seerr',
+    source: 'tmdb',
     tmdbId: 95396,
     status: 'available',
     videoStreamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',

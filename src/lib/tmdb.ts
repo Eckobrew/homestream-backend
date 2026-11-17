@@ -247,8 +247,7 @@ export class TmdbClient {
     const runtime = raw.runtime || (raw.episode_run_time && raw.episode_run_time[0]) || undefined;
 
     return {
-      // Use seerr- prefix for seamless backwards-compatibility across existing mobile and web routes
-      id: `seerr-${isTv ? 'tv' : 'movie'}-${raw.id}`,
+      id: `tmdb-${isTv ? 'tv' : 'movie'}-${raw.id}`,
       title,
       overview: raw.overview || 'No description available.',
       type: isTv ? 'Series' : 'Movie',
@@ -261,7 +260,7 @@ export class TmdbClient {
       communityRating: raw.vote_average,
       durationMinutes: runtime,
       genres,
-      source: 'seerr',
+      source: 'tmdb',
       tmdbId: raw.id,
       status: 'not_requested',
       trailerKey,
@@ -359,7 +358,7 @@ export class TmdbClient {
         : fallbackBackdrop || fallbackPoster || '';
 
       return {
-        id: `seerr-ep-${tmdbId}-${seasonNumber}-${ep.episode_number}`,
+        id: `tmdb-ep-${tmdbId}-${seasonNumber}-${ep.episode_number}`,
         name: ep.name || `Episode ${ep.episode_number}`,
         episodeNumber: ep.episode_number,
         seasonNumber,
@@ -377,7 +376,7 @@ export class TmdbClient {
       : fallbackPoster;
 
     return {
-      id: `seerr-season-${tmdbId}-${seasonNumber}`,
+      id: `tmdb-season-${tmdbId}-${seasonNumber}`,
       seasonNumber,
       name: seasonData.name || `Season ${seasonNumber}`,
       episodeCount: episodes.length,
@@ -419,7 +418,7 @@ export class TmdbClient {
           }
 
           return {
-            id: `seerr-season-${tmdbId}-${s.season_number}`,
+            id: `tmdb-season-${tmdbId}-${s.season_number}`,
             seasonNumber: s.season_number,
             name: s.name || `Season ${s.season_number}`,
             episodeCount: s.episode_count || 0,

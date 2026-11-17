@@ -11,28 +11,11 @@ export const sanitizeUrl = (url: string): string => {
 export const getServerConfig = (): ServerConfig => {
   const fileConfig = readState<Partial<ServerConfig>>('config', {});
 
-  const jellyfinUrl =
-    fileConfig.jellyfinUrl ??
-    process.env.JELLYFIN_URL ??
-    process.env.NEXT_PUBLIC_JELLYFIN_URL ??
-    '';
-  const jellyfinApiKey =
-    fileConfig.jellyfinApiKey ||
-    process.env.JELLYFIN_API_KEY ||
-    '';
-  const jellyfinUserId =
-    fileConfig.jellyfinUserId ||
-    process.env.JELLYFIN_USER_ID ||
-    '';
-  const seerrUrl =
-    fileConfig.seerrUrl ??
-    process.env.SEERR_URL ??
-    process.env.NEXT_PUBLIC_SEERR_URL ??
-    '';
-  const seerrApiKey =
-    fileConfig.seerrApiKey ||
-    process.env.SEERR_API_KEY ||
-    '';
+  const jellyfinUrl = '';
+  const jellyfinApiKey = '';
+  const jellyfinUserId = '';
+  const seerrUrl = '';
+  const seerrApiKey = '';
 
   const qbittorrentUrl =
     fileConfig.qbittorrentUrl ??
@@ -84,16 +67,21 @@ export const getServerConfig = (): ServerConfig => {
     'HomeStream';
 
   const isConfigured = Boolean(
-    (jellyfinUrl && jellyfinApiKey) || (seerrUrl && seerrApiKey) || tmdbApiKey
+    tmdbApiKey ||
+    (radarrUrl && radarrApiKey) ||
+    (sonarrUrl && sonarrApiKey) ||
+    (qbittorrentUrl && qbittorrentUsername) ||
+    fileConfig.slskdUrl ||
+    fileConfig.bookshelfUrl
   );
 
   return {
     appName,
-    jellyfinUrl: sanitizeUrl(jellyfinUrl),
-    jellyfinApiKey,
-    jellyfinUserId,
-    seerrUrl: sanitizeUrl(seerrUrl),
-    seerrApiKey,
+    jellyfinUrl: '',
+    jellyfinApiKey: '',
+    jellyfinUserId: '',
+    seerrUrl: '',
+    seerrApiKey: '',
     tmdbApiKey,
     slskdUrl: sanitizeUrl(fileConfig.slskdUrl ?? process.env.SLSKD_URL ?? ''),
     slskdApiKey: fileConfig.slskdApiKey || process.env.SLSKD_API_KEY || '',
@@ -124,12 +112,12 @@ export const saveServerConfig = (newConfig: Partial<ServerConfig>): ServerConfig
     ...current,
     ...newConfig,
     appName: newConfig.appName || current.appName || 'HomeStream',
-    jellyfinUrl: sanitizeUrl(newConfig.jellyfinUrl !== undefined ? newConfig.jellyfinUrl : current.jellyfinUrl),
-    seerrUrl: sanitizeUrl(newConfig.seerrUrl !== undefined ? newConfig.seerrUrl : current.seerrUrl),
-    jellyfinApiKey: newConfig.jellyfinApiKey !== undefined ? newConfig.jellyfinApiKey : current.jellyfinApiKey,
-    seerrApiKey: newConfig.seerrApiKey !== undefined ? newConfig.seerrApiKey : current.seerrApiKey,
+    jellyfinUrl: '',
+    seerrUrl: '',
+    jellyfinApiKey: '',
+    seerrApiKey: '',
     tmdbApiKey: newConfig.tmdbApiKey !== undefined ? newConfig.tmdbApiKey : current.tmdbApiKey,
-    jellyfinUserId: newConfig.jellyfinUserId !== undefined ? newConfig.jellyfinUserId : current.jellyfinUserId,
+    jellyfinUserId: '',
     slskdUrl: sanitizeUrl(newConfig.slskdUrl !== undefined ? newConfig.slskdUrl : current.slskdUrl || ''),
     slskdApiKey: newConfig.slskdApiKey !== undefined ? newConfig.slskdApiKey : current.slskdApiKey,
     musicPath: newConfig.musicPath !== undefined ? newConfig.musicPath : current.musicPath,
@@ -153,7 +141,12 @@ export const saveServerConfig = (newConfig: Partial<ServerConfig>): ServerConfig
   };
 
   merged.isConfigured = Boolean(
-    (merged.jellyfinUrl && merged.jellyfinApiKey) || (merged.seerrUrl && merged.seerrApiKey) || merged.tmdbApiKey
+    merged.tmdbApiKey ||
+    (merged.radarrUrl && merged.radarrApiKey) ||
+    (merged.sonarrUrl && merged.sonarrApiKey) ||
+    (merged.qbittorrentUrl && merged.qbittorrentUsername) ||
+    merged.slskdUrl ||
+    merged.bookshelfUrl
   );
 
   try {

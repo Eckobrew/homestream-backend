@@ -37,7 +37,7 @@ async function isAdminAuthorized(request: HttpRequest): Promise<boolean> {
     request.nextUrl.searchParams.get('profileId') ||
     request.nextUrl.searchParams.get('userId') ||
     request.cookies.get('homeflix_profile_id')?.value;
-  const active = profiles.find(p => p.id === activeId || p.jellyfinUserId === activeId) || profile;
+  const active = profiles.find(p => p.id === activeId) || profile;
   if (active && active.isAdministrator === false) return false;
   return true;
 }

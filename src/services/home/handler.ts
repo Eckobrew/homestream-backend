@@ -2,18 +2,14 @@ import { upstreamFailures } from '@/upstream';
 import { getServerConfig } from '@/lib/config';
 import { log } from '@/log';
 import { withParentalControls } from '@/lib/parental-controls';
-import { withJellyfinSession } from '@/lib/jellyfin-session';
 import { HttpRequest, HttpResponse } from '@/http';
-import { JellyfinClient, isYouTubeItem } from '@/lib/jellyfin';
-import { SeerrClient } from '@/lib/seerr';
 import { TmdbClient } from '@/lib/tmdb';
 import { SmartRecommendationEngine } from '@/lib/recommendations';
 import { stateDatabase } from '@/state/database';
 import { getNativeUserRequests } from '@/lib/user-requests';
 import { QBittorrentClient } from '@/lib/qbittorrent';
-import { resolveJellyfinUserId } from '@/lib/profiles';
-import { getMediaEngineSettings } from '@/lib/media-settings';
-import { getNativeBecauseYouWatched, getNativeResumeItems, listNativeLibraryItems } from '@/lib/native-media';
+import { resolveProfileId } from '@/lib/profiles';
+import { getNativeResumeItems, listNativeLibraryItems } from '@/lib/native-media';
 import {
   MOCK_HERO_ITEM,
   MOCK_CONTINUE_WATCHING,
@@ -23,11 +19,10 @@ import {
 } from '@/lib/mock-data';
 import { MediaItem, MediaRowSection } from '@/types';
 
-
 export const revalidate = 0;
 
 function isReleasedItem(item: MediaItem): boolean {
-  if (item.status === 'available' || item.source === 'jellyfin' || item.source === 'native') return true;
+  if (item.status === 'available' || item.source === 'native') return true;
   if (item.releaseDate) {
     const parsed = Date.parse(item.releaseDate);
     if (!Number.isNaN(parsed)) return parsed <= Date.now();
@@ -41,106 +36,60 @@ async function handleGET(request: HttpRequest) {
     request.nextUrl.searchParams.get('userId') ||
     request.cookies.get('homeflix_profile_id')?.value;
 
-  const targetUserId = await resolveJellyfinUserId(profileId);
-  const jellyfin = new JellyfinClient(undefined, undefined, targetUserId);
-  const seerr = new SeerrClient();
+  const targetUserId = await resolveProfileId(profileId);
   const tmdb = new TmdbClient();
 
-  const useNative = getMediaEngineSettings().mediaEngine === 'native';
-  const isJellyfinActive = useNative || jellyfin.isConfigured();
-
-  if (!isJellyfinActive) {
-    if (process.env.HOMESTREAM_DEMO_MODE !== 'true') return HttpResponse.json({ error: 'Connect Jellyfin to browse your library.', setupRequired: true, isDemoMode: false }, { status: 503 });
-    // 5 diverse mock hero items for cycling billboard
-    const mockHeroItems = [
-      MOCK_HERO_ITEM,
-      MOCK_CONTINUE_WATCHING[0], // Dune: Part Two
-      MOCK_CONTINUE_WATCHING[1], // Severance
-      MOCK_RECENT_MOVIES[0],     // Oppenheimer
-      MOCK_RECENT_SERIES[0],     // The Bear
-    ];
-
-    const sections: MediaRowSection[] = [
-      {
-        id: 'continue-watching',
-        title: 'Continue Watching',
-        items: MOCK_CONTINUE_WATCHING,
-      },
-      {
-        id: 'top-10',
-        title: `Top 10 on ${getServerConfig().appName} Today`,
-        items: MOCK_TOP_10,
-        isTop10: true,
-      },
-      {
-        id: 'recent-movies',
-        title: 'Recently Added Movies',
-        items: MOCK_RECENT_MOVIES,
-      },
-      {
-        id: 'recent-series',
-        title: 'Recently Added TV Shows',
-        items: MOCK_RECENT_SERIES,
-      },
-      {
-        id: 'trending-seerr',
-        title: 'Popular on Streaming',
-        items: [...MOCK_RECENT_MOVIES].reverse(),
-      },
-    ];
-
-    const demoRequestSections: MediaRowSection[] = [
-      {
-        id: 'requests-recommended',
-        title: 'Recommended for You',
-        items: MOCK_CONTINUE_WATCHING,
-      },
-      {
-        id: 'requests-popular',
-        title: 'Popular Titles',
-        items: [...MOCK_RECENT_MOVIES, ...MOCK_RECENT_SERIES],
-      },
-      {
-        id: 'requests-top-movies',
-        title: 'Top Movies',
-        items: MOCK_RECENT_MOVIES,
-      },
-      {
-        id: 'requests-top-tv',
-        title: 'Top TV Shows',
-        items: MOCK_RECENT_SERIES,
-      },
-    ];
-
-    return HttpResponse.json({
-      hero: MOCK_HERO_ITEM,
-      heroItems: mockHeroItems,
-      sections,
-      requestSections: demoRequestSections,
-      isDemoMode: true,
-      jellyfinConnected: false,
-      seerrConnected: seerr.isConfigured() || tmdb.isConfigured(),
-    });
-  }
-
   try {
-    const [resumeItems, latestMovies, latestSeries, topRated] = useNative
-      ? [
-          getNativeResumeItems(targetUserId || 'default', 15),
-          listNativeLibraryItems({ type: 'Movie', sort: 'recent', limit: 15 }),
-          listNativeLibraryItems({ type: 'Series', sort: 'recent', limit: 15 }),
-          listNativeLibraryItems({ sort: 'rating', limit: 15 }),
-        ]
-      : await Promise.all([
-          jellyfin.getResumeItems(),
-          jellyfin.getLatestMedia('Movie', 15),
-          jellyfin.getLatestMedia('Series', 15),
-          jellyfin.getTopRated(15),
-        ]);
+    const resumeItems = getNativeResumeItems(targetUserId || 'default', 15);
+    const latestMovies = listNativeLibraryItems({ type: 'Movie', sort: 'recent', limit: 15 });
+    const latestSeries = listNativeLibraryItems({ type: 'Series', sort: 'recent', limit: 15 });
+    const topRated = listNativeLibraryItems({ sort: 'rating', limit: 15 });
 
-    if (upstreamFailures()) return HttpResponse.json({ error: 'A media server is temporarily unavailable. Please try again.', isDemoMode: false }, { status: 503 });
+    const hasLibraryMedia =
+      resumeItems.length > 0 || latestMovies.length > 0 || latestSeries.length > 0 || topRated.length > 0;
+    const serverConfig = getServerConfig();
 
-    // Build 5 diverse hero candidates (prefer items with high quality backdrops)
+    if (!hasLibraryMedia && !serverConfig.isConfigured) {
+      if (process.env.HOMESTREAM_DEMO_MODE !== 'true') {
+        return HttpResponse.json(
+          { error: 'Add media libraries or configure TMDB to browse HomeStream.', setupRequired: true, isDemoMode: false },
+          { status: 503 }
+        );
+      }
+      const mockHeroItems = [
+        MOCK_HERO_ITEM,
+        MOCK_CONTINUE_WATCHING[0],
+        MOCK_CONTINUE_WATCHING[1],
+        MOCK_RECENT_MOVIES[0],
+        MOCK_RECENT_SERIES[0],
+      ];
+
+      const sections: MediaRowSection[] = [
+        { id: 'continue-watching', title: 'Continue Watching', items: MOCK_CONTINUE_WATCHING },
+        { id: 'top-10', title: `Top 10 on ${getServerConfig().appName} Today`, items: MOCK_TOP_10, isTop10: true },
+        { id: 'recent-movies', title: 'Recently Added Movies', items: MOCK_RECENT_MOVIES },
+        { id: 'recent-series', title: 'Recently Added TV Shows', items: MOCK_RECENT_SERIES },
+        { id: 'trending-tmdb', title: 'Popular on Streaming', items: [...MOCK_RECENT_MOVIES].reverse() },
+      ];
+
+      const demoRequestSections: MediaRowSection[] = [
+        { id: 'requests-recommended', title: 'Recommended for You', items: MOCK_CONTINUE_WATCHING },
+        { id: 'requests-popular', title: 'Popular Titles', items: [...MOCK_RECENT_MOVIES, ...MOCK_RECENT_SERIES] },
+        { id: 'requests-top-movies', title: 'Top Movies', items: MOCK_RECENT_MOVIES },
+        { id: 'requests-top-tv', title: 'Top TV Shows', items: MOCK_RECENT_SERIES },
+      ];
+
+      return HttpResponse.json({
+        hero: MOCK_HERO_ITEM,
+        heroItems: mockHeroItems,
+        sections,
+        requestSections: demoRequestSections,
+        isDemoMode: true,
+        jellyfinConnected: false,
+        seerrConnected: false,
+      });
+    }
+
     const allCandidates: MediaItem[] = [
       ...topRated,
       ...latestMovies,
@@ -150,7 +99,6 @@ async function handleGET(request: HttpRequest) {
 
     const uniqueCandidatesMap = new Map<string, MediaItem>();
     allCandidates.forEach((item) => {
-      // Prefer items that have backdrop and synopsis
       if (item.backdropUrl && item.overview && item.overview.length > 20) {
         if (!uniqueCandidatesMap.has(item.id)) {
           uniqueCandidatesMap.set(item.id, item);
@@ -160,7 +108,6 @@ async function handleGET(request: HttpRequest) {
 
     let heroCandidates = Array.from(uniqueCandidatesMap.values());
     if (heroCandidates.length < 5) {
-      // Fill with any candidates if backdrops are scarce
       allCandidates.forEach((item) => {
         if (!uniqueCandidatesMap.has(item.id)) {
           uniqueCandidatesMap.set(item.id, item);
@@ -173,24 +120,19 @@ async function handleGET(request: HttpRequest) {
     const heroCandidate = featuredHeroItems[0] || resumeItems[0] || latestMovies[0] || null;
 
     const sections: MediaRowSection[] = [];
-
-    // Check actively downloading items from qBittorrent
     const qb = new QBittorrentClient();
-    let initialUserRequests: MediaItem[] = [];
-    if (seerr.isConfigured()) {
-      try {
-        initialUserRequests = await seerr.getUserRequests(30);
-      } catch {}
-    }
+    const nativeRequestsPromise = getNativeUserRequests(targetUserId);
 
     if (qb.isConfigured()) {
       try {
-        const dlList = await qb.getStreamableDownloads();
+        const [dlList, initialUserRequests] = await Promise.all([
+          qb.getStreamableDownloads(),
+          nativeRequestsPromise,
+        ]);
         if (dlList.length > 0) {
           const downloadItems: MediaItem[] = [];
 
           for (const d of dlList) {
-            // Must have a real stream URL or active progress to be shown
             if (!d.streamUrl || (!d.streamable && d.progressPercent === 0)) {
               continue;
             }
@@ -201,9 +143,10 @@ async function handleGET(request: HttpRequest) {
               return cleanD === cleanR || (cleanD.startsWith(cleanR) && cleanR.length >= 3);
             });
 
-            const candidateTitle = matchedReq ? matchedReq.title : (d.videoFile?.name ? d.videoFile.name.replace(/\.[^/.]+$/, '') : d.name);
+            const candidateTitle = matchedReq
+              ? matchedReq.title
+              : (d.videoFile?.name ? d.videoFile.name.replace(/\.[^/.]+$/, '') : d.name);
 
-            // Check if already available in Jellyfin (or in hero/resume/topRated)
             const cleanCand = candidateTitle.toLowerCase().replace(/[^a-z0-9]/g, '');
             const alreadyInLibrary = [...heroCandidates, ...resumeItems, ...topRated, ...latestMovies].some(
               (it) => it.title.toLowerCase().replace(/[^a-z0-9]/g, '') === cleanCand
@@ -213,29 +156,18 @@ async function handleGET(request: HttpRequest) {
               continue;
             }
 
-            if (jellyfin.isConfigured()) {
-              const jfFound = await jellyfin.findItemByName(candidateTitle).catch(() => null);
-              if (jfFound) {
-                continue;
-              }
-              if (matchedReq?.tmdbId) {
-                const jfByTmdb = await jellyfin.findItemByTmdbId(matchedReq.tmdbId, matchedReq.type === 'Series' ? 'tv' : 'movie').catch(() => null);
-                if (jfByTmdb) {
-                  continue;
-                }
-              }
-            }
-
             downloadItems.push({
               id: matchedReq ? matchedReq.id : `dl-${d.hash}`,
               title: candidateTitle,
-              overview: matchedReq ? matchedReq.overview : `Actively downloading via qBittorrent (${d.progressPercent}% complete, ${(d.downloadSpeed / 1024 / 1024).toFixed(1)} MB/s). Ready to stream live.`,
+              overview: matchedReq
+                ? matchedReq.overview
+                : `Actively downloading via qBittorrent (${d.progressPercent}% complete, ${(d.downloadSpeed / 1024 / 1024).toFixed(1)} MB/s). Ready to stream live.`,
               type: matchedReq ? matchedReq.type : (/s\d{1,2}e\d{1,2}|season|episode/i.test(d.name) ? 'Series' : 'Movie'),
               posterUrl: matchedReq?.posterUrl || 'https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?w=500&auto=format&fit=crop&q=60',
               backdropUrl: matchedReq?.backdropUrl || 'https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?w=1280&auto=format&fit=crop&q=80',
               durationMinutes: matchedReq?.durationMinutes,
               genres: matchedReq?.genres?.length ? matchedReq.genres : ['Downloading', 'In-Progress'],
-              source: matchedReq?.source || 'jellyfin',
+              source: matchedReq?.source || 'tmdb',
               tmdbId: matchedReq?.tmdbId,
               status: 'processing',
               isDownloading: true,
@@ -261,7 +193,7 @@ async function handleGET(request: HttpRequest) {
       }
     }
 
-    const safeResume = resumeItems.filter((i) => i.source !== 'youtube' && !isYouTubeItem(i));
+    const safeResume = resumeItems.filter((i) => i.source !== 'youtube');
     if (safeResume.length > 0) {
       sections.push({
         id: 'continue-watching',
@@ -270,7 +202,7 @@ async function handleGET(request: HttpRequest) {
       });
     }
 
-    // Multiple "Because You Watched <Title>" sections directly below Continue Watching, pulling from TMDB (including non-library titles)
+    // Multiple "Because You Watched <Title>" sections directly below Continue Watching, pulling from TMDB
     const bywSeeds: Array<{ id: string; title: string; type: 'Movie' | 'Series'; tmdbId?: number }> = [];
     const seenSeedTitles = new Set<string>();
     const pushSeed = (item: { id: string; title?: string; type?: string; tmdbId?: number; seriesId?: string; seriesName?: string }) => {
@@ -281,7 +213,7 @@ async function handleGET(request: HttpRequest) {
       if (!key || seenSeedTitles.has(key)) return;
       seenSeedTitles.add(key);
       let resolvedTmdbId = typeof item.tmdbId === 'number' && item.tmdbId > 0 ? item.tmdbId : undefined;
-      if (!resolvedTmdbId && isEp && useNative && seedId.startsWith('nat-')) {
+      if (!resolvedTmdbId && isEp && seedId.startsWith('nat-')) {
         try {
           const row = stateDatabase().prepare('SELECT tmdb_id FROM native_media_items WHERE id = ?').get(seedId) as { tmdb_id?: number } | undefined;
           if (typeof row?.tmdb_id === 'number' && row.tmdb_id > 0) resolvedTmdbId = row.tmdb_id;
@@ -300,7 +232,7 @@ async function handleGET(request: HttpRequest) {
       if (bywSeeds.length >= 3) break;
     }
 
-    if (bywSeeds.length < 3 && useNative) {
+    if (bywSeeds.length < 3) {
       try {
         const recentWatched = stateDatabase()
           .prepare(
@@ -353,7 +285,7 @@ async function handleGET(request: HttpRequest) {
       }
     }
 
-    const safeTopRated = topRated.filter((i) => i.source !== 'youtube' && !isYouTubeItem(i));
+    const safeTopRated = topRated.filter((i) => i.source !== 'youtube');
     if (safeTopRated.length > 0) {
       sections.push({
         id: 'top-10',
@@ -363,7 +295,7 @@ async function handleGET(request: HttpRequest) {
       });
     }
 
-    const safeMovies = latestMovies.filter((i) => i.source !== 'youtube' && !isYouTubeItem(i));
+    const safeMovies = latestMovies.filter((i) => i.source !== 'youtube');
     if (safeMovies.length > 0) {
       sections.push({
         id: 'recent-movies',
@@ -394,8 +326,8 @@ async function handleGET(request: HttpRequest) {
           popularMovies,
           popularTv,
         ] = await Promise.all([
-          getNativeUserRequests(targetUserId),
-          useNative ? Promise.resolve([]) : tmdbTimeout(engine.getPersonalizedSections(jellyfin, targetUserId), []),
+          nativeRequestsPromise,
+          tmdbTimeout(engine.getPersonalizedSections(targetUserId), []),
           tmdbTimeout(tmdb.getTrending(), []),
           tmdbTimeout(tmdb.getPopularMovies(), []),
           tmdbTimeout(tmdb.getPopularTv(), []),
@@ -410,10 +342,8 @@ async function handleGET(request: HttpRequest) {
           });
         }
 
-        // Add personalized recommendations ("Recommended for You", "Because You Watched...")
         requestSections.push(...personalizedSections);
 
-        // Popular Titles
         if (trending.length > 0) {
           requestSections.push({
             id: 'requests-popular',
@@ -422,7 +352,6 @@ async function handleGET(request: HttpRequest) {
           });
         }
 
-        // Top Movies
         if (popularMovies.length > 0) {
           requestSections.push({
             id: 'requests-top-movies',
@@ -431,7 +360,6 @@ async function handleGET(request: HttpRequest) {
           });
         }
 
-        // Top TV Shows
         if (popularTv.length > 0) {
           requestSections.push({
             id: 'requests-top-tv',
@@ -440,7 +368,6 @@ async function handleGET(request: HttpRequest) {
           });
         }
 
-        // Native Auto-Approved User Requests
         if (nativeRequests.length > 0) {
           requestSections.push({
             id: 'my-requests',
@@ -451,102 +378,10 @@ async function handleGET(request: HttpRequest) {
       } catch (e) {
         log.error('Failed fetching TMDB discovery rows:', e);
       }
-    } else if (seerr.isConfigured()) {
-      try {
-        const topGenres = await jellyfin.getUserTopGenres(targetUserId);
+    }
 
-        const [userRequests, recommended, trending, popularMovies, popularTv] = await Promise.all([
-          initialUserRequests.length > 0 ? Promise.resolve(initialUserRequests) : seerr.getUserRequests(),
-          seerr.getRecommendationsForGenres(topGenres),
-          seerr.getTrending(),
-          seerr.getPopularMovies(),
-          seerr.getPopularTv(),
-        ]);
-
-        // Link active qBittorrent downloads to user requests
-        if (userRequests.length > 0 && qb.isConfigured()) {
-          try {
-            const dlList = await qb.getStreamableDownloads();
-            userRequests.forEach((req) => {
-              if (req.status === 'available') return;
-              const cleanReq = req.title.toLowerCase().replace(/[^a-z0-9]/g, '');
-              const matchedDl = dlList.find(
-                (d) => {
-                  if (!d.streamUrl || (!d.streamable && d.progressPercent === 0)) return false;
-                  const cleanD = (d.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-                  return cleanD === cleanReq || (cleanD.startsWith(cleanReq) && cleanReq.length >= 3);
-                }
-              );
-              if (matchedDl && matchedDl.streamUrl) {
-                req.isDownloading = true;
-                req.downloadProgress = matchedDl.progressPercent;
-                req.downloadSpeed = matchedDl.downloadSpeed;
-                req.downloadEta = matchedDl.eta;
-                req.torrentHash = matchedDl.hash;
-                req.videoStreamUrl = matchedDl.streamUrl;
-                req.downloadStreamUrl = matchedDl.streamUrl;
-                req.status = 'processing';
-              }
-            });
-          } catch {}
-        }
-
-        const releasedSeerrTrending = trending.filter(isReleasedItem);
-        if (releasedSeerrTrending.length > 0) {
-          sections.push({
-            id: 'trending-seerr',
-            title: 'Trending & Streamable (Seerr)',
-            items: releasedSeerrTrending,
-          });
-        }
-
-        // Row 1: Recommended for You (based on profile's watched content)
-        if (recommended.length > 0) {
-          requestSections.push({
-            id: 'requests-recommended',
-            title: 'Recommended for You',
-            items: recommended,
-          });
-        }
-
-        // Row 2: Popular Titles (including both movies and shows)
-        if (trending.length > 0) {
-          requestSections.push({
-            id: 'requests-popular',
-            title: 'Popular Titles',
-            items: trending,
-          });
-        }
-
-        // Row 3: Top Movies
-        if (popularMovies.length > 0) {
-          requestSections.push({
-            id: 'requests-top-movies',
-            title: 'Top Movies',
-            items: popularMovies,
-          });
-        }
-
-        // Row 4: Top TV Shows
-        if (popularTv.length > 0) {
-          requestSections.push({
-            id: 'requests-top-tv',
-            title: 'Top TV Shows',
-            items: popularTv,
-          });
-        }
-
-        // Bottom Row: Active user requests placed at the bottom of the Request media tab
-        if (userRequests.length > 0) {
-          requestSections.push({
-            id: 'my-requests',
-            title: '⚡ Your Requested Media (Downloading & In-Progress)',
-            items: userRequests,
-          });
-        }
-      } catch (e) {
-        log.error('Failed fetching Seerr discovery rows:', e);
-      }
+    if (!hasLibraryMedia && upstreamFailures()) {
+      return HttpResponse.json({ error: 'A media service is temporarily unavailable. Please try again.', isDemoMode: false }, { status: 503 });
     }
 
     return HttpResponse.json({
@@ -555,13 +390,13 @@ async function handleGET(request: HttpRequest) {
       sections,
       requestSections,
       isDemoMode: false,
-      jellyfinConnected: true,
-      seerrConnected: seerr.isConfigured() || tmdb.isConfigured(),
+      jellyfinConnected: false,
+      seerrConnected: tmdb.isConfigured(),
     });
   } catch (err: unknown) {
-    log.error('Error fetching home data from Jellyfin:', err);
-    return HttpResponse.json({ error: 'Jellyfin is temporarily unavailable. Please try again.', isDemoMode: false }, { status: 503 });
+    log.error('Error building home feed:', err);
+    return HttpResponse.json({ error: 'HomeStream library is temporarily unavailable. Please try again.', isDemoMode: false }, { status: 503 });
   }
 }
 
-export const GET = withJellyfinSession(withParentalControls(handleGET));
+export const GET = withParentalControls(handleGET);

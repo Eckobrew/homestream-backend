@@ -1,24 +1,19 @@
 import { log } from '@/log';
 import { withParentalControls } from '@/lib/parental-controls';
-import { withJellyfinSession } from '@/lib/jellyfin-session';
 import { HttpRequest, HttpResponse } from '@/http';
-import { JellyfinClient } from '@/lib/jellyfin';
-import { SeerrClient } from '@/lib/seerr';
 import { TmdbClient } from '@/lib/tmdb';
 import { QBittorrentClient } from '@/lib/qbittorrent';
-import { resolveJellyfinUserId } from '@/lib/profiles';
+import { resolveProfileId } from '@/lib/profiles';
 import { getStreamProgressMap } from '@/lib/stream-progress';
-import { getMediaEngineSettings } from '@/lib/media-settings';
-import { getNativeItemById } from '@/lib/native-media';
+import { getNativeItemById, getNativeTmdbIdMap } from '@/lib/native-media';
 import {
   MOCK_HERO_ITEM,
   MOCK_CONTINUE_WATCHING,
   MOCK_RECENT_MOVIES,
   MOCK_RECENT_SERIES,
-  MOCK_SEERR_SEARCH_RESULTS,
+  MOCK_DISCOVERY_SEARCH_RESULTS,
 } from '@/lib/mock-data';
 import { MediaItem } from '@/types';
-
 
 export const revalidate = 0;
 
@@ -27,28 +22,25 @@ async function handleGET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  if (!/^[a-zA-Z0-9_-]{1,128}$/.test(id)) return HttpResponse.json({ error: 'Invalid media ID' }, { status: 400 });
+  if (!/^[a-zA-Z0-9_-]{1,128}$/.test(id)) {
+    return HttpResponse.json({ error: 'Invalid media ID' }, { status: 400 });
+  }
 
   const profileId =
     request.nextUrl.searchParams.get('userId') ||
     request.cookies.get('homeflix_profile_id')?.value;
+  const effectiveProfile = (await resolveProfileId(profileId)) || 'default';
 
-  if (id.startsWith('nat-') || getMediaEngineSettings().mediaEngine === 'native') {
-    const nativeItem = getNativeItemById(id, await resolveJellyfinUserId(profileId) || 'default');
+  if (id.startsWith('nat-')) {
+    const nativeItem = getNativeItemById(id, effectiveProfile);
     if (nativeItem) {
-      return HttpResponse.json({ item: nativeItem });
+      return HttpResponse.json({ item: nativeItem }, { headers: { 'Cache-Control': 'no-store' } });
     }
-    if (id.startsWith('nat-')) {
-      return HttpResponse.json({ error: 'Native media item not found' }, { status: 404 });
-    }
+    return HttpResponse.json({ error: 'Native media item not found' }, { status: 404 });
   }
 
-  const targetUserId = await resolveJellyfinUserId(profileId);
-  const jellyfin = new JellyfinClient(undefined, undefined, targetUserId);
-  const seerr = new SeerrClient();
   const tmdb = new TmdbClient();
 
-  // 0. If it's an actively downloading torrent item (dl-hash)
   if (id.startsWith('dl-')) {
     const hash = id.replace('dl-', '');
     const qb = new QBittorrentClient();
@@ -63,18 +55,18 @@ async function handleGET(
             .replace(/\b(1080p|720p|2160p|4k|web-dl|bluray|x264|x265|hevc|ddp\d\.\d).*$/i, '')
             .trim();
 
-          const hasDiscovery = tmdb.isConfigured() || seerr.isConfigured();
-          if (hasDiscovery && cleanTitle) {
-            const searchResults = tmdb.isConfigured() ? await tmdb.search(cleanTitle) : await seerr.search(cleanTitle);
+          if (tmdb.isConfigured() && cleanTitle) {
+            const searchResults = await tmdb.search(cleanTitle);
             const matched = searchResults.find(
               (r) =>
                 r.title.toLowerCase().includes(cleanTitle.toLowerCase()) ||
                 cleanTitle.toLowerCase().includes(r.title.toLowerCase())
             );
             if (matched && matched.tmdbId) {
-              const fullDetails = tmdb.isConfigured()
-                ? (matched.type === 'Series' ? await tmdb.getTvDetails(matched.tmdbId) : await tmdb.getMovieDetails(matched.tmdbId))
-                : (matched.type === 'Series' ? await seerr.getTvDetails(matched.tmdbId) : await seerr.getMovieDetails(matched.tmdbId));
+              const fullDetails =
+                matched.type === 'Series'
+                  ? await tmdb.getTvDetails(matched.tmdbId)
+                  : await tmdb.getMovieDetails(matched.tmdbId);
               if (fullDetails) {
                 fullDetails.id = id;
                 fullDetails.torrentHash = hash;
@@ -94,20 +86,7 @@ async function handleGET(
     }
   }
 
-  // 1. If it's a Jellyfin ID, fetch full details & episodes from Jellyfin
-  if (jellyfin.isConfigured() && !id.startsWith('seerr-') && !id.startsWith('tmdb-') && !id.startsWith('hero-') && !id.startsWith('cw-') && !id.startsWith('mov-') && !id.startsWith('ser-')) {
-    const item = await jellyfin.getItemDetails(id);
-    if (item) {
-      return HttpResponse.json(
-        { item },
-        { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' } }
-      );
-    }
-  }
-
-  // 2. If it's a discovery item or TMDB ID, fetch full Movie or TV details & episodes
-  const isDiscoveryConfigured = tmdb.isConfigured() || seerr.isConfigured();
-  if (isDiscoveryConfigured && (id.startsWith('seerr-') || id.startsWith('tmdb-') || /^\d+$/.test(id))) {
+  if (tmdb.isConfigured() && (id.startsWith('seerr-') || id.startsWith('tmdb-') || /^\d+$/.test(id))) {
     let tmdbId = 0;
     let explicitType: 'movie' | 'tv' | null = null;
 
@@ -124,80 +103,58 @@ async function handleGET(
     }
 
     const typeQuery = request.nextUrl.searchParams.get('type')?.toLowerCase();
-    if (typeQuery === 'movie') {
-      explicitType = 'movie';
-    } else if (typeQuery === 'tv' || typeQuery === 'series') {
-      explicitType = 'tv';
-    }
+    if (typeQuery === 'movie') explicitType = 'movie';
+    else if (typeQuery === 'tv' || typeQuery === 'series') explicitType = 'tv';
 
     if (tmdbId > 0) {
       try {
-        const attachJellyfinMatch = async (item: any, type: 'movie' | 'tv') => {
-          if (!jellyfin.isConfigured() || !item) return item;
-          try {
-            const jfId = (await jellyfin.findItemByTmdbId(tmdbId, type)) ||
-              (item.title ? await jellyfin.findItemByName(item.title, type) : null);
-            if (jfId) {
-              const jfDetails = await jellyfin.getItemDetails(jfId);
-              if (jfDetails) {
-                item.jellyfinId = jfDetails.id;
-                item.playableEpisodeId = jfDetails.playableEpisodeId;
-                item.videoStreamUrl = jfDetails.videoStreamUrl;
-                item.status = 'available';
-                item.source = 'jellyfin';
-                if (jfDetails.seasons && jfDetails.seasons.length > 0) {
-                  const jfSeasons = jfDetails.seasons;
-                  if (item.seasons && item.seasons.length > 0) {
-                    item.seasons = item.seasons.map((s: any) => {
-                      const jfSeason = jfSeasons.find((js: any) => js.seasonNumber === s.seasonNumber);
-                      if (!jfSeason) return s;
+        const attachNativeMatch = (item: MediaItem): MediaItem => {
+          const natId = getNativeTmdbIdMap().get(tmdbId);
+          if (!natId) return item;
+          const nativeDetails = getNativeItemById(natId, effectiveProfile);
+          if (!nativeDetails) return item;
+          item.jellyfinId = nativeDetails.id;
+          item.playableEpisodeId = nativeDetails.playableEpisodeId;
+          item.videoStreamUrl = nativeDetails.videoStreamUrl;
+          item.status = 'available';
+          item.source = 'native';
+          if (nativeDetails.seasons && nativeDetails.seasons.length > 0) {
+            const natSeasons = nativeDetails.seasons;
+            if (item.seasons && item.seasons.length > 0) {
+              item.seasons = item.seasons.map((s) => {
+                const natSeason = natSeasons.find((ns) => ns.seasonNumber === s.seasonNumber);
+                if (!natSeason) return s;
+                return {
+                  ...s,
+                  overview: s.overview || natSeason.overview,
+                  posterUrl: s.posterUrl || natSeason.posterUrl,
+                  episodes: (s.episodes || []).map((ep) => {
+                    const natEp = (natSeason.episodes || []).find((ne) => ne.episodeNumber === ep.episodeNumber);
+                    if (natEp) {
                       return {
-                        ...s,
-                        overview: s.overview || jfSeason.overview,
-                        posterUrl: s.posterUrl || jfSeason.posterUrl,
-                        episodes: (s.episodes || []).map((ep: any) => {
-                          const jfEp = (jfSeason.episodes || []).find((je: any) => je.episodeNumber === ep.episodeNumber);
-                          if (jfEp) {
-                            return {
-                              ...ep,
-                              jellyfinId: jfEp.id || jfEp.jellyfinId,
-                              videoStreamUrl: jfEp.videoStreamUrl,
-                              downloadStreamUrl: jfEp.downloadStreamUrl,
-                              played: jfEp.played,
-                              playbackPositionTicks: jfEp.playbackPositionTicks,
-                              totalDurationTicks: jfEp.totalDurationTicks,
-                              progressPercent: jfEp.progressPercent,
-                              status: 'available',
-                            };
-                          }
-                          return ep;
-                        }),
+                        ...ep,
+                        id: natEp.id,
+                        jellyfinId: natEp.id,
+                        videoStreamUrl: natEp.videoStreamUrl,
+                        downloadStreamUrl: natEp.downloadStreamUrl,
+                        played: natEp.played,
+                        playbackPositionTicks: natEp.playbackPositionTicks,
+                        totalDurationTicks: natEp.totalDurationTicks,
+                        progressPercent: natEp.progressPercent,
                       };
-                    });
-                  } else {
-                    item.seasons = jfDetails.seasons;
-                  }
-                }
-              }
+                    }
+                    return ep;
+                  }),
+                };
+              });
+            } else {
+              item.seasons = nativeDetails.seasons;
             }
-          } catch {}
+          }
           return item;
         };
 
-        const fetchMovieDetails = async (idNum: number) => {
-          if (tmdb.isConfigured()) return tmdb.getMovieDetails(idNum);
-          if (seerr.isConfigured()) return seerr.getMovieDetails(idNum);
-          return null;
-        };
-
-        const fetchTvDetails = async (idNum: number) => {
-          if (tmdb.isConfigured()) return tmdb.getTvDetails(idNum);
-          if (seerr.isConfigured()) return seerr.getTvDetails(idNum);
-          return null;
-        };
-
         const hydrateStreamProgress = (target: MediaItem): MediaItem => {
-          const effectiveProfile = profileId || 'default';
           const ids = [target.id];
           for (const season of target.seasons || []) {
             for (const ep of season.episodes || []) {
@@ -219,69 +176,60 @@ async function handleGET(
         };
 
         if (explicitType === 'movie') {
-          let movieItem = await fetchMovieDetails(tmdbId);
+          const movieItem = await tmdb.getMovieDetails(tmdbId);
           if (movieItem) {
-            movieItem = hydrateStreamProgress(await attachJellyfinMatch(movieItem, 'movie'));
             return HttpResponse.json(
-              { item: movieItem },
-              { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' } }
+              { item: hydrateStreamProgress(attachNativeMatch(movieItem)) },
+              { headers: { 'Cache-Control': 'no-store' } }
             );
           }
         } else if (explicitType === 'tv') {
-          let tvItem = await fetchTvDetails(tmdbId);
+          const tvItem = await tmdb.getTvDetails(tmdbId);
           if (tvItem) {
-            tvItem = hydrateStreamProgress(await attachJellyfinMatch(tvItem, 'tv'));
             return HttpResponse.json(
-              { item: tvItem },
-              { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' } }
+              { item: hydrateStreamProgress(attachNativeMatch(tvItem)) },
+              { headers: { 'Cache-Control': 'no-store' } }
             );
           }
         } else {
-          // If no type was specified (legacy ID e.g. seerr-27205 without type param),
-          // Check movie details first
-          let movieItem = await fetchMovieDetails(tmdbId);
+          const movieItem = await tmdb.getMovieDetails(tmdbId);
           if (movieItem) {
-            movieItem = hydrateStreamProgress(await attachJellyfinMatch(movieItem, 'movie'));
             return HttpResponse.json(
-              { item: movieItem },
-              { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' } }
+              { item: hydrateStreamProgress(attachNativeMatch(movieItem)) },
+              { headers: { 'Cache-Control': 'no-store' } }
             );
           }
-          let tvItem = await fetchTvDetails(tmdbId);
+          const tvItem = await tmdb.getTvDetails(tmdbId);
           if (tvItem) {
-            tvItem = hydrateStreamProgress(await attachJellyfinMatch(tvItem, 'tv'));
             return HttpResponse.json(
-              { item: tvItem },
-              { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' } }
+              { item: hydrateStreamProgress(attachNativeMatch(tvItem)) },
+              { headers: { 'Cache-Control': 'no-store' } }
             );
           }
         }
       } catch (e) {
-        log.error(`Error querying discovery for media ${id}:`, e);
+        log.error(`Error querying TMDB for media ${id}:`, e);
       }
     }
   }
 
-  if (process.env.HOMESTREAM_DEMO_MODE !== 'true' || jellyfin.isConfigured()) return HttpResponse.json({ error: 'Media not found' }, { status: 404 });
-  // 3. Find in mock data
+  if (process.env.HOMESTREAM_DEMO_MODE !== 'true') {
+    return HttpResponse.json({ error: 'Media not found' }, { status: 404 });
+  }
+
   const allMock: MediaItem[] = [
     MOCK_HERO_ITEM,
     ...MOCK_CONTINUE_WATCHING,
     ...MOCK_RECENT_MOVIES,
     ...MOCK_RECENT_SERIES,
-    ...MOCK_SEERR_SEARCH_RESULTS,
+    ...MOCK_DISCOVERY_SEARCH_RESULTS,
   ];
-
   const found = allMock.find((m) => m.id === id);
-
   if (found) {
-    return HttpResponse.json(
-      { item: found },
-      { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate' } }
-    );
+    return HttpResponse.json({ item: found }, { headers: { 'Cache-Control': 'no-store' } });
   }
 
   return HttpResponse.json({ error: 'Media not found' }, { status: 404 });
 }
 
-export const GET = withJellyfinSession(withParentalControls(handleGET));
+export const GET = withParentalControls(handleGET);

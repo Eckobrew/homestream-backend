@@ -1,7 +1,6 @@
 import { stateDatabase } from '@/state/database';
 import { MediaItem } from '@/types';
 import { QBittorrentClient } from './qbittorrent';
-import { JellyfinClient } from './jellyfin';
 import { getNativeTmdbIdMap } from './native-media';
 
 export interface StoredRequest {
@@ -11,13 +10,14 @@ export interface StoredRequest {
   title: string;
   status: string; // 'pending' | 'processing' | 'available'
   requestedAt: string;
+  releaseDate?: string;
   posterUrl?: string;
   overview?: string;
 }
 
 let tableInitialized = false;
 
-function ensureTable() {
+export function ensureUserRequestsTable() {
   if (tableInitialized) return;
   try {
     const db = stateDatabase();
@@ -30,12 +30,16 @@ function ensureTable() {
         title TEXT NOT NULL,
         status TEXT NOT NULL,
         requested_at TEXT NOT NULL,
+        release_date TEXT,
         poster_url TEXT,
         overview TEXT
       );
     `);
     try {
       db.exec("ALTER TABLE user_requests ADD COLUMN user_id TEXT DEFAULT 'global'");
+    } catch {}
+    try {
+      db.exec('ALTER TABLE user_requests ADD COLUMN release_date TEXT');
     } catch {}
     tableInitialized = true;
   } catch (err) {
@@ -44,15 +48,16 @@ function ensureTable() {
 }
 
 export function saveUserRequest(req: StoredRequest) {
-  ensureTable();
+  ensureUserRequestsTable();
   try {
     const db = stateDatabase();
     db.prepare(`
-      INSERT INTO user_requests (id, media_type, media_id, title, status, requested_at, poster_url, overview)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO user_requests (id, media_type, media_id, title, status, requested_at, release_date, poster_url, overview)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         status = excluded.status,
         title = excluded.title,
+        release_date = COALESCE(excluded.release_date, user_requests.release_date),
         poster_url = excluded.poster_url,
         overview = excluded.overview;
     `).run(
@@ -62,6 +67,7 @@ export function saveUserRequest(req: StoredRequest) {
       req.title,
       req.status,
       req.requestedAt,
+      req.releaseDate || null,
       req.posterUrl || '',
       req.overview || ''
     );
@@ -71,7 +77,7 @@ export function saveUserRequest(req: StoredRequest) {
 }
 
 export async function getNativeUserRequests(targetUserId?: string): Promise<MediaItem[]> {
-  ensureTable();
+  ensureUserRequestsTable();
   try {
     const db = stateDatabase();
     const rows = targetUserId
@@ -81,7 +87,6 @@ export async function getNativeUserRequests(targetUserId?: string): Promise<Medi
 
     const qb = new QBittorrentClient();
     const qbDownloads = qb.isConfigured() ? await qb.getStreamableDownloads().catch(() => []) : [];
-    const jellyfin = new JellyfinClient();
     const nativeTmdbIds = getNativeTmdbIdMap();
 
     const items: MediaItem[] = [];
@@ -93,14 +98,8 @@ export async function getNativeUserRequests(targetUserId?: string): Promise<Medi
       let etaSeconds: number | undefined;
       let torrentHash: string | undefined;
 
-      // 1. Check if available in Jellyfin or Native library
-      if (jellyfin.isConfigured()) {
-        const found = await jellyfin.findItemByTmdbId(r.media_id, r.media_type).catch(() => null);
-        if (found) {
-          status = 'available';
-        }
-      }
-      if (status !== 'available' && nativeTmdbIds.has(Number(r.media_id))) {
+      // 1. Check if available in Native library
+      if (nativeTmdbIds.has(Number(r.media_id))) {
         status = 'available';
       }
 
@@ -129,6 +128,7 @@ export async function getNativeUserRequests(targetUserId?: string): Promise<Medi
         type: r.media_type === 'tv' ? 'Series' : 'Movie',
         posterUrl: r.poster_url || '',
         backdropUrl: r.poster_url || '',
+        releaseDate: r.release_date || undefined,
         requestedAt: r.requested_at,
         requestStatus: status === 'available' ? 'available' : status === 'processing' ? 'processing' : 'approved',
         status: status === 'available' ? 'available' : 'processing',

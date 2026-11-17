@@ -18,8 +18,7 @@ export function registerDevice(deviceId: string, deviceName: string, client = 'a
 }
 export function registeredDevice(token: string): PairedDevice | undefined {
   if (!valid(token)) return;
-  const device = loadDevices()[deviceHash(token)];
-  return device?.client !== 'android-jellyfin' ? device : undefined;
+  return loadDevices()[deviceHash(token)];
 }
 export function isValidDeviceToken(token: string): boolean {
   const device = registeredDevice(token);

@@ -984,9 +984,6 @@ export function processNextDownload(): void {
         SET status = 'completed', progress_percent = 100, completed_at = ?, file_path = ?
         WHERE video_id = ?
       `).run(new Date().toISOString(), finalPath || null, next.video_id);
-
-      // Trigger scan in Jellyfin if available
-      triggerJellyfinYouTubeScan().catch(() => {});
     } else {
       log.error(`[youtube] Download failed for ${next.video_id} with exit code ${code}`);
       db.prepare("UPDATE youtube_downloads SET status = 'failed', error_message = ? WHERE video_id = ?").run(
@@ -998,28 +995,6 @@ export function processNextDownload(): void {
     // Process next item in queue
     setTimeout(() => processNextDownload(), 1000);
   });
-}
-
-/**
- * Triggers Jellyfin virtual folder refresh for the YouTube collection
- */
-async function triggerJellyfinYouTubeScan(): Promise<void> {
-  const jellyfinUrl = process.env.JELLYFIN_URL;
-  const apiKey = process.env.JELLYFIN_API_KEY;
-  if (!jellyfinUrl || !apiKey) return;
-
-  try {
-    await fetch(`${jellyfinUrl.replace(/\/+$/, '')}/Library/Refresh`, {
-      method: 'POST',
-      headers: {
-        Authorization: `MediaBrowser Client="HomeStream", Device="Backend", DeviceId="homestream-backend", Version="1.0", Token="${apiKey}"`,
-      },
-      signal: AbortSignal.timeout(5000),
-    });
-    console.info('[youtube] Triggered Jellyfin library scan for new downloads');
-  } catch (err) {
-    log.warn('[youtube] Failed triggering Jellyfin scan:', err);
-  }
 }
 
 /**

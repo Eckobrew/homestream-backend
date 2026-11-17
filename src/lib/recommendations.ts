@@ -1,8 +1,8 @@
-import { JellyfinClient } from './jellyfin';
 import { TmdbClient } from './tmdb';
-import { MediaItem, MediaRowSection } from '@/types';
+import { stateDatabase } from '@/state/database';
+import { listNativeLibraryItems } from './native-media';
+import { MediaRowSection } from '@/types';
 
-// Map textual genre names to TMDB genre IDs
 const GENRE_NAME_TO_ID: Record<string, number> = {
   action: 28,
   adventure: 12,
@@ -32,23 +32,81 @@ export class SmartRecommendationEngine {
     this.tmdb = tmdb || new TmdbClient();
   }
 
-  async getPersonalizedSections(
-    jellyfin: JellyfinClient,
+  private getTopGenres(userId?: string): string[] {
+    const counts = new Map<string, number>();
+    try {
+      const db = stateDatabase();
+      const rows = db
+        .prepare(
+          `SELECT m.genres_json
+           FROM native_watch_history p
+           JOIN native_media_items m ON m.id = COALESCE(p.series_id, p.item_id)
+           ${userId ? 'WHERE p.profile_id = ?' : ''}
+           ORDER BY p.last_played_at DESC
+           LIMIT 30`
+        )
+        .all(...(userId ? [userId] : [])) as Array<{ genres_json?: string }>;
+      for (const row of rows) {
+        const genres = JSON.parse(row.genres_json || '[]') as unknown;
+        if (Array.isArray(genres)) {
+          for (const g of genres) {
+            if (typeof g === 'string' && g.trim()) {
+              counts.set(g.trim(), (counts.get(g.trim()) || 0) + 1);
+            }
+          }
+        }
+      }
+    } catch {}
+    if (counts.size === 0) {
+      for (const item of listNativeLibraryItems({ limit: 30 })) {
+        for (const g of item.genres) {
+          counts.set(g, (counts.get(g) || 0) + 1);
+        }
+      }
+    }
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([genre]) => genre)
+      .slice(0, 5);
+  }
+
+  private getLastPlayedItem(
     userId?: string
-  ): Promise<MediaRowSection[]> {
+  ): { tmdbId?: number; name?: string; isTv?: boolean } | null {
+    try {
+      const db = stateDatabase();
+      const row = db
+        .prepare(
+          `SELECT m.title, m.type, m.tmdb_id as tmdbId
+           FROM native_watch_history p
+           JOIN native_media_items m ON m.id = COALESCE(p.series_id, p.item_id)
+           ${userId ? 'WHERE p.profile_id = ?' : ''}
+           ORDER BY p.last_played_at DESC
+           LIMIT 1`
+        )
+        .get(...(userId ? [userId] : [])) as { title?: string; type?: string; tmdbId?: number } | undefined;
+      if (!row?.title) return null;
+      return {
+        tmdbId: typeof row.tmdbId === 'number' && row.tmdbId > 0 ? row.tmdbId : undefined,
+        name: row.title,
+        isTv: row.type === 'Series' || row.type === 'Episode',
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  async getPersonalizedSections(userId?: string): Promise<MediaRowSection[]> {
     if (!this.tmdb.isConfigured()) return [];
 
     const sections: MediaRowSection[] = [];
 
     try {
-      // 1. Get top genres from user watch history
-      const topGenres = await jellyfin.getUserTopGenres(userId);
+      const topGenres = this.getTopGenres(userId);
       const topGenreIds = topGenres
         .map(g => GENRE_NAME_TO_ID[g.toLowerCase().trim()])
         .filter(Boolean);
 
-      // 2. Discover high-rated content matching user's taste
-      // Filtering: minimum 7.0 rating and 150+ votes (eliminates low-budget fluff)
       const [tasteMovies, tasteShows] = await Promise.all([
         this.tmdb.discover({
           type: 'movie',
@@ -80,8 +138,7 @@ export class SmartRecommendationEngine {
         });
       }
 
-      // 3. "Because You Watched" - find last played item with a TMDB ID
-      const lastWatched = await this.getLastPlayedItem(jellyfin, userId);
+      const lastWatched = this.getLastPlayedItem(userId);
       if (lastWatched?.tmdbId && lastWatched?.name) {
         const becauseWatched = await this.tmdb.getRecommendations(
           lastWatched.tmdbId,
@@ -100,35 +157,5 @@ export class SmartRecommendationEngine {
     }
 
     return sections;
-  }
-
-  private async getLastPlayedItem(
-    jellyfin: JellyfinClient,
-    userId?: string
-  ): Promise<{ tmdbId?: number; name?: string; isTv?: boolean } | null> {
-    if (!jellyfin.isConfigured()) return null;
-    try {
-      const uid = userId || (await jellyfin.getFirstUserId());
-      if (!uid) return null;
-
-      const res = await (jellyfin as any).fetch(
-        `${(jellyfin as any).url}/Users/${uid}/Items?SortBy=DatePlayed&SortOrder=Descending&Filters=IsPlayed&Limit=1&Recursive=true&Fields=ProviderIds,Type,Name`,
-        { headers: (jellyfin as any).getHeaders() }
-      );
-      if (!res.ok) return null;
-      const data = await res.json();
-      const item = data.Items?.[0];
-      if (!item) return null;
-
-      const tmdbId = item.ProviderIds?.Tmdb ? parseInt(item.ProviderIds.Tmdb, 10) : undefined;
-      const isTv = item.Type === 'Series' || item.Type === 'Episode';
-      return {
-        tmdbId,
-        name: item.SeriesName || item.Name,
-        isTv,
-      };
-    } catch {
-      return null;
-    }
   }
 }

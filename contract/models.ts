@@ -98,7 +98,7 @@ export interface MediaItem {
   durationMinutes?: number;
   genres: string[];
   seasonsCount?: number;
-  source: 'jellyfin' | 'native' | 'seerr' | 'demo' | 'youtube';
+  source: 'jellyfin' | 'native' | 'seerr' | 'tmdb' | 'demo' | 'youtube';
   jellyfinId?: string;
   seerrId?: number;
   tmdbId?: number;

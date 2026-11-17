@@ -1,6 +1,5 @@
 import crypto from 'node:crypto';
 import { stateDatabase, readState, writeState } from '@/state/database';
-import { getServerConfig } from '@/lib/config';
 import type { UserProfile } from '@/types';
 
 export interface AccountRecord {
@@ -201,27 +200,6 @@ export function deleteAccount(accountId: string): boolean {
   return res.changes > 0;
 }
 
-async function verifyAgainstLegacyJellyfin(username: string, password: string): Promise<boolean> {
-  const config = getServerConfig();
-  const jellyfinUrl = (config.jellyfinUrl || '').replace(/\/+$/, '');
-  if (!jellyfinUrl) return false;
-  try {
-    const res = await fetch(`${jellyfinUrl}/Users/AuthenticateByName`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        Authorization: `MediaBrowser Client="${config.appName || 'HomeStream'}", Device="AuthMigration", DeviceId="homestream-auth-migration", Version="1.0.0"`,
-      },
-      body: JSON.stringify({ Username: username, Pw: password }),
-      signal: AbortSignal.timeout(10000),
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
-
 export async function authenticateAccount(
   username: string,
   password: string
@@ -237,14 +215,6 @@ export async function authenticateAccount(
   if (row.password_hash) {
     if (!verifyPassword(password, row.password_hash)) return null;
     return toAccountRecord(row);
-  }
-
-  if (row.legacy_jellyfin_auth === 1) {
-    const ok = await verifyAgainstLegacyJellyfin(clean, password);
-    if (!ok) return null;
-    // Capture scrypt hash locally so future logins are 100% in-house.
-    setAccountPassword(row.id, password);
-    return getAccountById(row.id);
   }
 
   return null;

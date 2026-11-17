@@ -162,7 +162,8 @@ export class SonarrClient {
 
   async requestSeries(
     titleOrTvdb: string | number,
-    seasons?: number[] | 'all'
+    _seasons?: number[] | 'all',
+    qualityProfileId?: number
   ): Promise<{ success: boolean; error?: string; series?: SonarrSeries }> {
     if (!this.isConfigured()) return { success: false, error: 'Sonarr is not configured' };
 
@@ -186,7 +187,7 @@ export class SonarrClient {
           searchForMissingEpisodes: true,
         },
         rootFolderPath: found.rootFolderPath || '/tv',
-        qualityProfileId: getServerConfig().sonarrQualityProfileId || found.qualityProfileId || 1,
+        qualityProfileId: qualityProfileId || getServerConfig().sonarrQualityProfileId || found.qualityProfileId || 1,
       };
 
       const addRes = await fetch(`${this.baseUrl}/api/v3/series`, {

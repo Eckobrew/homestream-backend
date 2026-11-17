@@ -962,7 +962,7 @@
     "/api/v1/config": {
       "get": {
         "operationId": "web_get_config",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -1393,7 +1393,7 @@
       },
       "post": {
         "operationId": "web_post_config",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -1974,7 +1974,7 @@
     "/api/v1/home": {
       "get": {
         "operationId": "web_get_home",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -2407,7 +2407,7 @@
     "/api/v1/library/{type}": {
       "get": {
         "operationId": "web_get_library_type_",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -2867,7 +2867,7 @@
     "/api/v1/categories/{type}": {
       "get": {
         "operationId": "web_get_categories_type_",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -3326,7 +3326,7 @@
     "/api/v1/media/{id}": {
       "get": {
         "operationId": "web_get_media_id_",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -3780,7 +3780,7 @@
     "/api/v1/media/{id}/recommendations": {
       "get": {
         "operationId": "web_get_media_id_recommendations",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -4280,7 +4280,7 @@
     "/api/v1/profiles": {
       "get": {
         "operationId": "web_get_profiles",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -4723,7 +4723,7 @@
       },
       "post": {
         "operationId": "web_post_profiles",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -5321,7 +5321,7 @@
     "/api/v1/accounts": {
       "get": {
         "operationId": "web_get_accounts",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -5811,7 +5811,7 @@
       },
       "post": {
         "operationId": "web_post_accounts",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -6317,7 +6317,7 @@
     "/api/v1/native/library": {
       "get": {
         "operationId": "web_get_native_library",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -6834,7 +6834,7 @@
       },
       "post": {
         "operationId": "web_post_native_library",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -7306,7 +7306,7 @@
     "/api/v1/native/stream": {
       "get": {
         "operationId": "web_get_native_stream",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -7956,7 +7956,7 @@
     "/api/v1/syncplay": {
       "get": {
         "operationId": "web_get_syncplay",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -8406,7 +8406,7 @@
       },
       "post": {
         "operationId": "web_post_syncplay",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -8900,7 +8900,7 @@
     "/api/v1/search": {
       "get": {
         "operationId": "web_get_search",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -9377,7 +9377,7 @@
     "/api/v1/downloads": {
       "get": {
         "operationId": "web_get_downloads",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -9823,7 +9823,7 @@
     "/api/v1/downloads/manager": {
       "get": {
         "operationId": "web_get_downloads_manager",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -10277,7 +10277,7 @@
       },
       "post": {
         "operationId": "web_post_downloads_manager",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -10807,7 +10807,7 @@
     "/api/v1/playback": {
       "get": {
         "operationId": "web_get_playback",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -11424,7 +11424,7 @@
     "/api/v1/playback/progress": {
       "post": {
         "operationId": "web_post_playback_progress",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -11922,7 +11922,7 @@
     "/api/v1/request": {
       "get": {
         "operationId": "web_get_request",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -12381,7 +12381,7 @@
       },
       "post": {
         "operationId": "web_post_request",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -12883,7 +12883,7 @@
     "/api/v1/preview-stream": {
       "get": {
         "operationId": "web_get_preview_stream",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -13366,7 +13366,7 @@
     "/api/v1/subtitles": {
       "get": {
         "operationId": "web_get_subtitles",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -13864,7 +13864,7 @@
     "/api/v1/trailer": {
       "get": {
         "operationId": "web_get_trailer",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -14350,7 +14350,7 @@
     "/api/v1/stream/download": {
       "get": {
         "operationId": "web_get_stream_download",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -14992,7 +14992,7 @@
     "/api/v1/stream/torrent": {
       "get": {
         "operationId": "web_get_stream_torrent",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -15662,7 +15662,7 @@
     "/api/v1/webhook/arr": {
       "get": {
         "operationId": "web_get_webhook_arr",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -16101,7 +16101,7 @@
       },
       "post": {
         "operationId": "web_post_webhook_arr",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -16575,7 +16575,7 @@
     "/api/v1/catalog-links": {
       "get": {
         "operationId": "web_get_catalog_links",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -17040,7 +17040,7 @@
     "/api/v1/books": {
       "get": {
         "operationId": "web_get_books",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -17492,7 +17492,7 @@
     "/api/v1/books/search": {
       "get": {
         "operationId": "web_get_books_search",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -17934,7 +17934,7 @@
     "/api/v1/books/book": {
       "get": {
         "operationId": "web_get_books_book",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -18832,7 +18832,7 @@
     "/api/v1/books/file": {
       "get": {
         "operationId": "web_get_books_file",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -19306,7 +19306,7 @@
     "/api/v1/books/queue": {
       "get": {
         "operationId": "web_get_books_queue",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -19739,7 +19739,7 @@
     "/api/v1/books/progress": {
       "get": {
         "operationId": "web_get_books_progress",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -20193,7 +20193,7 @@
       },
       "post": {
         "operationId": "web_post_books_progress",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -20683,7 +20683,7 @@
     "/api/v1/books/request": {
       "post": {
         "operationId": "web_post_books_request",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -21159,7 +21159,7 @@
     "/api/v1/books/profile-book": {
       "post": {
         "operationId": "web_post_books_profile_book",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -21623,7 +21623,7 @@
       },
       "delete": {
         "operationId": "web_delete_books_profile_book",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -22078,7 +22078,7 @@
     "/api/v1/music": {
       "get": {
         "operationId": "web_get_music",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -22530,7 +22530,7 @@
     "/api/v1/music/album": {
       "get": {
         "operationId": "web_get_music_album",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -22972,7 +22972,7 @@
       },
       "delete": {
         "operationId": "web_delete_music_album",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -23894,7 +23894,7 @@
     "/api/v1/music/stream": {
       "get": {
         "operationId": "web_get_music_stream",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -24428,7 +24428,7 @@
     "/api/v1/music/download": {
       "get": {
         "operationId": "web_get_music_download",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -24892,7 +24892,7 @@
     "/api/v1/music/import-status": {
       "get": {
         "operationId": "web_get_music_import_status",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -25359,7 +25359,7 @@
     "/api/v1/music/request": {
       "post": {
         "operationId": "web_post_music_request",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -25829,7 +25829,7 @@
     "/api/v1/music/profile-album": {
       "post": {
         "operationId": "web_post_music_profile_album",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -26291,7 +26291,7 @@
       },
       "delete": {
         "operationId": "web_delete_music_profile_album",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -26746,7 +26746,7 @@
     "/api/v1/music/playlists": {
       "get": {
         "operationId": "web_get_music_playlists",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -27191,7 +27191,7 @@
       },
       "post": {
         "operationId": "web_post_music_playlists",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -27661,7 +27661,7 @@
     "/api/v1/music/playlists/import": {
       "post": {
         "operationId": "web_post_music_playlists_import",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -28186,7 +28186,7 @@
     "/api/v1/music/playlists/import-spotify": {
       "post": {
         "operationId": "web_post_music_playlists_import_spotify",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -28681,7 +28681,7 @@
     "/api/v1/music/playlists/import-exportify": {
       "post": {
         "operationId": "web_post_music_playlists_import_exportify",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -29183,7 +29183,7 @@
     "/api/v1/music/playlist": {
       "get": {
         "operationId": "web_get_music_playlist",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -29628,7 +29628,7 @@
       },
       "delete": {
         "operationId": "web_delete_music_playlist",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -30083,7 +30083,7 @@
     "/api/v1/music/playlist/track": {
       "post": {
         "operationId": "web_post_music_playlist_track",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -30554,7 +30554,7 @@
       },
       "delete": {
         "operationId": "web_delete_music_playlist_track",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -31020,7 +31020,7 @@
     "/api/v1/requested": {
       "get": {
         "operationId": "web_get_requested",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -31453,7 +31453,7 @@
     "/api/v1/integrations": {
       "get": {
         "operationId": "web_get_integrations",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -31884,7 +31884,7 @@
       },
       "post": {
         "operationId": "web_post_integrations",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -32400,7 +32400,7 @@
     "/api/v1/youtube/search": {
       "get": {
         "operationId": "web_get_youtube_search",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -32842,7 +32842,7 @@
     "/api/v1/youtube/stream": {
       "get": {
         "operationId": "web_get_youtube_stream",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -33286,7 +33286,7 @@
     "/api/v1/youtube/stream-video": {
       "get": {
         "operationId": "web_get_youtube_stream_video",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -33798,7 +33798,7 @@
     "/api/v1/youtube/progress": {
       "post": {
         "operationId": "web_post_youtube_progress",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -34301,7 +34301,7 @@
       },
       "delete": {
         "operationId": "web_delete_youtube_progress",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -34765,7 +34765,7 @@
     "/api/v1/youtube/continue-watching": {
       "get": {
         "operationId": "web_get_youtube_continue_watching",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -35209,7 +35209,7 @@
       },
       "delete": {
         "operationId": "web_delete_youtube_continue_watching",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -35664,7 +35664,7 @@
     "/api/v1/youtube/auth": {
       "get": {
         "operationId": "web_get_youtube_auth",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -36102,7 +36102,7 @@
       },
       "post": {
         "operationId": "web_post_youtube_auth",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -36558,7 +36558,7 @@
       },
       "delete": {
         "operationId": "web_delete_youtube_auth",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -37002,7 +37002,7 @@
     "/api/v1/youtube/recommendations": {
       "get": {
         "operationId": "web_get_youtube_recommendations",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -37454,7 +37454,7 @@
     "/api/v1/youtube/download": {
       "post": {
         "operationId": "web_post_youtube_download",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -37946,7 +37946,7 @@
     "/api/v1/youtube/subscriptions": {
       "get": {
         "operationId": "web_get_youtube_subscriptions",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -38377,7 +38377,7 @@
       },
       "post": {
         "operationId": "web_post_youtube_subscriptions",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -38865,7 +38865,7 @@
       },
       "put": {
         "operationId": "web_put_youtube_subscriptions",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -39353,7 +39353,7 @@
       },
       "delete": {
         "operationId": "web_delete_youtube_subscriptions",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -39806,7 +39806,7 @@
     "/api/v1/youtube/subscriptions/check": {
       "post": {
         "operationId": "web_post_youtube_subscriptions_check",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -40269,7 +40269,7 @@
     "/api/v1/youtube/queue": {
       "get": {
         "operationId": "web_get_youtube_queue",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -40700,7 +40700,7 @@
       },
       "delete": {
         "operationId": "web_delete_youtube_queue",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -41155,7 +41155,7 @@
     "/api/v1/youtube/archive": {
       "get": {
         "operationId": "web_get_youtube_archive",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -41588,7 +41588,7 @@
     "/api/v1/youtube/stream-local": {
       "get": {
         "operationId": "web_get_youtube_stream_local",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -42541,7 +42541,7 @@
     "/api/v1/sessions": {
       "get": {
         "operationId": "web_get_sessions",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -43008,7 +43008,7 @@
     "/api/v1/sessions/heartbeat": {
       "post": {
         "operationId": "web_post_sessions_heartbeat",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -43530,7 +43530,7 @@
     "/api/v1/sessions/command": {
       "post": {
         "operationId": "web_post_sessions_command",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -44011,7 +44011,7 @@
     "/api/v1/sessions/commands": {
       "get": {
         "operationId": "web_get_sessions_commands",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -44462,7 +44462,7 @@
     "/api/v1/watchlist": {
       "get": {
         "operationId": "web_get_watchlist",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -44906,7 +44906,7 @@
       },
       "post": {
         "operationId": "web_post_watchlist",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -45399,7 +45399,7 @@
       },
       "delete": {
         "operationId": "web_delete_watchlist",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -45859,7 +45859,7 @@
     "/api/v1/profile-prefs": {
       "get": {
         "operationId": "web_get_profile_prefs",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -46323,7 +46323,7 @@
       },
       "post": {
         "operationId": "web_post_profile_prefs",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -46811,7 +46811,7 @@
       },
       "delete": {
         "operationId": "web_delete_profile_prefs",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -47274,7 +47274,7 @@
     "/api/v1/collections": {
       "get": {
         "operationId": "web_get_collections",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -47718,7 +47718,7 @@
       },
       "post": {
         "operationId": "web_post_collections",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -48212,7 +48212,7 @@
       },
       "delete": {
         "operationId": "web_delete_collections",
-        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their Jellyfin account.",
+        "description": "Signed web session, authorized setup/webhook bearer credential, or trusted local access. Remote sessions are bound to their HomeStream account.",
         "security": [
           {
             "session": []
@@ -101768,6 +101768,7 @@
               "jellyfin",
               "native",
               "seerr",
+              "tmdb",
               "youtube"
             ],
             "type": "string"

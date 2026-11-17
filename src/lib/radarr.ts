@@ -157,7 +157,7 @@ export class RadarrClient {
     }
   }
 
-  async requestMovie(tmdbId: number): Promise<{ success: boolean; error?: string; movie?: RadarrMovie }> {
+  async requestMovie(tmdbId: number, qualityProfileId?: number): Promise<{ success: boolean; error?: string; movie?: RadarrMovie }> {
     if (!this.isConfigured()) return { success: false, error: 'Radarr is not configured' };
 
     let movie = await this.getMovieByTmdb(tmdbId);
@@ -172,7 +172,7 @@ export class RadarrClient {
           searchForMovie: true,
         },
         rootFolderPath: lookup.rootFolderPath || '/movies',
-        qualityProfileId: getServerConfig().radarrQualityProfileId || lookup.qualityProfileId || 1,
+        qualityProfileId: qualityProfileId || getServerConfig().radarrQualityProfileId || lookup.qualityProfileId || 1,
       };
 
       const res = await fetch(`${this.baseUrl}/api/v3/movie`, {

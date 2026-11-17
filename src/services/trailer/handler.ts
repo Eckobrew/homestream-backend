@@ -1,13 +1,8 @@
 import { withParentalControls } from '@/lib/parental-controls';
 import { HttpRequest, HttpResponse } from '@/http';
-import { SeerrClient } from '@/lib/seerr';
-import { JellyfinClient } from '@/lib/jellyfin';
 import { getNativeItemById } from '@/lib/native-media';
 import { TmdbClient } from '@/lib/tmdb';
 
-
-
-// In-memory cache for ultra-fast trailer responses on hover
 const trailerCache = new Map<string, { key: string; name: string; site: string; type: string } | null>();
 
 async function handleGET(request: HttpRequest) {
@@ -19,35 +14,21 @@ async function handleGET(request: HttpRequest) {
   let tmdbId = tmdbIdParam ? Number(tmdbIdParam) : 0;
   let mediaType: 'movie' | 'tv' = typeParam === 'tv' || typeParam === 'Series' ? 'tv' : 'movie';
 
-  // If TMDB ID is not directly passed, try to extract from itemId
   if (!tmdbId && itemId) {
-    if (itemId.startsWith('seerr-tv-')) {
+    if (itemId.startsWith('seerr-tv-') || itemId.startsWith('tmdb-tv-')) {
       mediaType = 'tv';
-      tmdbId = Number(itemId.replace('seerr-tv-', '')) || 0;
-    } else if (itemId.startsWith('seerr-movie-')) {
+      tmdbId = Number(itemId.replace(/^(?:seerr|tmdb)-tv-/, '')) || 0;
+    } else if (itemId.startsWith('seerr-movie-') || itemId.startsWith('tmdb-movie-')) {
       mediaType = 'movie';
-      tmdbId = Number(itemId.replace('seerr-movie-', '')) || 0;
-    } else if (itemId.startsWith('seerr-')) {
-      tmdbId = Number(itemId.replace(/^seerr-(?:movie-|tv-)?/, '')) || 0;
+      tmdbId = Number(itemId.replace(/^(?:seerr|tmdb)-movie-/, '')) || 0;
+    } else if (itemId.startsWith('seerr-') || itemId.startsWith('tmdb-')) {
+      tmdbId = Number(itemId.replace(/^(?:seerr|tmdb)-(?:movie-|tv-)?/, '')) || 0;
     } else if (/^\d+$/.test(itemId)) {
       tmdbId = Number(itemId);
     } else if (itemId.startsWith('nat-')) {
       const natItem = getNativeItemById(itemId);
       if (natItem?.tmdbId) tmdbId = natItem.tmdbId;
       if (natItem?.type === 'Series') mediaType = 'tv';
-    } else {
-      // If it's a Jellyfin ID, look up its provider IDs from Jellyfin
-      const jellyfin = new JellyfinClient();
-      if (jellyfin.isConfigured()) {
-        try {
-          const jItem = await jellyfin.getItemDetails(itemId);
-          if (jItem?.tmdbId) {
-            tmdbId = jItem.tmdbId;
-          }
-        } catch {
-          // Ignore
-        }
-      }
     }
   }
 
@@ -60,26 +41,16 @@ async function handleGET(request: HttpRequest) {
     const cached = trailerCache.get(cacheKey);
     return HttpResponse.json(
       { success: true, trailer: cached },
-      {
-        headers: {
-          'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800',
-        },
-      }
+      { headers: { 'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800' } }
     );
   }
 
-  const seerr = new SeerrClient();
-  const trailer = await seerr.getTrailers(tmdbId, mediaType) || await new TmdbClient().getTrailers(tmdbId, mediaType);
-
+  const trailer = await new TmdbClient().getTrailers(tmdbId, mediaType);
   trailerCache.set(cacheKey, trailer);
 
   return HttpResponse.json(
     { success: true, trailer },
-    {
-      headers: {
-        'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800',
-      },
-    }
+    { headers: { 'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800' } }
   );
 }
 

@@ -1,16 +1,10 @@
-import { fetch } from '@/upstream';
-import { log } from '@/log';
 import { withParentalControls } from '@/lib/parental-controls';
-import { withJellyfinSession } from '@/lib/jellyfin-session';
 import { HttpRequest, HttpResponse } from '@/http';
-import { JellyfinClient } from '@/lib/jellyfin';
 import { readSession } from '@/lib/session';
 import { extractNativeSubtitleVtt, listNativeSubtitlesForFile, resolveNativeFileByItemOrFileId } from '@/lib/native-transcode';
 import { getMediaEngineSettings } from '@/lib/media-settings';
 import { getProfileMediaPrefs } from '@/lib/profile-features';
 import { stateDatabase } from '@/state/database';
-
-
 
 async function handleGET(request: HttpRequest) {
   const { searchParams } = request.nextUrl;
@@ -18,8 +12,6 @@ async function handleGET(request: HttpRequest) {
   const mediaSourceId = searchParams.get('mediaSourceId') || itemId || '';
   const indexStr = searchParams.get('index');
 
-  // Cast clients receive scoped resource tickets. Require a session for the
-  // legacy web proxy even when the general API trusts the local network.
   if (indexStr !== null && !request.nextUrl.pathname.startsWith('/api/mobile/') &&
       !await readSession(request.cookies.get('homeflix_session')?.value, 'web')) {
     return HttpResponse.json({ error: 'Authentication required' }, { status: 401 });
@@ -29,74 +21,45 @@ async function handleGET(request: HttpRequest) {
     return HttpResponse.json({ error: 'Valid itemId, mediaSourceId and subtitle index required' }, { status: 400 });
   }
 
-  if (itemId.startsWith('nat-')) {
-    const fileRow = resolveNativeFileByItemOrFileId(itemId, searchParams.get('versionId') || undefined);
-    const profileId = searchParams.get('userId') || request.cookies.get('homeflix_profile_id')?.value || 'default';
-    const serverDefaultMode = getMediaEngineSettings().subtitleMode;
-    if (!fileRow) return HttpResponse.json({ subtitles: [], subtitleMode: serverDefaultMode });
-    if (indexStr !== null && indexStr !== undefined) {
-      const vtt = await extractNativeSubtitleVtt(fileRow, parseInt(indexStr, 10));
-      if (!vtt) return HttpResponse.json({ error: 'Subtitle not found' }, { status: 404 });
-      return new HttpResponse(vtt, { status: 200, headers: { 'Content-Type': 'text/vtt; charset=utf-8' } });
+  const serverDefaultMode = getMediaEngineSettings().subtitleMode;
+  const fileRow = resolveNativeFileByItemOrFileId(itemId, searchParams.get('versionId') || undefined);
+  const profileId = searchParams.get('userId') || request.cookies.get('homeflix_profile_id')?.value || 'default';
+
+  if (!fileRow) {
+    if (indexStr !== null) {
+      return HttpResponse.json({ error: 'Subtitle not found' }, { status: 404 });
     }
-    const epRow = fileRow.episode_id
-      ? (stateDatabase().prepare('SELECT series_id FROM native_media_episodes WHERE id = ?').get(fileRow.episode_id) as { series_id?: string } | undefined)
-      : undefined;
-    const prefs = getProfileMediaPrefs(profileId, epRow?.series_id);
-    const effectiveMode = prefs.effective.subtitleMode && prefs.effective.subtitleMode !== 'auto'
-      ? prefs.effective.subtitleMode
-      : serverDefaultMode;
-    return HttpResponse.json({
-      subtitles: listNativeSubtitlesForFile(fileRow, {
-        subtitleLang: prefs.effective.subtitleLang,
-        subtitleMode: prefs.effective.subtitleMode,
-      }),
-      subtitleMode: effectiveMode,
+    return HttpResponse.json({ subtitles: [], subtitleMode: serverDefaultMode });
+  }
+
+  if (indexStr !== null && indexStr !== undefined) {
+    const vtt = await extractNativeSubtitleVtt(fileRow, parseInt(indexStr, 10));
+    if (!vtt) return HttpResponse.json({ error: 'Subtitle not found' }, { status: 404 });
+    return new HttpResponse(vtt, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/vtt; charset=utf-8',
+        'Cache-Control': 'no-store',
+        'Access-Control-Allow-Origin': '*',
+      },
     });
   }
 
-  const jellyfin = new JellyfinClient();
-  if (!jellyfin.isConfigured()) {
-    return HttpResponse.json({ error: 'Jellyfin is not configured' }, { status: 503 });
-  }
+  const epRow = fileRow.episode_id
+    ? (stateDatabase().prepare('SELECT series_id FROM native_media_episodes WHERE id = ?').get(fileRow.episode_id) as { series_id?: string } | undefined)
+    : undefined;
+  const prefs = getProfileMediaPrefs(profileId, epRow?.series_id);
+  const effectiveMode = prefs.effective.subtitleMode && prefs.effective.subtitleMode !== 'auto'
+    ? prefs.effective.subtitleMode
+    : serverDefaultMode;
 
-  // If index is provided, proxy the WebVTT file
-  if (indexStr !== null && indexStr !== undefined) {
-    const index = parseInt(indexStr, 10);
-    const vttUrl = jellyfin.getSubtitleStreamUrl(itemId, mediaSourceId, index);
-
-    try {
-      const res = await fetch(vttUrl, {
-        headers: {
-          Accept: 'text/vtt, text/plain, */*',
-        }, redirect: 'error', signal: AbortSignal.timeout(15000), cache: 'no-store',
-      });
-
-      if (!res.ok) {
-        return new HttpResponse(`Failed to fetch subtitle from server (HTTP ${res.status})`, {
-          status: res.status,
-          headers: { 'Content-Type': 'text/plain' },
-        });
-      }
-
-      const vttContent = await res.text();
-      return new HttpResponse(vttContent, {
-        status: 200,
-        headers: {
-          'Content-Type': 'text/vtt; charset=utf-8',
-          'Cache-Control': 'no-store',
-          'Access-Control-Allow-Origin': '*',
-        },
-      });
-    } catch (err: unknown) {
-      log.warn('Subtitle fetch failed');
-      return new HttpResponse('Subtitle temporarily unavailable', { status: 502 });
-    }
-  }
-
-  // Otherwise, return JSON list of available subtitle tracks
-  const subtitles = await jellyfin.getSubtitles(itemId);
-  return HttpResponse.json({ subtitles });
+  return HttpResponse.json({
+    subtitles: listNativeSubtitlesForFile(fileRow, {
+      subtitleLang: prefs.effective.subtitleLang,
+      subtitleMode: prefs.effective.subtitleMode,
+    }),
+    subtitleMode: effectiveMode,
+  });
 }
 
-export const GET = withJellyfinSession(withParentalControls(handleGET));
+export const GET = withParentalControls(handleGET);

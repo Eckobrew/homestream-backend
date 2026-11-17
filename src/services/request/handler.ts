@@ -1,35 +1,37 @@
-import { invalidateRequested } from '@/lib/request-cache';
+import { log } from '@/log';
 import { withParentalControls } from '@/lib/parental-controls';
 import { HttpRequest, HttpResponse } from '@/http';
-import { SeerrClient } from '@/lib/seerr';
 import { RadarrClient } from '@/lib/radarr';
 import { SonarrClient } from '@/lib/sonarr';
 import { TmdbClient } from '@/lib/tmdb';
+import { getServerConfig } from '@/lib/config';
 import { saveUserRequest } from '@/lib/user-requests';
-import { RequestMediaPayload } from '@/types';
 
 async function handleGET(request: HttpRequest) {
-  const type = (request.nextUrl.searchParams.get('type') || 'movie') as 'movie' | 'tv';
-  const seerr = new SeerrClient();
-
-  const fallbackProfiles = [{ id: -1, name: 'Server default (Radarr / Sonarr)', is4k: false }];
-
-  if (!seerr.isConfigured()) {
-    return HttpResponse.json({
-      profiles: fallbackProfiles,
-      defaultProfileId: -1,
-    });
-  }
-
+  const typeParam = request.nextUrl.searchParams.get('type') === 'tv' ? 'tv' : 'movie';
+  const config = getServerConfig();
   try {
-    const profiles = await seerr.getQualityProfiles(type);
+    const rawProfiles = typeParam === 'movie'
+      ? await new RadarrClient().getQualityProfiles()
+      : await new SonarrClient().getQualityProfiles();
+
+    const profiles = rawProfiles.map(p => ({ id: p.id, name: p.name, is4k: false }));
+    const configuredDefault = typeParam === 'movie'
+      ? config.radarrQualityProfileId
+      : config.sonarrQualityProfileId;
+    const defaultProfileId =
+      (configuredDefault && profiles.some(p => p.id === configuredDefault) ? configuredDefault : undefined) ??
+      profiles[0]?.id ??
+      -1;
+
     return HttpResponse.json({
-      profiles: [...fallbackProfiles, ...profiles],
-      defaultProfileId: -1,
+      profiles: profiles.length ? profiles : [{ id: -1, name: 'Server default (Radarr / Sonarr)', is4k: false }],
+      defaultProfileId,
     });
-  } catch {
+  } catch (err) {
+    log.error('Failed to fetch quality profiles:', err);
     return HttpResponse.json({
-      profiles: fallbackProfiles,
+      profiles: [{ id: -1, name: 'Server default (Radarr / Sonarr)', is4k: false }],
       defaultProfileId: -1,
     });
   }
@@ -37,95 +39,80 @@ async function handleGET(request: HttpRequest) {
 
 async function handlePOST(request: HttpRequest) {
   try {
-    const payload: RequestMediaPayload = await request.json().catch(() => null);
+    const body = await request.json();
+    const { mediaType, mediaId, seasons, profileId } = body;
 
-    if (!payload || (payload.is4k !== undefined && typeof payload.is4k !== 'boolean') || (payload.profileId !== undefined && (!Number.isSafeInteger(payload.profileId) || payload.profileId < -1)) || (payload.serverId !== undefined && (!Number.isSafeInteger(payload.serverId) || payload.serverId < 0)) || !Number.isSafeInteger(payload.mediaId) || payload.mediaId <= 0 || !['movie', 'tv'].includes(payload.mediaType) || (payload.seasons !== undefined && payload.seasons !== 'all' && (!Array.isArray(payload.seasons) || payload.seasons.some(season => !Number.isSafeInteger(season) || season < 0)))) {
+    if (!mediaType || !mediaId || !['movie', 'tv'].includes(mediaType)) {
       return HttpResponse.json(
-        { success: false, error: 'mediaId and mediaType are required' },
+        { error: 'Valid mediaType (movie|tv) and mediaId are required' },
         { status: 400 }
       );
     }
-    if (payload.profileId !== undefined && payload.profileId < 0) {
-      delete payload.profileId;
+
+    const numericId = Number(mediaId);
+    if (!Number.isSafeInteger(numericId) || numericId <= 0) {
+      return HttpResponse.json({ error: 'Valid positive mediaId is required' }, { status: 400 });
     }
 
     const radarr = new RadarrClient();
     const sonarr = new SonarrClient();
     const tmdb = new TmdbClient();
-    let handled = false;
-    let title = `Media #${payload.mediaId}`;
-    let posterUrl = '';
-    let overview = '';
 
-    // Fetch basic details from TMDB if configured
+    let tmdbDetails: any = null;
     if (tmdb.isConfigured()) {
-      const details = payload.mediaType === 'movie'
-        ? await tmdb.getMovieDetails(payload.mediaId)
-        : await tmdb.getTvDetails(payload.mediaId);
-      if (details) {
-        title = details.title;
-        posterUrl = details.posterUrl;
-        overview = details.overview;
-      }
+      tmdbDetails =
+        mediaType === 'movie'
+          ? await tmdb.getMovieDetails(numericId).catch(() => null)
+          : await tmdb.getTvDetails(numericId).catch(() => null);
     }
 
-    // 1. Direct native handling via Radarr / Sonarr
-    if (payload.mediaType === 'movie' && radarr.isConfigured()) {
-      const result = await radarr.requestMovie(payload.mediaId);
-      if (result.success) {
-        handled = true;
-        title = result.movie?.title || title;
+    const resolvedProfileId = typeof profileId === 'number' && profileId > 0 ? profileId : undefined;
+    let arrHandled = false;
+    let status: 'pending' | 'processing' = 'pending';
+
+    if (mediaType === 'movie' && radarr.isConfigured()) {
+      const res = await radarr.requestMovie(numericId, resolvedProfileId);
+      if (!res.success) {
+        return HttpResponse.json({ success: false, error: res.error || 'Radarr request failed' }, { status: 500 });
       }
-    } else if (payload.mediaType === 'tv' && sonarr.isConfigured()) {
-      const result = await sonarr.requestSeries(title || payload.mediaId, payload.seasons);
-      if (result.success) {
-        handled = true;
-        title = result.series?.title || title;
+      arrHandled = true;
+      status = 'processing';
+    } else if (mediaType === 'tv' && sonarr.isConfigured()) {
+      const res = await sonarr.requestSeries(
+        tmdbDetails?.title || String(numericId),
+        Array.isArray(seasons) ? seasons : seasons === 'all' ? 'all' : undefined,
+        resolvedProfileId
+      );
+      if (!res.success) {
+        return HttpResponse.json({ success: false, error: res.error || 'Sonarr request failed' }, { status: 500 });
       }
+      arrHandled = true;
+      status = 'processing';
     }
 
-    // 2. Fallback / supplementary handling via Seerr if configured
-    const seerr = new SeerrClient();
-    if (!handled && seerr.isConfigured()) {
-      const result = await seerr.requestMedia(payload);
-      if (result.success) {
-        handled = true;
-      } else if (!handled) {
-        return HttpResponse.json({ success: false, error: result.error }, { status: 400 });
-      }
-    }
-
-    if (!handled && !radarr.isConfigured() && !sonarr.isConfigured() && !seerr.isConfigured()) {
-      if (process.env.HOMESTREAM_DEMO_MODE !== 'true') {
-        return HttpResponse.json({ error: 'Neither Radarr, Sonarr nor Seerr is configured' }, { status: 503 });
-      }
-      return HttpResponse.json({
-        success: true,
-        message: 'Request simulated! (Demo mode)',
-        isDemo: true,
-      });
-    }
-
-    // Save to local user_requests database
     saveUserRequest({
-      id: `req-${payload.mediaType}-${payload.mediaId}`,
-      mediaType: payload.mediaType,
-      mediaId: payload.mediaId,
-      title,
-      status: 'processing',
+      id: `tmdb-${mediaType}-${numericId}`,
+      mediaType,
+      mediaId: numericId,
+      title: tmdbDetails?.title || `${mediaType === 'movie' ? 'Movie' : 'Series'} #${numericId}`,
+      status,
       requestedAt: new Date().toISOString(),
-      posterUrl,
-      overview,
+      releaseDate: tmdbDetails?.releaseDate,
+      posterUrl: tmdbDetails?.posterUrl,
+      overview: tmdbDetails?.overview,
     });
 
-    invalidateRequested();
     return HttpResponse.json({
       success: true,
-      message: `"${title}" requested and auto-approved!`,
+      request: { id: `tmdb-${mediaType}-${numericId}`, status },
+      message: arrHandled
+        ? `Sent to ${mediaType === 'movie' ? 'Radarr' : 'Sonarr'}! Auto-approved and added to HomeStream download queue.`
+        : 'Media request saved! Configure Radarr / Sonarr in Admin for automatic downloading.',
     });
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return HttpResponse.json({ success: false, error: msg }, { status: 500 });
+    const message = err instanceof Error ? err.message : String(err);
+    log.error('Request media error:', message);
+    return HttpResponse.json({ success: false, error: `Failed to request media: ${message}` }, { status: 500 });
   }
 }
 

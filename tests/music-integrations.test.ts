@@ -8,6 +8,7 @@ import { createApp } from '../src/app';
 import { createSession } from '../src/lib/session';
 import { writeState, closeStateDatabases, stateDatabase } from '../src/state/database';
 import { ensureMusicTables, stopDownloadMonitor } from '../src/lib/music';
+import { saveUserRequest } from '../src/lib/user-requests';
 const mbid = '11111111-1111-4111-8111-111111111111';
 test('music requests, authenticated range streaming, all-media queue and admin credential separation', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'homestream-music-'));
@@ -83,8 +84,8 @@ test('music requests, authenticated range streaming, all-media queue and admin c
     HOMESTREAM_MOBILE_TOKEN: 'mobile-test-token-at-least-32-chars',
     SLSKD_URL: url,
     SLSKD_API_KEY: 'server-only-music-token',
-    SEERR_URL: url,
-    SEERR_API_KEY: 'seerr-only-token',
+    RADARR_URL: url,
+    RADARR_API_KEY: 'radarr-only-token',
     QBITTORRENT_URL: url,
     QBITTORRENT_USERNAME: 'fixture',
     QBITTORRENT_PASSWORD: 'qb-only-password',
@@ -94,6 +95,15 @@ test('music requests, authenticated range streaming, all-media queue and admin c
   // Seed native SQLite library and track file
   const app = createApp();
   ensureMusicTables();
+  saveUserRequest({
+    id: 'tmdb-movie-42',
+    mediaType: 'movie',
+    mediaId: 42,
+    title: 'Example Movie',
+    status: 'processing',
+    requestedAt: '2026-11-08T12:00:00Z',
+    releaseDate: '2027-04-03',
+  });
   const db = stateDatabase();
   const now = new Date().toISOString();
   db.prepare(
@@ -174,7 +184,7 @@ test('music requests, authenticated range streaming, all-media queue and admin c
     const integration = await app.inject('/api/v1/integrations');
     assert.equal(integration.statusCode, 200);
     assert.ok(integration.json().integrations.find((i: any) => i.id === 'slskd').credentialSet);
-    for (const secret of ['server-only-music-token', 'seerr-only-token', 'qb-only-password'])
+    for (const secret of ['server-only-music-token', 'radarr-only-token', 'qb-only-password'])
       assert.ok(!integration.body.includes(secret));
 
     assert.equal(

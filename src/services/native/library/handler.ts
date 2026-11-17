@@ -35,17 +35,16 @@ import {
   startIntroDetectionJob,
 } from '@/lib/intro-detection';
 import { listActiveNativeStreams, stopNativeStreamSession } from '@/lib/native-transcode';
-import { importJellyfinWatchHistory } from '@/lib/jellyfin-history-import';
 import { isRequestLocalOrTailscale } from '@/lib/network';
 import { readSession } from '@/lib/session';
 import { getNativeHardwareAcceleration } from '@/lib/native-hardware';
-import { resolveJellyfinUserId } from '@/lib/profiles';
+import { resolveProfileId } from '@/lib/profiles';
 
 export async function GET(request: HttpRequest) {
   const { searchParams } = request.nextUrl;
   const view = searchParams.get('view') || 'overview';
   const rawProfileId = searchParams.get('profileId') || searchParams.get('userId') || request.cookies.get('homeflix_profile_id')?.value || undefined;
-  const profileId = rawProfileId ? await resolveJellyfinUserId(rawProfileId) : undefined;
+  const profileId = rawProfileId ? await resolveProfileId(rawProfileId) : undefined;
   const settings = getMediaEngineSettings();
 
   if (view === 'hardware') {
@@ -118,25 +117,6 @@ export async function POST(request: HttpRequest) {
   }
 
   const action = String(body.action || '').trim();
-
-  if (action === 'importJellyfinHistory') {
-    if (!request.nextUrl.pathname.startsWith('/api/mobile/') &&
-        !(await isRequestLocalOrTailscale(request)).isLocalOrTailscale &&
-        !(await readSession(request.cookies.get('homeflix_session')?.value, 'web'))?.admin) {
-      return HttpResponse.json({ error: 'Administrator access required' }, { status: 403 });
-    }
-    try {
-      const overrides = (body.overrides && typeof body.overrides === 'object' && !Array.isArray(body.overrides))
-        ? Object.fromEntries(Object.entries(body.overrides as Record<string, unknown>).map(([k, v]) => [k, String(v)]))
-        : undefined;
-      return HttpResponse.json({
-        success: true,
-        ...await importJellyfinWatchHistory({ dryRun: Boolean(body.dryRun), overrides }),
-      });
-    } catch (error) {
-      return HttpResponse.json({ error: error instanceof Error ? error.message : 'Watch history import failed' }, { status: 400 });
-    }
-  }
 
   if (action === 'saveSettings') {
     const prev = getMediaEngineSettings();

@@ -17,7 +17,7 @@
       "apiVersion": 1,
       "appName": "HomeStream",
       "cast": true,
-      "jellyfinLogin": true
+      "jellyfinLogin": false
     }
   },
   {
@@ -974,7 +974,7 @@
           ]
         },
         {
-          "id": "trending-seerr",
+          "id": "trending-tmdb",
           "title": "Popular on Streaming",
           "items": [
             {

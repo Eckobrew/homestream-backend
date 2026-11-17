@@ -15,7 +15,7 @@ test('demo mode is explicit and configured upstream failures never substitute sa
     assert.equal(setup.statusCode,503); assert.equal(setup.json().isDemoMode,false);
     process.env.HOMESTREAM_DEMO_MODE='true';
     assert.equal((await app.inject('/api/v1/home')).json().isDemoMode,true);
-    writeState('config',{jellyfinUrl:'http://127.0.0.1:1',jellyfinApiKey:'fake-test-key'});
+    writeState('config',{qbittorrentUrl:'http://127.0.0.1:1',qbittorrentUsername:'fixture',qbittorrentPassword:'fake-test-password'});
     const failed=await app.inject('/api/v1/home');
     assert.equal(failed.statusCode,503); assert.equal(failed.json().isDemoMode,false); assert.ok(!failed.body.includes('Stranger'));
     assert.match(failed.headers['x-request-id'] as string,/^[a-f0-9-]+$/);
