@@ -273,15 +273,25 @@ async function handleGET(request: HttpRequest) {
     // Multiple "Because You Watched <Title>" sections directly below Continue Watching, pulling from TMDB (including non-library titles)
     const bywSeeds: Array<{ id: string; title: string; type: 'Movie' | 'Series'; tmdbId?: number }> = [];
     const seenSeedTitles = new Set<string>();
-    const pushSeed = (item: { id: string; title?: string; type?: string; tmdbId?: number }) => {
-      const key = (item.title || '').trim().toLowerCase();
+    const pushSeed = (item: { id: string; title?: string; type?: string; tmdbId?: number; seriesId?: string; seriesName?: string }) => {
+      const isEp = item.type === 'Episode';
+      const seedId = isEp && item.seriesId ? item.seriesId : item.id;
+      const rawTitle = (isEp && item.seriesName ? item.seriesName : item.title) || '';
+      const key = rawTitle.trim().toLowerCase();
       if (!key || seenSeedTitles.has(key)) return;
       seenSeedTitles.add(key);
+      let resolvedTmdbId = typeof item.tmdbId === 'number' && item.tmdbId > 0 ? item.tmdbId : undefined;
+      if (!resolvedTmdbId && isEp && useNative && seedId.startsWith('nat-')) {
+        try {
+          const row = stateDatabase().prepare('SELECT tmdb_id FROM native_media_items WHERE id = ?').get(seedId) as { tmdb_id?: number } | undefined;
+          if (typeof row?.tmdb_id === 'number' && row.tmdb_id > 0) resolvedTmdbId = row.tmdb_id;
+        } catch {}
+      }
       bywSeeds.push({
-        id: item.id,
-        title: item.title!.trim(),
+        id: seedId,
+        title: rawTitle.trim(),
         type: item.type === 'Series' || item.type === 'Episode' ? 'Series' : 'Movie',
-        tmdbId: typeof item.tmdbId === 'number' && item.tmdbId > 0 ? item.tmdbId : undefined,
+        tmdbId: resolvedTmdbId,
       });
     };
 
