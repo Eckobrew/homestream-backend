@@ -2,6 +2,7 @@ import { stateDatabase } from '@/state/database';
 import { MediaItem } from '@/types';
 import { QBittorrentClient } from './qbittorrent';
 import { JellyfinClient } from './jellyfin';
+import { getNativeTmdbIdMap } from './native-media';
 
 export interface StoredRequest {
   id: string;
@@ -81,6 +82,7 @@ export async function getNativeUserRequests(targetUserId?: string): Promise<Medi
     const qb = new QBittorrentClient();
     const qbDownloads = qb.isConfigured() ? await qb.getStreamableDownloads().catch(() => []) : [];
     const jellyfin = new JellyfinClient();
+    const nativeTmdbIds = getNativeTmdbIdMap();
 
     const items: MediaItem[] = [];
 
@@ -91,12 +93,15 @@ export async function getNativeUserRequests(targetUserId?: string): Promise<Medi
       let etaSeconds: number | undefined;
       let torrentHash: string | undefined;
 
-      // 1. Check if available in Jellyfin
+      // 1. Check if available in Jellyfin or Native library
       if (jellyfin.isConfigured()) {
         const found = await jellyfin.findItemByTmdbId(r.media_id, r.media_type).catch(() => null);
         if (found) {
           status = 'available';
         }
+      }
+      if (status !== 'available' && nativeTmdbIds.has(Number(r.media_id))) {
+        status = 'available';
       }
 
       // 2. Check if downloading in qBittorrent

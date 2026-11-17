@@ -186,6 +186,9 @@ export function ensureNativeMediaTables() {
   if (!watchCols.has('hidden_from_continue_watching')) {
     db.exec('ALTER TABLE native_watch_history ADD COLUMN hidden_from_continue_watching INTEGER NOT NULL DEFAULT 0');
   }
+  if (!watchCols.has('updated_at_ms')) {
+    db.exec('ALTER TABLE native_watch_history ADD COLUMN updated_at_ms INTEGER NOT NULL DEFAULT 0');
+  }
 }
 
 function stableId(prefix: string, seed: string): string {
@@ -776,8 +779,8 @@ export async function scanNativeLibraries(libraryId?: string): Promise<ScanStatu
             const stat = fs.statSync(filePath);
             const mtimeMs = Math.floor(stat.mtimeMs);
             const existingFile = db
-              .prepare('SELECT id, item_id, file_size, file_mtime_ms, nfo_mtime_ms, library_id, source_revision FROM native_media_files WHERE file_path = ?')
-              .get(filePath) as { id: string; item_id: string; file_size: number; file_mtime_ms?: number; nfo_mtime_ms?: number; library_id?: string; source_revision?: number } | undefined;
+              .prepare('SELECT id, item_id, file_size, file_mtime_ms, nfo_mtime_ms, library_id, source_revision, manual_skip_json, skip_preview_json, trickplay_vtt_path FROM native_media_files WHERE file_path = ?')
+              .get(filePath) as { id: string; item_id: string; file_size: number; file_mtime_ms?: number; nfo_mtime_ms?: number; library_id?: string; source_revision?: number; manual_skip_json?: string | null; skip_preview_json?: string | null; trickplay_vtt_path?: string | null } | undefined;
             const nfo = lib.preferNfo ? readNativeNfo(filePath) : {};
             const nfoMtimeMs = lib.preferNfo ? getNfoMtimeMs(filePath) : 0;
             const videoChanged = !existingFile || existingFile.file_size !== stat.size || (existingFile.file_mtime_ms || 0) !== mtimeMs;
@@ -859,8 +862,8 @@ export async function scanNativeLibraries(libraryId?: string): Promise<ScanStatu
               const nextRev = (existingFile?.source_revision || 0) + 1;
               db.prepare(`
                 INSERT OR REPLACE INTO native_media_files
-                  (id, item_id, episode_id, file_path, file_size, file_mtime_ms, nfo_mtime_ms, library_id, source_revision, version_label, resolution, video_codec, audio_codec, has_hdr, duration_ticks, streams_json, chapters_json, updated_at)
-                VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                  (id, item_id, episode_id, file_path, file_size, file_mtime_ms, nfo_mtime_ms, library_id, source_revision, version_label, resolution, video_codec, audio_codec, has_hdr, duration_ticks, streams_json, chapters_json, manual_skip_json, skip_preview_json, trickplay_vtt_path, updated_at)
+                VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
               `).run(
                 fileId,
                 itemId,
@@ -878,6 +881,9 @@ export async function scanNativeLibraries(libraryId?: string): Promise<ScanStatu
                 probe.durationTicks,
                 JSON.stringify(probe.streams),
                 JSON.stringify(probe.chapters),
+                existingFile?.manual_skip_json ?? null,
+                existingFile?.skip_preview_json ?? null,
+                existingFile?.trickplay_vtt_path ?? null,
                 now
               );
 
@@ -956,8 +962,8 @@ export async function scanNativeLibraries(libraryId?: string): Promise<ScanStatu
               const nextRev = (existingFile?.source_revision || 0) + 1;
               db.prepare(`
                 INSERT OR REPLACE INTO native_media_files
-                  (id, item_id, episode_id, file_path, file_size, file_mtime_ms, nfo_mtime_ms, library_id, source_revision, version_label, resolution, video_codec, audio_codec, has_hdr, duration_ticks, streams_json, chapters_json, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                  (id, item_id, episode_id, file_path, file_size, file_mtime_ms, nfo_mtime_ms, library_id, source_revision, version_label, resolution, video_codec, audio_codec, has_hdr, duration_ticks, streams_json, chapters_json, manual_skip_json, skip_preview_json, trickplay_vtt_path, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
               `).run(
                 fileId,
                 seriesId,
@@ -976,6 +982,9 @@ export async function scanNativeLibraries(libraryId?: string): Promise<ScanStatu
                 probe.durationTicks,
                 JSON.stringify(probe.streams),
                 JSON.stringify(probe.chapters),
+                existingFile?.manual_skip_json ?? null,
+                existingFile?.skip_preview_json ?? null,
+                existingFile?.trickplay_vtt_path ?? null,
                 now
               );
 
@@ -1417,13 +1426,28 @@ export function recordNativeWatchProgress(
   durationTicks = 0,
   played?: boolean,
   seriesId?: string,
-  deltaWatchSeconds = 0
-) {
+  deltaWatchSeconds = 0,
+  recordedAtMs?: number
+): { updated: boolean; skippedStale?: boolean } {
   ensureNativeMediaTables();
   const db = stateDatabase();
   const existing = db
     .prepare('SELECT * FROM native_watch_history WHERE profile_id = ? AND item_id = ?')
     .get(profileId, itemId) as Record<string, unknown> | undefined;
+
+  const nowMs = Date.now();
+  const validRecordedMs = recordedAtMs && Number.isFinite(recordedAtMs) && recordedAtMs > 0
+    ? Math.min(recordedAtMs, nowMs)
+    : undefined;
+
+  if (validRecordedMs !== undefined && existing) {
+    const existingMutMs = Number(existing.updated_at_ms || 0);
+    const existingPlayedMs = existing.last_played_at ? Date.parse(String(existing.last_played_at)) : 0;
+    const latestMs = Math.max(existingMutMs, Number.isFinite(existingPlayedMs) ? existingPlayedMs : 0);
+    if (latestMs > validRecordedMs) {
+      return { updated: false, skippedStale: true };
+    }
+  }
 
   const effectiveDuration = durationTicks || Number(existing?.duration_ticks || 0);
   const completedByProgress = effectiveDuration > 0 && positionTicks >= effectiveDuration * 0.9;
@@ -1437,22 +1461,32 @@ export function recordNativeWatchProgress(
   const statsEnabled = getMediaEngineSettings().enableWatchStats;
   const watchSeconds = Number(existing?.watch_seconds || 0) + (statsEnabled ? Math.max(0, Math.round(deltaWatchSeconds)) : 0);
   const playCount = Number(existing?.play_count || 0) + (existing ? 0 : 1);
+  const recordedIso = validRecordedMs !== undefined
+    ? new Date(validRecordedMs).toISOString()
+    : new Date(nowMs).toISOString();
+  const nextMutMs = validRecordedMs !== undefined ? validRecordedMs : nowMs;
+
+  const resolvedSeriesId = seriesId
+    || (existing?.series_id ? String(existing.series_id) : null)
+    || ((db.prepare('SELECT series_id FROM native_media_episodes WHERE id = ?').get(itemId) as { series_id?: string } | undefined)?.series_id || null);
 
   db.prepare(`
     INSERT OR REPLACE INTO native_watch_history
-      (profile_id, item_id, series_id, position_ticks, duration_ticks, played, watch_seconds, play_count, last_played_at, hidden_from_continue_watching)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+      (profile_id, item_id, series_id, position_ticks, duration_ticks, played, watch_seconds, play_count, last_played_at, hidden_from_continue_watching, updated_at_ms)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
   `).run(
     profileId,
     itemId,
-    seriesId || (existing?.series_id ? String(existing.series_id) : null),
+    resolvedSeriesId,
     isPlayed ? 0 : Math.max(0, positionTicks),
     effectiveDuration,
     isPlayed ? 1 : 0,
     watchSeconds,
     playCount,
-    new Date().toISOString()
+    recordedIso,
+    nextMutMs
   );
+  return { updated: true };
 }
 
 export function getNativeWatchStats(profileId?: string): {
@@ -1547,9 +1581,9 @@ export function getNativeItemById(id: string, profileId = 'default'): MediaItem 
     const seriesRow = db.prepare('SELECT * FROM native_media_items WHERE id = ?').get(String(epRow.series_id)) as Record<string, unknown> | undefined;
     const files = db.prepare('SELECT * FROM native_media_files WHERE episode_id = ?').all(id) as unknown as NativeMediaFileRow[];
     const watch = db.prepare('SELECT * FROM native_watch_history WHERE profile_id = ? AND item_id = ?').get(profileId, id) as Record<string, unknown> | undefined;
-    const firstFile = files[0];
+    const firstFile = files[0] as (NativeMediaFileRow & { source_revision?: number; manual_skip_json?: string | null }) | undefined;
     let skipSegments: SkipSegment[] = [];
-    try { skipSegments = JSON.parse(String(firstFile?.chapters_json || '[]')); } catch { skipSegments = []; }
+    try { skipSegments = JSON.parse(String(firstFile?.manual_skip_json || firstFile?.chapters_json || '[]')); } catch { skipSegments = []; }
     return {
       id,
       title: String(epRow.name),
@@ -1571,7 +1605,7 @@ export function getNativeItemById(id: string, profileId = 'default'): MediaItem 
       totalDurationTicks: Number(firstFile?.duration_ticks || watch?.duration_ticks || 0),
       versions: files.length > 1 ? files.map((f) => ({ id: f.id, label: f.version_label, resolution: f.resolution, videoCodec: f.video_codec, audioCodec: f.audio_codec, fileSize: f.file_size })) : undefined,
       skipSegments: skipSegments.length > 0 ? skipSegments : undefined,
-      trickplayUrl: firstFile?.trickplay_vtt_path ? `/api/native/stream?trickplay=${encodeURIComponent(firstFile.id)}&asset=trickplay.vtt` : undefined,
+      trickplayUrl: resolveTrickplayUrlForFile(firstFile),
     };
   }
 
@@ -1585,7 +1619,7 @@ export function getNativeItemById(id: string, profileId = 'default'): MediaItem 
     for (const season of seasons) {
       for (const ep of season.episodes || []) {
         const w = db.prepare('SELECT * FROM native_watch_history WHERE profile_id = ? AND item_id = ?').get(profileId, ep.id) as Record<string, unknown> | undefined;
-        const f = db.prepare('SELECT id, duration_ticks, chapters_json, trickplay_vtt_path FROM native_media_files WHERE episode_id = ? LIMIT 1').get(ep.id) as Record<string, unknown> | undefined;
+        const f = db.prepare('SELECT id, source_revision, duration_ticks, chapters_json, trickplay_vtt_path FROM native_media_files WHERE episode_id = ? LIMIT 1').get(ep.id) as { id: string; source_revision?: number; duration_ticks?: number; chapters_json?: string | null; trickplay_vtt_path?: string | null } | undefined;
         if (w) {
           ep.played = Boolean(w.played);
           ep.playbackPositionTicks = Number(w.position_ticks || 0);
@@ -1594,17 +1628,18 @@ export function getNativeItemById(id: string, profileId = 'default'): MediaItem 
             ep.progressPercent = Math.min(100, Math.round((ep.playbackPositionTicks / ep.totalDurationTicks) * 100));
           }
         }
-        if (f?.trickplay_vtt_path) {
-          ep.trickplayUrl = `/api/native/stream?trickplay=${encodeURIComponent(String(f.id))}&asset=trickplay.vtt`;
+        const epTrickplayUrl = resolveTrickplayUrlForFile(f);
+        if (epTrickplayUrl) {
+          ep.trickplayUrl = epTrickplayUrl;
         }
       }
     }
   }
 
   const files = db.prepare('SELECT * FROM native_media_files WHERE item_id = ?').all(id) as unknown as NativeMediaFileRow[];
-  const firstFile = files[0];
+  const firstFile = files[0] as (NativeMediaFileRow & { source_revision?: number; manual_skip_json?: string | null }) | undefined;
   let skipSegments: SkipSegment[] = [];
-  try { skipSegments = JSON.parse(String(firstFile?.chapters_json || '[]')); } catch { skipSegments = []; }
+  try { skipSegments = JSON.parse(String(firstFile?.manual_skip_json || firstFile?.chapters_json || '[]')); } catch { skipSegments = []; }
   const watch = db.prepare('SELECT * FROM native_watch_history WHERE profile_id = ? AND item_id = ?').get(profileId, id) as Record<string, unknown> | undefined;
   const playableEpisodeId = isSeries ? getNativeSeriesFirstPlayableEpisodeId(id, profileId) : undefined;
 
@@ -1635,7 +1670,7 @@ export function getNativeItemById(id: string, profileId = 'default'): MediaItem 
     hasHdr: Boolean(firstFile?.has_hdr),
     versions: !isSeries && files.length > 1 ? files.map((f) => ({ id: f.id, label: f.version_label, resolution: f.resolution, videoCodec: f.video_codec, audioCodec: f.audio_codec, fileSize: f.file_size })) : undefined,
     skipSegments: skipSegments.length > 0 ? skipSegments : undefined,
-    trickplayUrl: firstFile?.trickplay_vtt_path ? `/api/native/stream?trickplay=${encodeURIComponent(firstFile.id)}&asset=trickplay.vtt` : undefined,
+    trickplayUrl: resolveTrickplayUrlForFile(firstFile),
   };
 }
 
@@ -1860,18 +1895,57 @@ export function getNativeCategoryRows(type: 'movies' | 'series'): Array<{ id: st
 
 export function hideFromContinueWatching(profileId: string, itemId: string): boolean {
   ensureNativeMediaTables();
-  const res = stateDatabase()
-    .prepare('UPDATE native_watch_history SET hidden_from_continue_watching = 1 WHERE profile_id = ? AND item_id = ?')
-    .run(profileId, itemId);
-  return res.changes > 0;
+  const db = stateDatabase();
+  const nowMs = Date.now();
+  const res = db
+    .prepare(`
+      UPDATE native_watch_history
+      SET hidden_from_continue_watching = 1, updated_at_ms = ?
+      WHERE profile_id = ? AND (
+        item_id = ? OR series_id = ? OR item_id IN (SELECT id FROM native_media_episodes WHERE series_id = ?)
+      )
+    `)
+    .run(nowMs, profileId, itemId, itemId, itemId);
+  if (res.changes === 0) {
+    db.prepare(`
+      INSERT OR IGNORE INTO native_watch_history
+        (profile_id, item_id, series_id, position_ticks, duration_ticks, played, watch_seconds, play_count, last_played_at, hidden_from_continue_watching, updated_at_ms)
+      VALUES (?, ?, NULL, 0, 0, 0, 0, 0, ?, 1, ?)
+    `).run(profileId, itemId, new Date(nowMs).toISOString(), nowMs);
+  }
+  return true;
 }
 
 export function startOverNativeItem(profileId: string, itemId: string): boolean {
   ensureNativeMediaTables();
-  const res = stateDatabase()
-    .prepare('UPDATE native_watch_history SET position_ticks = 0, played = 0, hidden_from_continue_watching = 0 WHERE profile_id = ? AND item_id = ?')
-    .run(profileId, itemId);
-  return res.changes > 0;
+  const db = stateDatabase();
+  const nowMs = Date.now();
+  // Resolve the specific episode when itemId is a Series so older watched episodes stay played
+  let targetItemId = itemId;
+  const isSeries = db.prepare("SELECT 1 FROM native_media_items WHERE id = ? AND type = 'Series'").get(itemId);
+  if (isSeries) {
+    const inProgress = db.prepare(`
+      SELECT item_id FROM native_watch_history
+      WHERE profile_id = ? AND played = 0 AND position_ticks > 0
+        AND (series_id = ? OR item_id IN (SELECT id FROM native_media_episodes WHERE series_id = ?))
+      ORDER BY updated_at_ms DESC, last_played_at DESC LIMIT 1
+    `).get(profileId, itemId, itemId) as { item_id: string } | undefined;
+    const firstEp = inProgress || (db.prepare(
+      'SELECT id AS item_id FROM native_media_episodes WHERE series_id = ? ORDER BY season_number ASC, episode_number ASC LIMIT 1'
+    ).get(itemId) as { item_id: string } | undefined);
+    if (firstEp?.item_id) targetItemId = firstEp.item_id;
+  }
+  const res = db
+    .prepare('UPDATE native_watch_history SET position_ticks = 0, played = 0, hidden_from_continue_watching = 0, updated_at_ms = ? WHERE profile_id = ? AND item_id = ?')
+    .run(nowMs, profileId, targetItemId);
+  if (res.changes === 0) {
+    db.prepare(`
+      INSERT OR IGNORE INTO native_watch_history
+        (profile_id, item_id, series_id, position_ticks, duration_ticks, played, watch_seconds, play_count, last_played_at, hidden_from_continue_watching, updated_at_ms)
+      VALUES (?, ?, ?, 0, 0, 0, 0, 0, ?, 0, ?)
+    `).run(profileId, targetItemId, isSeries ? itemId : null, new Date(nowMs).toISOString(), nowMs);
+  }
+  return true;
 }
 
 export type LibraryHealthReport = {
@@ -1900,8 +1974,8 @@ export function getNativeLibraryHealth(): LibraryHealthReport {
     if (!fs.existsSync(f.file_path)) {
       missingFiles.push({ fileId: f.id, itemId: f.item_id, filePath: f.file_path });
     }
-    const rev = f.source_revision || 1;
-    const expectedSub = `${path.sep}rev-${rev}${path.sep}`;
+    const revKey = getTrickplayRevisionKey(f);
+    const expectedSub = `${path.sep}${f.id}-r${revKey}${path.sep}`;
     if (!f.trickplay_vtt_path || !f.trickplay_vtt_path.includes(expectedSub) || !fs.existsSync(f.trickplay_vtt_path)) {
       missingOrStaleTrickplay++;
     }
@@ -2010,7 +2084,8 @@ export function pruneMediaCaches(): { removedFiles: number; freedBytes: number }
 
   // Prune orphaned Trickplay directories
   if (fs.existsSync(trickplayDir)) {
-    const validFiles = new Set((db.prepare('SELECT id FROM native_media_files').all() as Array<{ id: string }>).map(r => r.id));
+    const fileRows = db.prepare('SELECT id, source_revision FROM native_media_files').all() as Array<{ id: string; source_revision?: number }>;
+    const validFiles = new Set(fileRows.flatMap((r) => [r.id, `${r.id}-r${getTrickplayRevisionKey(r)}`]));
     for (const entry of fs.readdirSync(trickplayDir, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;
       if (!validFiles.has(entry.name)) {

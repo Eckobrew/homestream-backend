@@ -224,7 +224,14 @@ export interface BookRequestItem {
   error?: string;
   createdAt: string;
 }
-export interface BookProgress { location: string; percent: number; updatedAt: string }
+export interface BookProgress {
+  location: string;
+  percent: number;
+  updatedAt: string;
+  format?: string;
+  spineIndex?: number;
+  spinePct?: number;
+}
 
 export interface MusicAlbum {
   id: string;
@@ -314,7 +321,7 @@ export interface RequestedItem {
 }
 export interface RequestedResponse { items: RequestedItem[]; warnings: string[]; updatedAt: string; }
 export interface IntegrationSummary {
-  id: 'jellyfin' | 'seerr' | 'qbittorrent' | 'slskd' | 'bookshelf' | 'radarr' | 'sonarr' | 'tmdb';
+  id: 'jellyfin' | 'seerr' | 'qbittorrent' | 'slskd' | 'bookshelf' | 'radarr' | 'sonarr' | 'tmdb' | 'spotify';
   name: string;
   url: string;
   configured: boolean;
@@ -324,7 +331,7 @@ export interface IntegrationSummary {
   qualityProfiles?: Array<{ id: number; name: string }>;
   qualityPreference?: 'mp3-320' | 'flac' | 'any-lossless' | 'mp3-any';
 }
-export interface IntegrationsResponse { integrations: IntegrationSummary[]; downloadsPath: string; booksPath?: string; }
+export interface IntegrationsResponse { integrations: IntegrationSummary[]; downloadsPath: string; booksPath?: string; musicPath?: string; }
 
 export interface YouTubeSearchResult {
   id: string;

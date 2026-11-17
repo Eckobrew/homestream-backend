@@ -1351,7 +1351,7 @@ async function dispatchAlbumDownload(requestId: string, artist: string, album: s
     }
 
     for (const [dir, dirFiles] of dirMap.entries()) {
-      if (dirFiles.length < 3) continue; // Must have at least a few tracks to be a full release
+      if (dirFiles.length < 1) continue; // Allow single-track / EP releases as well as full albums
 
       let score = dirFiles.length * 10;
       if (resp.hasFreeUploadSlot) score += 50;
@@ -2010,8 +2010,6 @@ export async function populatePlaylistWithTracks(
         updated_at = ?
       WHERE id = ?
     `).run(name, options?.description || null, options?.coverUrl || null, now, playlistId);
-    // Remove existing tracks to cleanly re-populate
-    db.prepare('DELETE FROM playlist_tracks WHERE playlist_id=?').run(playlistId);
   } else {
     db.prepare(`
       INSERT INTO playlists (id, profile_id, name, description, cover_url, spotify_id, total_tracks, downloaded_tracks, created_at, updated_at)
@@ -2019,10 +2017,33 @@ export async function populatePlaylistWithTracks(
     `).run(playlistId, pid, name, options?.description || null, options?.coverUrl || null, options?.spotifyId || null, tracks.length, now, now);
   }
 
+  // Preserve existing tracks (custom additions, completed links, active jobs) on re-import
+  // while supporting distinct Spotify IDs and intentional repeated occurrences in the same playlist.
+  const existingRows = db.prepare(
+    'SELECT title, artist, spotify_track_id, position FROM playlist_tracks WHERE playlist_id = ?'
+  ).all(playlistId) as Array<{ title: string; artist: string; spotify_track_id: string | null; position: number }>;
+  const existingOccurrenceCounts = new Map<string, number>();
+  for (const r of existingRows) {
+    const rowKey = r.spotify_track_id
+      ? `sp:${r.spotify_track_id}`
+      : `txt:${r.artist.toLowerCase().trim()}::${r.title.toLowerCase().trim()}`;
+    existingOccurrenceCounts.set(rowKey, (existingOccurrenceCounts.get(rowKey) || 0) + 1);
+  }
+  const importSeenCounts = new Map<string, number>();
+
   let queuedCount = 0;
-  let pos = 0;
+  let pos = existingRows.reduce((max, r) => Math.max(max, r.position || 0), 0);
 
   for (const t of tracks) {
+    const rowKey = t.spotifyTrackId
+      ? `sp:${t.spotifyTrackId}`
+      : `txt:${t.artist.toLowerCase().trim()}::${t.title.toLowerCase().trim()}`;
+    const seen = (importSeenCounts.get(rowKey) || 0) + 1;
+    importSeenCounts.set(rowKey, seen);
+    if (seen <= (existingOccurrenceCounts.get(rowKey) || 0)) {
+      continue;
+    }
+
     pos++;
     const ptId = randomUUID().replace(/-/g, '').slice(0, 32);
 
@@ -2047,6 +2068,14 @@ export async function populatePlaylistWithTracks(
 
       queuedCount++;
     }
+  }
+
+  if (existing) {
+    const counts = db.prepare(
+      "SELECT COUNT(*) AS total, SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed FROM playlist_tracks WHERE playlist_id = ?"
+    ).get(playlistId) as { total: number; completed: number | null };
+    db.prepare('UPDATE playlists SET total_tracks = ?, downloaded_tracks = ?, updated_at = ? WHERE id = ?')
+      .run(counts.total, counts.completed || 0, now, playlistId);
   }
 
   updatePlaylistCounts(playlistId);

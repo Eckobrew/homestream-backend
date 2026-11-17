@@ -7,7 +7,7 @@ import { resolveJellyfinUserId } from '@/lib/profiles';
 import { readSession } from '@/lib/session';
 import { isRequestLocalOrTailscale } from '@/lib/network';
 import { saveStreamProgress } from '@/lib/stream-progress';
-import { recordNativeWatchProgress } from '@/lib/native-media';
+import { hideFromContinueWatching, recordNativeWatchProgress, startOverNativeItem } from '@/lib/native-media';
 import { resolveNativeFileByItemOrFileId, touchNativeTranscodeSessionByItem } from '@/lib/native-transcode';
 import { getMediaEngineSettings } from '@/lib/media-settings';
 
@@ -22,28 +22,46 @@ async function handlePOST(request: HttpRequest) {
     let body;
     try { body = JSON.parse(text); } catch { return HttpResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     if (!body || typeof body !== 'object' || Array.isArray(body)) return HttpResponse.json({ error: 'JSON object required' }, { status: 400 });
-    const { itemId, positionTicks, isPaused, isStopped, isStarted, userId } = body;
+    const { itemId, positionTicks, isPaused, isStopped, isStarted, userId, action, recordedAt } = body;
 
-    if (typeof itemId !== 'string' || !/^[a-zA-Z0-9_-]{1,128}$/.test(itemId) || !Number.isSafeInteger(positionTicks) || positionTicks < 0 || [isPaused, isStopped, isStarted].some(flag => flag !== undefined && typeof flag !== 'boolean')) {
-      return HttpResponse.json({ error: 'Valid itemId, positionTicks and playback flags required' }, { status: 400 });
+    if (typeof itemId !== 'string' || !/^[a-zA-Z0-9_-]{1,128}$/.test(itemId)) {
+      return HttpResponse.json({ error: 'Valid itemId is required' }, { status: 400 });
     }
 
     const session = await readSession(request.cookies.get('homeflix_session')?.value, 'web');
     const profileId = session && !(await isRequestLocalOrTailscale(request)).isLocalOrTailscale ? session.id : userId || request.cookies.get('homeflix_profile_id')?.value;
     const effectiveProfileId = profileId || 'default';
 
+    if (action === 'startOver' || action === 'hideContinueWatching') {
+      const nativeProfileId = await resolveJellyfinUserId(effectiveProfileId);
+      const updated = action === 'startOver'
+        ? startOverNativeItem(nativeProfileId, itemId)
+        : hideFromContinueWatching(nativeProfileId, itemId);
+      if (action === 'startOver') saveStreamProgress(effectiveProfileId, itemId, 0);
+      return HttpResponse.json({ success: true, updated });
+    }
+
+    if (!Number.isSafeInteger(positionTicks) || positionTicks < 0 || [isPaused, isStopped, isStarted].some(flag => flag !== undefined && typeof flag !== 'boolean')) {
+      return HttpResponse.json({ error: 'Valid itemId, positionTicks and playback flags required' }, { status: 400 });
+    }
+    const recordedAtMs = typeof recordedAt === 'number' && Number.isSafeInteger(recordedAt) && recordedAt > 0 ? recordedAt : undefined;
+
     const isNonJellyfinId = /^(?:seerr|tmdb|dl|yt|nat)-/i.test(itemId);
-    saveStreamProgress(effectiveProfileId, itemId, positionTicks);
     if (itemId.startsWith('nat-') || getMediaEngineSettings().mediaEngine === 'native') {
       const fileRow = resolveNativeFileByItemOrFileId(itemId);
       const fileDurationTicks = fileRow?.duration_ticks || 0;
       const nativeProfileId = await resolveJellyfinUserId(effectiveProfileId);
-      touchNativeTranscodeSessionByItem(fileRow?.item_id || itemId, effectiveProfileId);
-      touchNativeTranscodeSessionByItem(fileRow?.item_id || itemId, nativeProfileId);
-      recordNativeWatchProgress(nativeProfileId, itemId, positionTicks, fileDurationTicks, undefined, undefined, isPaused || isStarted || isStopped ? 0 : 10);
-      if (itemId.startsWith('nat-')) {
-        return HttpResponse.json({ success: true });
+      const res = recordNativeWatchProgress(nativeProfileId, itemId, positionTicks, fileDurationTicks, undefined, undefined, isPaused || isStarted || isStopped ? 0 : 10, recordedAtMs);
+      if (!res.skippedStale) {
+        saveStreamProgress(effectiveProfileId, itemId, positionTicks);
+        touchNativeTranscodeSessionByItem(fileRow?.item_id || itemId, effectiveProfileId);
+        touchNativeTranscodeSessionByItem(fileRow?.item_id || itemId, nativeProfileId);
       }
+      if (itemId.startsWith('nat-')) {
+        return HttpResponse.json({ success: true, ...(res.skippedStale ? { skippedStale: true } : {}) });
+      }
+    } else {
+      saveStreamProgress(effectiveProfileId, itemId, positionTicks);
     }
 
     const targetUserId = await resolveJellyfinUserId(profileId);

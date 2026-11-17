@@ -59,6 +59,16 @@ export async function POST(request: HttpRequest) {
   if (!code) return HttpResponse.json({ error: 'Room code is required' }, { status: 400 });
 
   if (action === 'join') {
+    const existing = getSyncPlayRoom(code);
+    if (!existing) return HttpResponse.json({ error: 'SyncPlay room not found' }, { status: 404 });
+    const clientItem = String(body.episodeId || body.itemId || '').trim();
+    const roomItem = String(existing.episodeId || existing.itemId || '').trim();
+    if (clientItem && roomItem && clientItem !== roomItem) {
+      return HttpResponse.json(
+        { error: `Room ${existing.code} is playing "${existing.title}", not your current title.`, roomTitle: existing.title, roomItemId: roomItem },
+        { status: 409 }
+      );
+    }
     const room = joinSyncPlayRoom(code, profileId, profileName);
     return room
       ? HttpResponse.json({ success: true, room })
@@ -71,13 +81,20 @@ export async function POST(request: HttpRequest) {
   }
 
   if (action === 'sync') {
+    const existing = getSyncPlayRoom(code);
+    if (!existing) return HttpResponse.json({ error: 'SyncPlay room not found' }, { status: 404 });
+    const clientItem = String(body.episodeId || body.itemId || '').trim();
+    const roomItem = String(existing.episodeId || existing.itemId || '').trim();
+    if (clientItem && roomItem && clientItem !== roomItem) {
+      return HttpResponse.json(
+        { error: `Cannot sync a different title into room ${existing.code} ("${existing.title}")` },
+        { status: 409 }
+      );
+    }
     const room = updateSyncPlayRoom(code, profileId, {
       positionTicks: typeof body.positionTicks === 'number' ? body.positionTicks : undefined,
       isPaused: typeof body.isPaused === 'boolean' ? body.isPaused : undefined,
       playbackRate: typeof body.playbackRate === 'number' ? body.playbackRate : undefined,
-      itemId: typeof body.itemId === 'string' ? body.itemId : undefined,
-      episodeId: typeof body.episodeId === 'string' ? body.episodeId : undefined,
-      title: typeof body.title === 'string' ? body.title : undefined,
     });
     return room
       ? HttpResponse.json({ success: true, room })

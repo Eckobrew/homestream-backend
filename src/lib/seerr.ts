@@ -631,7 +631,7 @@ export class SeerrClient {
         is4k,
       };
 
-      if (typeof payload.profileId === 'number') {
+      if (typeof payload.profileId === 'number' && payload.profileId > 0) {
         body.profileId = payload.profileId;
       }
       if (typeof payload.serverId === 'number') {

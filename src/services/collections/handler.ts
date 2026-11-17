@@ -7,8 +7,9 @@ import {
   removeCollectionItem,
 } from '@/lib/profile-features';
 
-function activeProfileId(request: HttpRequest): string {
-  return request.cookies.get('homeflix_profile_id')?.value || 'default';
+function activeProfileId(request: HttpRequest, bodyUserId?: unknown): string {
+  if (typeof bodyUserId === 'string' && bodyUserId.trim()) return bodyUserId.trim();
+  return request.nextUrl.searchParams.get('userId') || request.cookies.get('homeflix_profile_id')?.value || 'default';
 }
 
 export async function GET(request: HttpRequest) {
@@ -17,8 +18,8 @@ export async function GET(request: HttpRequest) {
 }
 
 export async function POST(request: HttpRequest) {
-  const profileId = activeProfileId(request);
   const body = await request.json().catch(() => ({})) as Record<string, unknown>;
+  const profileId = activeProfileId(request, body.userId);
   const action = typeof body.action === 'string' ? body.action : 'create';
   if (action === 'addItem') {
     const collectionId = typeof body.collectionId === 'string' ? body.collectionId : '';

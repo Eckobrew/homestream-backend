@@ -43,6 +43,21 @@ function confinedYouTubeFile(storagePath: string, relativePath: string): string 
   }
 }
 
+function resolveYouTubeProfileId(request: HttpRequest, body?: Record<string, unknown> | null): string {
+  const fromBody = typeof body?.profileId === 'string' && body.profileId.trim()
+    ? body.profileId.trim()
+    : typeof body?.userId === 'string' && body.userId.trim()
+      ? body.userId.trim()
+      : '';
+  return (
+    fromBody ||
+    request.nextUrl.searchParams.get('profileId') ||
+    request.nextUrl.searchParams.get('userId') ||
+    request.cookies.get('homeflix_profile_id')?.value ||
+    'default'
+  );
+}
+
 async function handleGET(request: HttpRequest) {
   const pathname = request.nextUrl.pathname;
   const route = pathname.replace(/^\/api\/(?:mobile\/v1\/|v1\/)?/, '');
@@ -59,7 +74,7 @@ async function handleGET(request: HttpRequest) {
   }
 
   if (route === 'youtube/recommendations') {
-    const profileId = request.nextUrl.searchParams.get('profileId') || 'default';
+    const profileId = resolveYouTubeProfileId(request);
     try {
       const data = await getYouTubeRecommendations(profileId);
       return HttpResponse.json(data);
@@ -69,13 +84,13 @@ async function handleGET(request: HttpRequest) {
   }
 
   if (route === 'youtube/continue-watching') {
-    const profileId = request.nextUrl.searchParams.get('profileId') || 'default';
+    const profileId = resolveYouTubeProfileId(request);
     const items = getYouTubeContinueWatching(profileId);
     return HttpResponse.json({ items });
   }
 
   if (route === 'youtube/auth') {
-    const profileId = request.nextUrl.searchParams.get('profileId') || 'default';
+    const profileId = resolveYouTubeProfileId(request);
     const auth = getYouTubeAuth(profileId);
     return HttpResponse.json(auth);
   }
@@ -194,11 +209,11 @@ async function handlePOST(request: HttpRequest) {
     if (!body || !body.videoId || typeof body.positionSeconds !== 'number') {
       return HttpResponse.json({ error: 'videoId and positionSeconds required' }, { status: 400 });
     }
-    const profileId = body.profileId || request.nextUrl.searchParams.get('profileId') || 'default';
+    const profileId = resolveYouTubeProfileId(request, body as Record<string, unknown>);
     saveYouTubeProgress(profileId, {
       videoId: body.videoId,
       title: body.title || 'YouTube Video',
-      channelName: body.channelName,
+      channelName: body.channelName || body.channelTitle,
       thumbnailUrl: body.thumbnailUrl,
       positionSeconds: body.positionSeconds,
       durationSeconds: body.durationSeconds || 0,
@@ -212,7 +227,7 @@ async function handlePOST(request: HttpRequest) {
     if (!body || !body.cookiesText) {
       return HttpResponse.json({ error: 'cookiesText required' }, { status: 400 });
     }
-    const profileId = body.profileId || request.nextUrl.searchParams.get('profileId') || 'default';
+    const profileId = resolveYouTubeProfileId(request, body as Record<string, unknown>);
     saveYouTubeAuth(profileId, body.cookiesText, body.accountName);
     return HttpResponse.json({ success: true, message: 'YouTube account connected' });
   }
@@ -299,16 +314,16 @@ async function handleDELETE(request: HttpRequest) {
   const pathname = request.nextUrl.pathname;
   const route = pathname.replace(/^\/api\/(?:mobile\/v1\/|v1\/)?/, '');
 
-  if (route === 'youtube/progress') {
+  if (route === 'youtube/progress' || route === 'youtube/continue-watching') {
     const videoId = request.nextUrl.searchParams.get('videoId');
     if (!videoId) return HttpResponse.json({ error: 'videoId required' }, { status: 400 });
-    const profileId = request.nextUrl.searchParams.get('profileId') || 'default';
+    const profileId = resolveYouTubeProfileId(request);
     const deleted = deleteYouTubeProgress(profileId, videoId);
     return HttpResponse.json({ success: deleted });
   }
 
   if (route === 'youtube/auth') {
-    const profileId = request.nextUrl.searchParams.get('profileId') || 'default';
+    const profileId = resolveYouTubeProfileId(request);
     const deleted = deleteYouTubeAuth(profileId);
     return HttpResponse.json({ success: deleted });
   }

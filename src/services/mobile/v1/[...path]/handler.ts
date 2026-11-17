@@ -399,8 +399,11 @@ async function dispatchContent(request: HttpRequest, context: Context) {
     if (!body || typeof body !== 'object') {
       return HttpResponse.json({ error: 'JSON object required' }, { status: 400 });
     }
-    if (typeof body.itemId !== 'string' || !body.itemId ||
-        !Number.isSafeInteger(body.positionTicks) || body.positionTicks < 0) {
+    if (typeof body.itemId !== 'string' || !body.itemId) {
+      return HttpResponse.json({ error: 'Valid itemId required' }, { status: 400 });
+    }
+    const isViewerAction = body.action === 'startOver' || body.action === 'hideContinueWatching';
+    if (!isViewerAction && (!Number.isSafeInteger(body.positionTicks) || body.positionTicks < 0)) {
       return HttpResponse.json({ error: 'Valid itemId and nonnegative positionTicks required' }, { status: 400 });
     }
     return progress(request);

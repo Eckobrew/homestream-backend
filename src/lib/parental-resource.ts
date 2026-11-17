@@ -11,7 +11,7 @@ import { UserProfile } from '@/types';
 type Ticket = { url: string; profile: string; user: string; revision: string; expires: number; kind: 'image' | 'stream'; age: number; device?: string };
 const artworkTickets = new Map<string, { url: string; expires: number }>();
 function key() {
-  const secret = process.env.HOMESTREAM_SESSION_SECRET || '';
+  const secret = process.env.HOMESTREAM_SESSION_SECRET || process.env.HOMESTREAM_MOBILE_TOKEN || '';
   if (secret.length < 32) throw new Error('Parental streaming secret unavailable');
   return crypto.createHash('sha256').update(secret).digest();
 }
@@ -50,7 +50,7 @@ export function imageResource(source: string, profile: UserProfile, age: number)
       } else return null;
     }
     const parsed = new URL(target);
-    const jellyfin = new URL(config.jellyfinUrl);
+    const jellyfin = new URL(config.jellyfinUrl || 'http://homestream.invalid');
     if (parsed.origin !== jellyfin.origin && !(parsed.protocol === 'https:' && ['image.tmdb.org', 'images.unsplash.com'].includes(parsed.hostname))) return null;
     return resourceUrl(target, profile, 'image', age);
   } catch { return null; }

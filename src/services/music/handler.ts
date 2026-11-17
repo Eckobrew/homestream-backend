@@ -181,7 +181,9 @@ async function post(request: HttpRequest) {
           profileId
         );
       } else {
-        const input = body.url || body.urls || body.spotifyUrl;
+        const rawInput = body.url || body.urls || body.spotifyUrl;
+        const input = Array.isArray(rawInput) ? rawInput.map(String).join('\n') : String(rawInput || '');
+        if (!input.trim()) return HttpResponse.json({ error: 'A Spotify URL or playlist list is required' }, { status: 400 });
         res = await importSpotifyPlaylists(input, profileId);
       }
 
@@ -196,12 +198,19 @@ async function post(request: HttpRequest) {
     }
   }
 
-  if (route === 'music/playlist/track' && body?.playlistId && body?.trackId) {
+  if (route === 'music/playlists') {
+    return HttpResponse.json({ error: 'Playlist name is required' }, { status: 400 });
+  }
+  if (route === 'music/playlist/track') {
+    if (!body?.playlistId || !body?.trackId) {
+      return HttpResponse.json({ error: 'playlistId and trackId are required' }, { status: 400 });
+    }
     const ok = await addTrackToPlaylist(body.playlistId, body.trackId, profileId);
     return HttpResponse.json({ success: ok });
   }
 
-  if (route === 'music/profile-album' && body?.albumId) {
+  if (route === 'music/profile-album') {
+    if (!body?.albumId) return HttpResponse.json({ error: 'albumId is required' }, { status: 400 });
     const result = addMusicAlbumToProfile(body.albumId, profileId);
     return HttpResponse.json(result);
   }

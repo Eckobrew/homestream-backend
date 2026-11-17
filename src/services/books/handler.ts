@@ -52,9 +52,9 @@ async function get(request: HttpRequest) {
     if (route === 'books/book') {
       const book = await getBook(id, profileId);
       if (!book) return HttpResponse.json({ error: 'Book not found' }, { status: 404 });
-      return json({ book, progress: getProgress(Number(id), profileId) });
+      return json({ book, progress: getProgress(Number(id), profileId, params.get('format') || undefined) });
     }
-    if (route === 'books/progress') return json({ progress: getProgress(Number(id), profileId) });
+    if (route === 'books/progress') return json({ progress: getProgress(Number(id), profileId, params.get('format') || undefined) });
 
     if (route === 'books/cover') {
       const art = await getBookCover(Number(id));
@@ -122,7 +122,19 @@ async function post(request: HttpRequest) {
     const id = String(body?.bookId ?? '');
     if (!safeBookId(id)) return HttpResponse.json({ error: 'Invalid book ID' }, { status: 400 });
     if (route === 'books/profile-book') return HttpResponse.json(addBookToProfile(Number(id), profileId));
-    if (route === 'books/progress') return HttpResponse.json(saveProgress(Number(id), profileId, String(body?.location || ''), Number(body?.percent)));
+    if (route === 'books/progress') {
+      return HttpResponse.json(saveProgress(
+        Number(id),
+        profileId,
+        String(body?.location || ''),
+        Number(body?.percent),
+        {
+          format: typeof body?.format === 'string' ? body.format : undefined,
+          spineIndex: typeof body?.spineIndex === 'number' ? body.spineIndex : undefined,
+          spinePct: typeof body?.spinePct === 'number' ? body.spinePct : undefined,
+        }
+      ));
+    }
     return HttpResponse.json({ error: 'Not found' }, { status: 404 });
   } catch (err: any) {
     return HttpResponse.json({ error: err?.message || 'The book request could not be submitted.' }, { status: 502 });

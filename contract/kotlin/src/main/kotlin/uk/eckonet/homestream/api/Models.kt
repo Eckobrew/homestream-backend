@@ -348,7 +348,10 @@ data class BookRequestItem(
 data class BookProgress(
     @SerialName("location") val `location`: String,
     @SerialName("percent") val `percent`: Double,
-    @SerialName("updatedAt") val `updatedAt`: String
+    @SerialName("updatedAt") val `updatedAt`: String,
+    @SerialName("format") val `format`: String? = null,
+    @SerialName("spineIndex") val `spineIndex`: Double? = null,
+    @SerialName("spinePct") val `spinePct`: Double? = null
 )
 
 @Serializable
@@ -433,7 +436,8 @@ data class IntegrationSummaryQualityProfilesItem(
 data class IntegrationsResponse(
     @SerialName("integrations") val `integrations`: List<IntegrationSummary>,
     @SerialName("downloadsPath") val `downloadsPath`: String,
-    @SerialName("booksPath") val `booksPath`: String? = null
+    @SerialName("booksPath") val `booksPath`: String? = null,
+    @SerialName("musicPath") val `musicPath`: String? = null
 )
 
 @Serializable
@@ -950,10 +954,12 @@ data class WebPostPlaybackProgressQuery(
 data class WebPostPlaybackProgressBody(
     @SerialName("itemId") val `itemId`: String,
     @SerialName("userId") val `userId`: String? = null,
-    @SerialName("positionTicks") val `positionTicks`: Long,
+    @SerialName("positionTicks") val `positionTicks`: Long? = null,
     @SerialName("isPaused") val `isPaused`: Boolean? = null,
     @SerialName("isStopped") val `isStopped`: Boolean? = null,
-    @SerialName("isStarted") val `isStarted`: Boolean? = null
+    @SerialName("isStarted") val `isStarted`: Boolean? = null,
+    @SerialName("action") val `action`: String? = null,
+    @SerialName("recordedAt") val `recordedAt`: Long? = null
 )
 
 @Serializable
@@ -1128,7 +1134,8 @@ data class WebGetBooksSearchQuery(
 @Serializable
 data class WebGetBooksBookQuery(
     @SerialName("userId") val `userId`: String? = null,
-    @SerialName("bookId") val `bookId`: String
+    @SerialName("bookId") val `bookId`: String,
+    @SerialName("format") val `format`: String? = null
 )
 
 @Serializable
@@ -1153,7 +1160,8 @@ data class WebGetBooksQueueQuery(
 @Serializable
 data class WebGetBooksProgressQuery(
     @SerialName("userId") val `userId`: String? = null,
-    @SerialName("bookId") val `bookId`: String
+    @SerialName("bookId") val `bookId`: String,
+    @SerialName("format") val `format`: String? = null
 )
 
 @Serializable
@@ -1165,7 +1173,10 @@ data class WebPostBooksProgressQuery(
 data class WebPostBooksProgressBody(
     @SerialName("bookId") val `bookId`: String,
     @SerialName("location") val `location`: String,
-    @SerialName("percent") val `percent`: Double? = null
+    @SerialName("percent") val `percent`: Double? = null,
+    @SerialName("format") val `format`: String? = null,
+    @SerialName("spineIndex") val `spineIndex`: Long? = null,
+    @SerialName("spinePct") val `spinePct`: Double? = null
 )
 
 @Serializable
@@ -1248,7 +1259,9 @@ data class WebDeleteMusicAlbumResponse(
 @Serializable
 data class WebGetMusicArtworkQuery(
     @SerialName("userId") val `userId`: String? = null,
-    @SerialName("albumId") val `albumId`: String
+    @SerialName("albumId") val `albumId`: String? = null,
+    @SerialName("trackId") val `trackId`: String? = null,
+    @SerialName("id") val `id`: String? = null
 )
 
 @Serializable
@@ -1462,8 +1475,8 @@ data class WebPostMusicPlaylistTrackResponse(
 @Serializable
 data class WebDeleteMusicPlaylistTrackQuery(
     @SerialName("userId") val `userId`: String? = null,
-    @SerialName("playlistId") val `playlistId`: String? = null,
-    @SerialName("trackId") val `trackId`: String? = null
+    @SerialName("playlistId") val `playlistId`: String,
+    @SerialName("trackId") val `trackId`: String
 )
 
 @Serializable
@@ -1496,6 +1509,7 @@ data class WebPostIntegrationsBody(
     @SerialName("username") val `username`: String? = null,
     @SerialName("downloadsPath") val `downloadsPath`: String? = null,
     @SerialName("booksPath") val `booksPath`: String? = null,
+    @SerialName("musicPath") val `musicPath`: String? = null,
     @SerialName("parentPin") val `parentPin`: String? = null,
     @SerialName("qualityProfileId") val `qualityProfileId`: Long? = null,
     @SerialName("qualityPreference") val `qualityPreference`: String? = null
@@ -1527,10 +1541,13 @@ data class WebPostYoutubeProgressQuery(
 @Serializable
 data class WebPostYoutubeProgressBody(
     @SerialName("videoId") val `videoId`: String,
-    @SerialName("positionSeconds") val `positionSeconds`: Long? = null,
-    @SerialName("durationSeconds") val `durationSeconds`: Long? = null,
+    @SerialName("profileId") val `profileId`: String? = null,
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("positionSeconds") val `positionSeconds`: Double? = null,
+    @SerialName("durationSeconds") val `durationSeconds`: Double? = null,
     @SerialName("completed") val `completed`: Boolean? = null,
     @SerialName("title") val `title`: String? = null,
+    @SerialName("channelName") val `channelName`: String? = null,
     @SerialName("channelTitle") val `channelTitle`: String? = null,
     @SerialName("thumbnailUrl") val `thumbnailUrl`: String? = null
 )
@@ -1539,6 +1556,18 @@ data class WebPostYoutubeProgressBody(
 data class WebPostYoutubeProgressResponse(
     @SerialName("success") val `success`: Boolean? = null,
     @SerialName("message") val `message`: String? = null
+)
+
+@Serializable
+data class WebDeleteYoutubeProgressQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("videoId") val `videoId`: String,
+    @SerialName("profileId") val `profileId`: String? = null
+)
+
+@Serializable
+data class WebDeleteYoutubeProgressResponse(
+    @SerialName("success") val `success`: Boolean
 )
 
 @Serializable
@@ -2326,7 +2355,8 @@ data class MobileGetBooksSearchQuery(
 @Serializable
 data class MobileGetBooksBookQuery(
     @SerialName("userId") val `userId`: String? = null,
-    @SerialName("bookId") val `bookId`: String
+    @SerialName("bookId") val `bookId`: String,
+    @SerialName("format") val `format`: String? = null
 )
 
 @Serializable
@@ -2351,7 +2381,8 @@ data class MobileGetBooksQueueQuery(
 @Serializable
 data class MobileGetBooksProgressQuery(
     @SerialName("userId") val `userId`: String? = null,
-    @SerialName("bookId") val `bookId`: String
+    @SerialName("bookId") val `bookId`: String,
+    @SerialName("format") val `format`: String? = null
 )
 
 @Serializable
@@ -2363,7 +2394,10 @@ data class MobilePostBooksProgressQuery(
 data class MobilePostBooksProgressBody(
     @SerialName("bookId") val `bookId`: String,
     @SerialName("location") val `location`: String,
-    @SerialName("percent") val `percent`: Double? = null
+    @SerialName("percent") val `percent`: Double? = null,
+    @SerialName("format") val `format`: String? = null,
+    @SerialName("spineIndex") val `spineIndex`: Long? = null,
+    @SerialName("spinePct") val `spinePct`: Double? = null
 )
 
 @Serializable
@@ -2446,7 +2480,9 @@ data class MobileDeleteMusicAlbumResponse(
 @Serializable
 data class MobileGetMusicArtworkQuery(
     @SerialName("userId") val `userId`: String? = null,
-    @SerialName("albumId") val `albumId`: String
+    @SerialName("albumId") val `albumId`: String? = null,
+    @SerialName("trackId") val `trackId`: String? = null,
+    @SerialName("id") val `id`: String? = null
 )
 
 @Serializable
@@ -2660,8 +2696,8 @@ data class MobilePostMusicPlaylistTrackResponse(
 @Serializable
 data class MobileDeleteMusicPlaylistTrackQuery(
     @SerialName("userId") val `userId`: String? = null,
-    @SerialName("playlistId") val `playlistId`: String? = null,
-    @SerialName("trackId") val `trackId`: String? = null
+    @SerialName("playlistId") val `playlistId`: String,
+    @SerialName("trackId") val `trackId`: String
 )
 
 @Serializable
@@ -2694,6 +2730,7 @@ data class MobilePostIntegrationsBody(
     @SerialName("username") val `username`: String? = null,
     @SerialName("downloadsPath") val `downloadsPath`: String? = null,
     @SerialName("booksPath") val `booksPath`: String? = null,
+    @SerialName("musicPath") val `musicPath`: String? = null,
     @SerialName("parentPin") val `parentPin`: String? = null,
     @SerialName("qualityProfileId") val `qualityProfileId`: Long? = null,
     @SerialName("qualityPreference") val `qualityPreference`: String? = null
@@ -2725,10 +2762,13 @@ data class MobilePostYoutubeProgressQuery(
 @Serializable
 data class MobilePostYoutubeProgressBody(
     @SerialName("videoId") val `videoId`: String,
-    @SerialName("positionSeconds") val `positionSeconds`: Long? = null,
-    @SerialName("durationSeconds") val `durationSeconds`: Long? = null,
+    @SerialName("profileId") val `profileId`: String? = null,
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("positionSeconds") val `positionSeconds`: Double? = null,
+    @SerialName("durationSeconds") val `durationSeconds`: Double? = null,
     @SerialName("completed") val `completed`: Boolean? = null,
     @SerialName("title") val `title`: String? = null,
+    @SerialName("channelName") val `channelName`: String? = null,
     @SerialName("channelTitle") val `channelTitle`: String? = null,
     @SerialName("thumbnailUrl") val `thumbnailUrl`: String? = null
 )
@@ -2737,6 +2777,18 @@ data class MobilePostYoutubeProgressBody(
 data class MobilePostYoutubeProgressResponse(
     @SerialName("success") val `success`: Boolean? = null,
     @SerialName("message") val `message`: String? = null
+)
+
+@Serializable
+data class MobileDeleteYoutubeProgressQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("videoId") val `videoId`: String,
+    @SerialName("profileId") val `profileId`: String? = null
+)
+
+@Serializable
+data class MobileDeleteYoutubeProgressResponse(
+    @SerialName("success") val `success`: Boolean
 )
 
 @Serializable
@@ -3446,10 +3498,12 @@ data class MobilePostProgressQuery(
 data class MobilePostProgressBody(
     @SerialName("itemId") val `itemId`: String,
     @SerialName("userId") val `userId`: String? = null,
-    @SerialName("positionTicks") val `positionTicks`: Long,
+    @SerialName("positionTicks") val `positionTicks`: Long? = null,
     @SerialName("isPaused") val `isPaused`: Boolean? = null,
     @SerialName("isStopped") val `isStopped`: Boolean? = null,
-    @SerialName("isStarted") val `isStarted`: Boolean? = null
+    @SerialName("isStarted") val `isStarted`: Boolean? = null,
+    @SerialName("action") val `action`: String? = null,
+    @SerialName("recordedAt") val `recordedAt`: Long? = null
 )
 
 @Serializable

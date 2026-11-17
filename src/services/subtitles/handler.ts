@@ -31,7 +31,7 @@ async function handleGET(request: HttpRequest) {
 
   if (itemId.startsWith('nat-')) {
     const fileRow = resolveNativeFileByItemOrFileId(itemId, searchParams.get('versionId') || undefined);
-    const profileId = request.cookies.get('homeflix_profile_id')?.value || 'default';
+    const profileId = searchParams.get('userId') || request.cookies.get('homeflix_profile_id')?.value || 'default';
     const serverDefaultMode = getMediaEngineSettings().subtitleMode;
     if (!fileRow) return HttpResponse.json({ subtitles: [], subtitleMode: serverDefaultMode });
     if (indexStr !== null && indexStr !== undefined) {

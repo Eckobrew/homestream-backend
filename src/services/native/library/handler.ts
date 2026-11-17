@@ -10,7 +10,6 @@ import {
   getNativeScanStatus,
   getNativeWatchStats,
   getTrickplayBackfillStatus,
-  hideFromContinueWatching,
   identifyNativeItem,
   listNativeFilesForAdmin,
   listNativeLibraryItems,
@@ -19,7 +18,6 @@ import {
   repairNativeLibraryHealth,
   scanNativeLibraries,
   setManualSkipSegments,
-  startOverNativeItem,
   startTrickplayBackfill,
 } from '@/lib/native-media';
 import {
@@ -41,11 +39,13 @@ import { importJellyfinWatchHistory } from '@/lib/jellyfin-history-import';
 import { isRequestLocalOrTailscale } from '@/lib/network';
 import { readSession } from '@/lib/session';
 import { getNativeHardwareAcceleration } from '@/lib/native-hardware';
+import { resolveJellyfinUserId } from '@/lib/profiles';
 
 export async function GET(request: HttpRequest) {
   const { searchParams } = request.nextUrl;
   const view = searchParams.get('view') || 'overview';
-  const profileId = searchParams.get('profileId') || undefined;
+  const rawProfileId = searchParams.get('profileId') || searchParams.get('userId') || request.cookies.get('homeflix_profile_id')?.value || undefined;
+  const profileId = rawProfileId ? await resolveJellyfinUserId(rawProfileId) : undefined;
   const settings = getMediaEngineSettings();
 
   if (view === 'hardware') {
@@ -260,20 +260,6 @@ export async function POST(request: HttpRequest) {
     const sessionId = String(body.sessionId || '').trim();
     const ok = stopNativeStreamSession(sessionId);
     return HttpResponse.json({ success: ok });
-  }
-
-  if (action === 'hideContinueWatching') {
-    const profileId = request.cookies.get('homeflix_profile_id')?.value || 'default';
-    const itemId = String(body.itemId || '').trim();
-    if (!itemId) return HttpResponse.json({ error: 'itemId is required' }, { status: 400 });
-    return HttpResponse.json({ success: hideFromContinueWatching(profileId, itemId) });
-  }
-
-  if (action === 'startOver') {
-    const profileId = request.cookies.get('homeflix_profile_id')?.value || 'default';
-    const itemId = String(body.itemId || '').trim();
-    if (!itemId) return HttpResponse.json({ error: 'itemId is required' }, { status: 400 });
-    return HttpResponse.json({ success: startOverNativeItem(profileId, itemId) });
   }
 
   const adminActions = new Set([

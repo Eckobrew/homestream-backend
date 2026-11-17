@@ -25,11 +25,11 @@ interface AccountRow {
   updated_at: string;
 }
 
-let accountsInitialized = false;
+let accountsInitializedDb: ReturnType<typeof stateDatabase> | null = null;
 
 export function ensureAccountTables() {
   const db = stateDatabase();
-  if (!accountsInitialized) {
+  if (accountsInitializedDb !== db) {
     db.exec(`
       CREATE TABLE IF NOT EXISTS accounts (
         id TEXT PRIMARY KEY,
@@ -42,7 +42,7 @@ export function ensureAccountTables() {
         updated_at TEXT NOT NULL
       );
     `);
-    accountsInitialized = true;
+    accountsInitializedDb = db;
   }
   migrateLegacyProfilesIfNeeded();
 }

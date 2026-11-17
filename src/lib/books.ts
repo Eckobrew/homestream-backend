@@ -18,9 +18,7 @@ const CONTENT_TYPES: Record<string, string> = {
   cbr: 'application/vnd.comicbook-rar',
 };
 
-let initialized = false;
 export function ensureBookTables() {
-  if (initialized) return;
   const db = stateDatabase();
   db.exec(`
     CREATE TABLE IF NOT EXISTS profile_books (
@@ -45,6 +43,17 @@ export function ensureBookTables() {
       updated_at TEXT NOT NULL,
       PRIMARY KEY (profile_id, book_id)
     );
+    CREATE TABLE IF NOT EXISTS book_format_progress (
+      profile_id TEXT NOT NULL,
+      book_id INTEGER NOT NULL,
+      format TEXT NOT NULL,
+      location TEXT NOT NULL,
+      percent REAL NOT NULL DEFAULT 0,
+      spine_index INTEGER,
+      spine_pct REAL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (profile_id, book_id, format)
+    );
     CREATE TABLE IF NOT EXISTS book_requests (
       foreign_book_id TEXT PRIMARY KEY,
       book_id INTEGER,
@@ -65,7 +74,6 @@ export function ensureBookTables() {
     );
     CREATE INDEX IF NOT EXISTS idx_profile_books_profile ON profile_books(profile_id);
   `);
-  initialized = true;
 }
 
 const client = () => new BookshelfClient();
@@ -300,20 +308,107 @@ export function removeBookFromProfile(bookId: number, profileId?: string) {
   return { success: true };
 }
 
-export function getProgress(bookId: number, profileId?: string): BookProgress | null {
-  ensureBookTables();
-  const pid = pidOf(profileId);
-  const row = stateDatabase().prepare('SELECT location, percent, updated_at FROM book_progress WHERE profile_id = ? AND book_id = ?').get(pid, bookId) as any;
-  return row ? { location: row.location, percent: row.percent, updatedAt: row.updated_at } : null;
+function inferBookFormat(location: string, explicit?: string): 'epub' | 'pdf' {
+  const e = (explicit || '').trim().toLowerCase();
+  if (e === 'pdf') return 'pdf';
+  if (e === 'epub') return 'epub';
+  if (/^\d+$/.test(location.trim())) return 'pdf';
+  return 'epub';
 }
-export function saveProgress(bookId: number, profileId: string | undefined, location: string, percent: number) {
+
+function parseSpineAnchor(location: string, spineIndex?: number, spinePct?: number): { spineIndex?: number; spinePct?: number } {
+  let idx = typeof spineIndex === 'number' && Number.isInteger(spineIndex) && spineIndex >= 0 ? spineIndex : undefined;
+  if (idx === undefined) {
+    const m = /^ch:(\d+):/.exec(location.trim());
+    if (m) idx = Number(m[1]);
+  }
+  const pct = typeof spinePct === 'number' && Number.isFinite(spinePct)
+    ? Math.max(0, Math.min(100, spinePct))
+    : undefined;
+  return { spineIndex: idx, spinePct: pct };
+}
+
+export function getProgress(bookId: number, profileId?: string, format?: string): BookProgress | null {
+  ensureBookTables();
+  const db = stateDatabase();
+  const pid = pidOf(profileId);
+  const fmt = format ? format.trim().toLowerCase() : undefined;
+  const row = fmt
+    ? (db.prepare('SELECT format, location, percent, spine_index, spine_pct, updated_at FROM book_format_progress WHERE profile_id = ? AND book_id = ? AND format = ?').get(pid, bookId, fmt) as any)
+    : (db.prepare('SELECT format, location, percent, spine_index, spine_pct, updated_at FROM book_format_progress WHERE profile_id = ? AND book_id = ? ORDER BY updated_at DESC LIMIT 1').get(pid, bookId) as any);
+  if (row) {
+    const anchor = parseSpineAnchor(row.location, row.spine_index ?? undefined, row.spine_pct ?? undefined);
+    return {
+      location: row.location,
+      percent: row.percent,
+      updatedAt: row.updated_at,
+      format: row.format,
+      spineIndex: anchor.spineIndex,
+      spinePct: anchor.spinePct,
+    };
+  }
+  const legacy = db.prepare('SELECT location, percent, updated_at FROM book_progress WHERE profile_id = ? AND book_id = ?').get(pid, bookId) as any;
+  if (!legacy) return null;
+  const legacyFmt = inferBookFormat(legacy.location);
+  if (fmt && legacyFmt !== fmt) return null;
+  const anchor = parseSpineAnchor(legacy.location);
+  return {
+    location: legacy.location,
+    percent: legacy.percent,
+    updatedAt: legacy.updated_at,
+    format: legacyFmt,
+    spineIndex: anchor.spineIndex,
+    spinePct: anchor.spinePct,
+  };
+}
+
+export function saveProgress(
+  bookId: number,
+  profileId: string | undefined,
+  location: string,
+  percent: number,
+  options?: { format?: string; spineIndex?: number; spinePct?: number }
+) {
   ensureBookTables();
   const pid = pidOf(profileId);
   if (!location || location.length > 2000) return { success: false };
-  stateDatabase().prepare(`
-    INSERT INTO book_progress (profile_id, book_id, location, percent, updated_at) VALUES (?, ?, ?, ?, ?)
-    ON CONFLICT(profile_id, book_id) DO UPDATE SET location = excluded.location, percent = excluded.percent, updated_at = excluded.updated_at
-  `).run(pid, bookId, location, Math.max(0, Math.min(100, Number(percent) || 0)), new Date().toISOString());
+  const clampedPct = Math.max(0, Math.min(100, Number(percent) || 0));
+  const fmt = inferBookFormat(location, options?.format);
+  const anchor = parseSpineAnchor(location, options?.spineIndex, options?.spinePct);
+  const now = new Date().toISOString();
+  const db = stateDatabase();
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    // Preserve any existing legacy single-row entry before overwriting book_progress
+    const legacy = db.prepare('SELECT location, percent, updated_at FROM book_progress WHERE profile_id = ? AND book_id = ?').get(pid, bookId) as any;
+    if (legacy) {
+      const legacyFmt = inferBookFormat(legacy.location);
+      const legacyAnchor = parseSpineAnchor(legacy.location);
+      db.prepare(`
+        INSERT OR IGNORE INTO book_format_progress (profile_id, book_id, format, location, percent, spine_index, spine_pct, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(pid, bookId, legacyFmt, legacy.location, legacy.percent, legacyAnchor.spineIndex ?? null, legacyAnchor.spinePct ?? null, legacy.updated_at);
+    }
+
+    db.prepare(`
+      INSERT INTO book_format_progress (profile_id, book_id, format, location, percent, spine_index, spine_pct, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(profile_id, book_id, format) DO UPDATE SET
+        location = excluded.location,
+        percent = excluded.percent,
+        spine_index = CASE WHEN excluded.location = book_format_progress.location THEN COALESCE(excluded.spine_index, book_format_progress.spine_index) ELSE excluded.spine_index END,
+        spine_pct = CASE WHEN excluded.location = book_format_progress.location THEN COALESCE(excluded.spine_pct, book_format_progress.spine_pct) ELSE excluded.spine_pct END,
+        updated_at = excluded.updated_at
+    `).run(pid, bookId, fmt, location, clampedPct, anchor.spineIndex ?? null, anchor.spinePct ?? null, now);
+    db.prepare(`
+      INSERT INTO book_progress (profile_id, book_id, location, percent, updated_at) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(profile_id, book_id) DO UPDATE SET location = excluded.location, percent = excluded.percent, updated_at = excluded.updated_at
+    `).run(pid, bookId, location, clampedPct, now);
+    db.exec('COMMIT');
+  } catch (err) {
+    try { db.exec('ROLLBACK'); } catch {}
+    throw err;
+  }
   return { success: true };
 }
 

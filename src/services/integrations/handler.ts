@@ -31,7 +31,7 @@ async function get(_r:HttpRequest) {
       ...(id==='sonarr'?{qualityProfileId:c.sonarrQualityProfileId||1,qualityProfiles:sonarrProfiles}:{}),
       ...(id==='slskd'?{qualityPreference:c.slskdQualityPreference||'mp3-320'}:{}),
     };
-  }),downloadsPath:c.downloadsPath||'/downloads',booksPath:c.booksPath||'/books'});
+  }),downloadsPath:c.downloadsPath||'/downloads',booksPath:c.booksPath||'/books',musicPath:c.musicPath||'/music'});
 }
 async function post(r:HttpRequest) {
  const body=await r.json().catch(()=>null);if(!body || !Object.hasOwn(fields,body.integration) || !['save','test'].includes(body.action))return HttpResponse.json({error:'Choose a supported integration and action'},{status:400});
@@ -69,6 +69,7 @@ async function post(r:HttpRequest) {
    patch.slskdQualityPreference = body.qualityPreference;
  }
  if(body.booksPath!==undefined) {if(typeof body.booksPath!=='string'||!body.booksPath.startsWith('/')||/[\r\n\0]/.test(body.booksPath))return HttpResponse.json({error:'Books path must be an absolute path inside the backend container'},{status:400});patch.booksPath=body.booksPath;}
+ if(body.musicPath!==undefined) {if(typeof body.musicPath!=='string'||!body.musicPath.startsWith('/')||/[\r\n\0]/.test(body.musicPath))return HttpResponse.json({error:'Music path must be an absolute path inside the backend container'},{status:400});patch.musicPath=body.musicPath;}
  if(body.downloadsPath!==undefined) {if(typeof body.downloadsPath!=='string'||!body.downloadsPath.startsWith('/')||/[\r\n\0]/.test(body.downloadsPath))return HttpResponse.json({error:'Downloads path must be an absolute path inside the backend container'},{status:400});patch.downloadsPath=body.downloadsPath;}
  saveServerConfig(patch);return HttpResponse.json({success:true});
 }
