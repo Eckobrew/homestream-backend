@@ -319,6 +319,9 @@ export interface IntegrationSummary {
   configured: boolean;
   credentialSet: boolean;
   username?: string;
+  qualityProfileId?: number;
+  qualityProfiles?: Array<{ id: number; name: string }>;
+  qualityPreference?: 'mp3-320' | 'flac' | 'any-lossless' | 'mp3-any';
 }
 export interface IntegrationsResponse { integrations: IntegrationSummary[]; downloadsPath: string; booksPath?: string; }
 

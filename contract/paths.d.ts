@@ -2900,6 +2900,13 @@ export interface components {
             configured: boolean;
             credentialSet: boolean;
             username?: string;
+            qualityProfileId?: number;
+            qualityProfiles?: {
+                id: number;
+                name: string;
+            }[];
+            /** @enum {string} */
+            qualityPreference?: "any-lossless" | "flac" | "mp3-320" | "mp3-any";
         };
         IntegrationsResponse: {
             integrations: components["schemas"]["IntegrationSummary"][];
@@ -15843,6 +15850,9 @@ export interface operations {
                     downloadsPath?: string;
                     booksPath?: string;
                     parentPin?: string;
+                    qualityProfileId?: number;
+                    /** @enum {string} */
+                    qualityPreference?: "mp3-320" | "flac" | "any-lossless" | "mp3-any";
                 } & {
                     [key: string]: unknown;
                 };
@@ -31479,6 +31489,9 @@ export interface operations {
                     downloadsPath?: string;
                     booksPath?: string;
                     parentPin?: string;
+                    qualityProfileId?: number;
+                    /** @enum {string} */
+                    qualityPreference?: "mp3-320" | "flac" | "any-lossless" | "mp3-any";
                 } & {
                     [key: string]: unknown;
                 };

@@ -10,15 +10,27 @@ import { SlskdClient } from '@/lib/slskd';
 import { BookshelfClient } from '@/lib/bookshelf';
 import { withParentalControls } from '@/lib/parental-controls';
 const fields={jellyfin:['jellyfinUrl','jellyfinApiKey'],seerr:['seerrUrl','seerrApiKey'],qbittorrent:['qbittorrentUrl','qbittorrentPassword'],slskd:['slskdUrl','slskdApiKey'],bookshelf:['bookshelfUrl','bookshelfApiKey'],radarr:['radarrUrl','radarrApiKey'],sonarr:['sonarrUrl','sonarrApiKey'],tmdb:['','tmdbApiKey'],spotify:['spotifyClientId','spotifyClientSecret']} as const;
+const SLSKD_QUALITIES = new Set(['mp3-320', 'flac', 'any-lossless', 'mp3-any']);
 async function get(_r:HttpRequest) {
-  const c=getServerConfig();return HttpResponse.json({integrations:Object.entries(fields).map(([id,[urlField,keyField]])=>{
+  const c=getServerConfig();
+  const [radarrProfiles, sonarrProfiles] = await Promise.all([
+    c.radarrUrl && c.radarrApiKey ? new RadarrClient(c.radarrUrl, c.radarrApiKey).getQualityProfiles() : Promise.resolve([]),
+    c.sonarrUrl && c.sonarrApiKey ? new SonarrClient(c.sonarrUrl, c.sonarrApiKey).getQualityProfiles() : Promise.resolve([]),
+  ]);
+  return HttpResponse.json({integrations:Object.entries(fields).map(([id,[urlField,keyField]])=>{
     const isTmdb = id === 'tmdb';
     const isSpotify = id === 'spotify';
     const url = isTmdb ? 'https://api.themoviedb.org/3' : isSpotify ? c.spotifyClientId || '' : (c as any)[urlField] || '';
     const configured = isTmdb ? Boolean(c.tmdbApiKey) : isSpotify ? Boolean(c.spotifyClientId && c.spotifyClientSecret) : Boolean((c as any)[urlField] && (id==='qbittorrent' || (c as any)[keyField]));
     const credentialSet = Boolean((c as any)[keyField]);
     const name = id==='slskd'?'slskd (Soulseek Music)':id==='bookshelf'?'Bookshelf (Books)':id==='qbittorrent'?'qBittorrent':id==='seerr'?'Seerr':id==='radarr'?'Radarr':id==='sonarr'?'Sonarr':id==='tmdb'?'TMDB':id==='spotify'?'Spotify (Optional Client ID & Secret)':'Jellyfin';
-    return { id, name, url, configured, credentialSet, ...(id==='qbittorrent'?{username:c.qbittorrentUsername||''}:{}) };
+    return {
+      id, name, url, configured, credentialSet,
+      ...(id==='qbittorrent'?{username:c.qbittorrentUsername||''}:{}),
+      ...(id==='radarr'?{qualityProfileId:c.radarrQualityProfileId||1,qualityProfiles:radarrProfiles}:{}),
+      ...(id==='sonarr'?{qualityProfileId:c.sonarrQualityProfileId||1,qualityProfiles:sonarrProfiles}:{}),
+      ...(id==='slskd'?{qualityPreference:c.slskdQualityPreference||'mp3-320'}:{}),
+    };
   }),downloadsPath:c.downloadsPath||'/downloads',booksPath:c.booksPath||'/books'});
 }
 async function post(r:HttpRequest) {
@@ -42,9 +54,20 @@ async function post(r:HttpRequest) {
   else if (id === 'spotify') result = { success: true, version: 'Spotify Web API' };
   return HttpResponse.json({success:result.success,...('version' in result && result.version?{version:result.version}:{})});
  }catch{return HttpResponse.json({success:false,error:'Connection failed. Check the URL, credential and upstream service.'},{status:502});}}
- const patch:Record<string,string>={};
+ const patch:Record<string,string|number>={};
  if (id === 'spotify') { if (body.url !== undefined) patch.spotifyClientId = body.url.trim(); if (body.secret) patch.spotifyClientSecret = body.secret; }
  else { if(urlField)patch[urlField]=url; if(body.secret)patch[secretField]=body.secret; if(id==='qbittorrent')patch.qbittorrentUsername=username; }
+ if ((id === 'radarr' || id === 'sonarr') && body.qualityProfileId !== undefined) {
+   const qid = Number(body.qualityProfileId);
+   if (!Number.isInteger(qid) || qid < 1) return HttpResponse.json({ error: 'Quality profile ID must be a positive integer' }, { status: 400 });
+   patch[id === 'radarr' ? 'radarrQualityProfileId' : 'sonarrQualityProfileId'] = qid;
+ }
+ if (id === 'slskd' && body.qualityPreference !== undefined) {
+   if (typeof body.qualityPreference !== 'string' || !SLSKD_QUALITIES.has(body.qualityPreference)) {
+     return HttpResponse.json({ error: 'Invalid slskd quality preference' }, { status: 400 });
+   }
+   patch.slskdQualityPreference = body.qualityPreference;
+ }
  if(body.booksPath!==undefined) {if(typeof body.booksPath!=='string'||!body.booksPath.startsWith('/')||/[\r\n\0]/.test(body.booksPath))return HttpResponse.json({error:'Books path must be an absolute path inside the backend container'},{status:400});patch.booksPath=body.booksPath;}
  if(body.downloadsPath!==undefined) {if(typeof body.downloadsPath!=='string'||!body.downloadsPath.startsWith('/')||/[\r\n\0]/.test(body.downloadsPath))return HttpResponse.json({error:'Downloads path must be an absolute path inside the backend container'},{status:400});patch.downloadsPath=body.downloadsPath;}
  saveServerConfig(patch);return HttpResponse.json({success:true});

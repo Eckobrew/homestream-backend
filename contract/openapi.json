@@ -31864,6 +31864,20 @@
                   "parentPin": {
                     "type": "string",
                     "maxLength": 8192
+                  },
+                  "qualityProfileId": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "qualityPreference": {
+                    "type": "string",
+                    "enum": [
+                      "mp3-320",
+                      "flac",
+                      "any-lossless",
+                      "mp3-any"
+                    ]
                   }
                 },
                 "required": [
@@ -70159,6 +70173,20 @@
                   "parentPin": {
                     "type": "string",
                     "maxLength": 8192
+                  },
+                  "qualityProfileId": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "qualityPreference": {
+                    "type": "string",
+                    "enum": [
+                      "mp3-320",
+                      "flac",
+                      "any-lossless",
+                      "mp3-any"
+                    ]
                   }
                 },
                 "required": [
@@ -93497,6 +93525,36 @@
             "type": "boolean"
           },
           "username": {
+            "type": "string"
+          },
+          "qualityProfileId": {
+            "type": "number"
+          },
+          "qualityProfiles": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "number"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ]
+            }
+          },
+          "qualityPreference": {
+            "enum": [
+              "any-lossless",
+              "flac",
+              "mp3-320",
+              "mp3-any"
+            ],
             "type": "string"
           }
         },

@@ -160,8 +160,11 @@ export interface ServerConfig {
   downloadsPath?: string;
   radarrUrl?: string;
   radarrApiKey?: string;
+  radarrQualityProfileId?: number;
   sonarrUrl?: string;
   sonarrApiKey?: string;
+  sonarrQualityProfileId?: number;
+  slskdQualityPreference?: 'mp3-320' | 'flac' | 'any-lossless' | 'mp3-any';
   spotifyClientId?: string;
   spotifyClientSecret?: string;
   isConfigured: boolean;
@@ -343,6 +346,9 @@ export interface IntegrationSummary {
   configured: boolean;
   credentialSet: boolean;
   username?: string;
+  qualityProfileId?: number;
+  qualityProfiles?: Array<{ id: number; name: string }>;
+  qualityPreference?: 'mp3-320' | 'flac' | 'any-lossless' | 'mp3-any';
 }
 export interface IntegrationsResponse { integrations: IntegrationSummary[]; downloadsPath: string; booksPath?: string; }
 

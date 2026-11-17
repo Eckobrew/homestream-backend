@@ -216,6 +216,36 @@ function trackIdFromFile(filePath: string): string {
 }
 
 const AUDIO_EXTS = new Set(['.mp3', '.flac', '.m4a', '.aac', '.ogg', '.opus', '.wav', '.wma', '.alac']);
+
+export type SlskdQualityPreference = 'mp3-320' | 'flac' | 'any-lossless' | 'mp3-any';
+
+const LOSSLESS_EXTS = new Set(['.flac', '.alac', '.wav']);
+
+function scoreSlskdQuality(ext: string, bitRate: number | undefined, pref: SlskdQualityPreference): number {
+  let score = 0;
+  if (pref === 'flac') {
+    if (ext === '.flac') score += 90;
+    else if (LOSSLESS_EXTS.has(ext)) score += 45;
+    else if (ext === '.mp3' && bitRate && bitRate >= 320) score += 20;
+    return score;
+  }
+  if (pref === 'any-lossless') {
+    if (LOSSLESS_EXTS.has(ext)) score += 90;
+    else if (ext === '.mp3' && bitRate && bitRate >= 320) score += 20;
+    return score;
+  }
+  if (pref === 'mp3-any') {
+    if (ext === '.mp3') score += 70;
+    else if (ext === '.flac') score += 15;
+    if (bitRate && bitRate >= 192) score += 20;
+    return score;
+  }
+  if (ext === '.mp3') score += 50;
+  if (bitRate && bitRate >= 320) score += 40;
+  else if (bitRate && bitRate >= 256) score += 25;
+  else if (bitRate && bitRate >= 192) score += 10;
+  return score;
+}
 const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 
 // Clean up track title from filenames like "0101 Cold Wind Blows.mp3" or "01 - Cold Wind Blows.mp3"
@@ -1330,9 +1360,10 @@ async function dispatchAlbumDownload(requestId: string, artist: string, album: s
       if (lowerDir.includes(album.toLowerCase())) score += 100;
       if (lowerDir.includes(artist.toLowerCase())) score += 50;
 
-      // Bitrate preference: 320kbps or lossless
       const avgBitrate = dirFiles.reduce((acc, f) => acc + (f.bitRate || 192), 0) / dirFiles.length;
-      if (avgBitrate >= 320) score += 40;
+      const dominantExt = path.extname(dirFiles[0]?.filename || '').toLowerCase();
+      const qualityPref = getServerConfig().slskdQualityPreference || 'mp3-320';
+      score += scoreSlskdQuality(dominantExt, avgBitrate, qualityPref);
 
       if (score > bestScore) {
         bestScore = score;
@@ -2247,11 +2278,8 @@ async function executeTrackSearchAndDownload(track: any) {
       const ext = path.extname(fn).toLowerCase();
       if (!AUDIO_EXTS.has(ext) || !Number.isSafeInteger(f.size) || f.size <= 0) continue;
 
-      let score = 0;
-      if (ext === '.mp3') score += 50;
-      if (f.bitRate && f.bitRate >= 320) score += 40;
-      else if (f.bitRate && f.bitRate >= 256) score += 25;
-      else if (f.bitRate && f.bitRate >= 192) score += 10;
+      const qualityPref = getServerConfig().slskdQualityPreference || 'mp3-320';
+      let score = scoreSlskdQuality(ext, f.bitRate, qualityPref);
       if (resp.hasFreeUploadSlot) score += 30;
       if (resp.uploadSpeed && resp.uploadSpeed > 500000) score += 20;
 

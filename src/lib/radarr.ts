@@ -76,6 +76,24 @@ export class RadarrClient {
     }
   }
 
+  async getQualityProfiles(): Promise<Array<{ id: number; name: string }>> {
+    if (!this.isConfigured()) return [];
+    try {
+      const res = await fetch(`${this.baseUrl}/api/v3/qualityprofile`, {
+        headers: this.getHeaders(),
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!res.ok) return [];
+      const data = await res.json();
+      if (!Array.isArray(data)) return [];
+      return data
+        .filter((p: any) => typeof p?.id === 'number' && typeof p?.name === 'string')
+        .map((p: any) => ({ id: p.id, name: p.name }));
+    } catch {
+      return [];
+    }
+  }
+
   async getMovieByTmdb(tmdbId: number): Promise<RadarrMovie | null> {
     if (!this.isConfigured()) return null;
     try {
@@ -122,7 +140,7 @@ export class RadarrClient {
           searchForMovie: false,
         },
         rootFolderPath: lookup.rootFolderPath || '/movies',
-        qualityProfileId: lookup.qualityProfileId || 1,
+        qualityProfileId: getServerConfig().radarrQualityProfileId || lookup.qualityProfileId || 1,
       };
 
       const res = await fetch(`${this.baseUrl}/api/v3/movie`, {
@@ -154,7 +172,7 @@ export class RadarrClient {
           searchForMovie: true,
         },
         rootFolderPath: lookup.rootFolderPath || '/movies',
-        qualityProfileId: lookup.qualityProfileId || 1,
+        qualityProfileId: getServerConfig().radarrQualityProfileId || lookup.qualityProfileId || 1,
       };
 
       const res = await fetch(`${this.baseUrl}/api/v3/movie`, {

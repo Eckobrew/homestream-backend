@@ -416,7 +416,16 @@ data class IntegrationSummary(
     @SerialName("url") val `url`: String,
     @SerialName("configured") val `configured`: Boolean,
     @SerialName("credentialSet") val `credentialSet`: Boolean,
-    @SerialName("username") val `username`: String? = null
+    @SerialName("username") val `username`: String? = null,
+    @SerialName("qualityProfileId") val `qualityProfileId`: Double? = null,
+    @SerialName("qualityProfiles") val `qualityProfiles`: List<IntegrationSummaryQualityProfilesItem>? = null,
+    @SerialName("qualityPreference") val `qualityPreference`: String? = null
+)
+
+@Serializable
+data class IntegrationSummaryQualityProfilesItem(
+    @SerialName("id") val `id`: Double,
+    @SerialName("name") val `name`: String
 )
 
 @Serializable
@@ -1481,7 +1490,9 @@ data class WebPostIntegrationsBody(
     @SerialName("username") val `username`: String? = null,
     @SerialName("downloadsPath") val `downloadsPath`: String? = null,
     @SerialName("booksPath") val `booksPath`: String? = null,
-    @SerialName("parentPin") val `parentPin`: String? = null
+    @SerialName("parentPin") val `parentPin`: String? = null,
+    @SerialName("qualityProfileId") val `qualityProfileId`: Long? = null,
+    @SerialName("qualityPreference") val `qualityPreference`: String? = null
 )
 
 @Serializable
@@ -2538,7 +2549,9 @@ data class MobilePostIntegrationsBody(
     @SerialName("username") val `username`: String? = null,
     @SerialName("downloadsPath") val `downloadsPath`: String? = null,
     @SerialName("booksPath") val `booksPath`: String? = null,
-    @SerialName("parentPin") val `parentPin`: String? = null
+    @SerialName("parentPin") val `parentPin`: String? = null,
+    @SerialName("qualityProfileId") val `qualityProfileId`: Long? = null,
+    @SerialName("qualityPreference") val `qualityPreference`: String? = null
 )
 
 @Serializable

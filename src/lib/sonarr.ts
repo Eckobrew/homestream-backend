@@ -80,6 +80,24 @@ export class SonarrClient {
     }
   }
 
+  async getQualityProfiles(): Promise<Array<{ id: number; name: string }>> {
+    if (!this.isConfigured()) return [];
+    try {
+      const res = await fetch(`${this.baseUrl}/api/v3/qualityprofile`, {
+        headers: this.getHeaders(),
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!res.ok) return [];
+      const data = await res.json();
+      if (!Array.isArray(data)) return [];
+      return data
+        .filter((p: any) => typeof p?.id === 'number' && typeof p?.name === 'string')
+        .map((p: any) => ({ id: p.id, name: p.name }));
+    } catch {
+      return [];
+    }
+  }
+
   async getAllSeries(): Promise<SonarrSeries[]> {
     if (!this.isConfigured()) return [];
     try {
@@ -131,7 +149,7 @@ export class SonarrClient {
             searchForMissingEpisodes: false,
           },
           rootFolderPath: found.rootFolderPath || '/tv',
-          qualityProfileId: found.qualityProfileId || 1,
+          qualityProfileId: getServerConfig().sonarrQualityProfileId || found.qualityProfileId || 1,
         }),
         signal: AbortSignal.timeout(15000),
       });
@@ -168,7 +186,7 @@ export class SonarrClient {
           searchForMissingEpisodes: true,
         },
         rootFolderPath: found.rootFolderPath || '/tv',
-        qualityProfileId: found.qualityProfileId || 1,
+        qualityProfileId: getServerConfig().sonarrQualityProfileId || found.qualityProfileId || 1,
       };
 
       const addRes = await fetch(`${this.baseUrl}/api/v3/series`, {

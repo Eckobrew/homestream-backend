@@ -90,7 +90,7 @@ add('music/playlist/track','POST',success,{},object({playlistId:id,trackId:id},[
 add('music/playlist/track','DELETE',success,{playlistId:id,trackId:id},{requiredQuery:['playlistId','trackId']});
 add('requested','GET',object(),{},undefined,{responseModel:'RequestedResponse'});
 add('integrations','GET',object(),{},undefined,{responseModel:'IntegrationsResponse'});
-add('integrations','POST',object(),{},object({integration:{type:'string',enum:['jellyfin','seerr','qbittorrent','slskd','bookshelf','radarr','sonarr','tmdb']},action:{type:'string',enum:['save','test']},url:text,secret:text,username:text,downloadsPath:text,booksPath:text,parentPin:text},['integration','action']));
+add('integrations','POST',object(),{},object({integration:{type:'string',enum:['jellyfin','seerr','qbittorrent','slskd','bookshelf','radarr','sonarr','tmdb']},action:{type:'string',enum:['save','test']},url:text,secret:text,username:text,downloadsPath:text,booksPath:text,parentPin:text,qualityProfileId:integer,qualityPreference:{type:'string',enum:['mp3-320','flac','any-lossless','mp3-any']}},['integration','action']));
 add('youtube/search','GET',object(),{q:text},undefined,{responseModel:'YouTubeSearchResponse'});
 add('youtube/stream','GET',object(),{videoId:id},undefined,{requiredQuery:['videoId'],responseModel:'YouTubeStreamResponse'});
 add('youtube/stream-video','GET',object(),{videoId:id},undefined,{requiredQuery:['videoId'],binary:true});
