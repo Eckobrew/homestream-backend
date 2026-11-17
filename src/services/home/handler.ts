@@ -7,7 +7,6 @@ import { TmdbClient } from '@/lib/tmdb';
 import { SmartRecommendationEngine } from '@/lib/recommendations';
 import { stateDatabase } from '@/state/database';
 import { getNativeUserRequests } from '@/lib/user-requests';
-import { QBittorrentClient } from '@/lib/qbittorrent';
 import { resolveProfileId } from '@/lib/profiles';
 import { getNativeResumeItems, listNativeLibraryItems } from '@/lib/native-media';
 import {
@@ -120,78 +119,7 @@ async function handleGET(request: HttpRequest) {
     const heroCandidate = featuredHeroItems[0] || resumeItems[0] || latestMovies[0] || null;
 
     const sections: MediaRowSection[] = [];
-    const qb = new QBittorrentClient();
     const nativeRequestsPromise = getNativeUserRequests(targetUserId);
-
-    if (qb.isConfigured()) {
-      try {
-        const [dlList, initialUserRequests] = await Promise.all([
-          qb.getStreamableDownloads(),
-          nativeRequestsPromise,
-        ]);
-        if (dlList.length > 0) {
-          const downloadItems: MediaItem[] = [];
-
-          for (const d of dlList) {
-            if (!d.streamUrl || (!d.streamable && d.progressPercent === 0)) {
-              continue;
-            }
-
-            const cleanD = (d.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-            const matchedReq = initialUserRequests.find((r) => {
-              const cleanR = (r.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-              return cleanD === cleanR || (cleanD.startsWith(cleanR) && cleanR.length >= 3);
-            });
-
-            const candidateTitle = matchedReq
-              ? matchedReq.title
-              : (d.videoFile?.name ? d.videoFile.name.replace(/\.[^/.]+$/, '') : d.name);
-
-            const cleanCand = candidateTitle.toLowerCase().replace(/[^a-z0-9]/g, '');
-            const alreadyInLibrary = [...heroCandidates, ...resumeItems, ...topRated, ...latestMovies].some(
-              (it) => it.title.toLowerCase().replace(/[^a-z0-9]/g, '') === cleanCand
-            );
-
-            if (alreadyInLibrary) {
-              continue;
-            }
-
-            downloadItems.push({
-              id: matchedReq ? matchedReq.id : `dl-${d.hash}`,
-              title: candidateTitle,
-              overview: matchedReq
-                ? matchedReq.overview
-                : `Actively downloading via qBittorrent (${d.progressPercent}% complete, ${(d.downloadSpeed / 1024 / 1024).toFixed(1)} MB/s). Ready to stream live.`,
-              type: matchedReq ? matchedReq.type : (/s\d{1,2}e\d{1,2}|season|episode/i.test(d.name) ? 'Series' : 'Movie'),
-              posterUrl: matchedReq?.posterUrl || 'https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?w=500&auto=format&fit=crop&q=60',
-              backdropUrl: matchedReq?.backdropUrl || 'https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?w=1280&auto=format&fit=crop&q=80',
-              durationMinutes: matchedReq?.durationMinutes,
-              genres: matchedReq?.genres?.length ? matchedReq.genres : ['Downloading', 'In-Progress'],
-              source: matchedReq?.source || 'tmdb',
-              tmdbId: matchedReq?.tmdbId,
-              status: 'processing',
-              isDownloading: true,
-              downloadProgress: d.progressPercent,
-              downloadSpeed: d.downloadSpeed,
-              downloadEta: d.eta,
-              torrentHash: d.hash,
-              videoStreamUrl: d.streamUrl,
-              downloadStreamUrl: d.streamUrl,
-            });
-          }
-
-          if (downloadItems.length > 0) {
-            sections.push({
-              id: 'currently-downloading',
-              title: '⬇ Actively Downloading (Stream In-Progress)',
-              items: downloadItems,
-            });
-          }
-        }
-      } catch (err) {
-        log.warn('Failed to load active downloads for home feed:', err);
-      }
-    }
 
     const safeResume = resumeItems.filter((i) => i.source !== 'youtube');
     if (safeResume.length > 0) {
