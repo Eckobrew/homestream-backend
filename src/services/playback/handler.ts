@@ -34,8 +34,8 @@ async function handleGET(request: HttpRequest) {
       const streamUrl = `/api/stream/download?hash=${encodeURIComponent(hash)}${season ? `&season=${season}` : ''}${episode ? `&episode=${episode}` : ''}${forwardStreamCapabilities(searchParams)}`;
       return HttpResponse.json({
         streamUrl,
-        transport: 'file',
-        contentType: 'video/mp4',
+        transport: cast ? 'HLS' : 'file',
+        contentType: cast ? 'application/vnd.apple.mpegurl' : 'video/mp4',
         isTranscoding: true,
         playMethod: 'Transcode',
         durationSeconds: 7200,
@@ -79,8 +79,8 @@ async function handleGET(request: HttpRequest) {
 
     return HttpResponse.json({
       streamUrl,
-      transport: 'file',
-      contentType: 'video/mp4',
+      transport: cast ? 'HLS' : 'file',
+      contentType: cast ? 'application/vnd.apple.mpegurl' : 'video/mp4',
       isTranscoding: true,
       playMethod: 'Transcode',
       durationSeconds,

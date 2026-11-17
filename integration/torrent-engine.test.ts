@@ -7,6 +7,8 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createApp } from '../src/app';
+import { saveMediaEngineSettings } from '../src/lib/media-settings';
+import { listActiveNativeStreams, stopNativeStreamSession } from '../src/lib/native-transcode';
 import { getOrCreateTorrentEngine } from '../src/lib/torrent-stream-engine';
 
 test('the in-process torrent route preserves season-pack selection and reads real torrent pieces', { timeout: 30000 }, async () => {
@@ -14,6 +16,7 @@ test('the in-process torrent route preserves season-pack selection and reads rea
   process.env.DATA_DIR = directory;
   process.env.DOWNLOADS_PATH = join(directory, 'missing-download-mount');
   const app = createApp();
+  saveMediaEngineSettings({ hwAccel: 'none', transcodeTempDir: join(directory, 'hls') });
   let active: ReturnType<typeof getOrCreateTorrentEngine> | undefined;
   try {
     const files = await Promise.all([1, 3].map(async (duration, index) => {
@@ -65,10 +68,31 @@ test('the in-process torrent route preserves season-pack selection and reads rea
       '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=nw=1:nk=1', rendered,
     ], { encoding: 'utf8' });
     assert.ok(Number(duration) > 2);
+    // Cast gets independently addressable fMP4 HLS fragments for both remux and conversion.
+    for (const force of [false, true]) {
+      const castUrl = `${url}&receiver=cast&forceTranscode=${force}&videoCapabilities=${encodeURIComponent(JSON.stringify([
+        { codec: 'h264', width: 1920, height: 1080, profiles: ['baseline', 'main', 'high'] },
+      ]))}`;
+      const cast = await fetch(castUrl, { headers: { Connection: 'close' } });
+      assert.equal(cast.status, 200);
+      assert.match(cast.headers.get('content-type') || '', /mpegurl/);
+      const playlist = await cast.text();
+      const init = /URI="([^"]+)"/.exec(playlist)?.[1];
+      const segment = playlist.split('\n').find(line => line.startsWith('/api/native/stream?') && line.includes('.m4s'));
+      assert.ok(init?.startsWith('/api/native/stream?'));
+      assert.ok(segment);
+      const initResponse = await fetch(new URL(init!, origin), { headers: { Connection: 'close' } });
+      assert.equal(initResponse.headers.get('content-type'), 'video/mp4');
+      assert.ok(Buffer.from(await initResponse.arrayBuffer()).includes(Buffer.from('ftyp')));
+      const fragment = await fetch(new URL(segment!, origin), { headers: { Connection: 'close' } });
+      assert.equal(fragment.headers.get('content-type'), 'video/mp4');
+      assert.ok(Buffer.from(await fragment.arrayBuffer()).includes(Buffer.from('moof')));
+    }
     const missing = await fetch(url.replace('season=1', 'season=2'), { headers: { Connection: 'close' } });
     assert.equal(missing.status, 404);
     await missing.arrayBuffer();
   } finally {
+    for (const session of listActiveNativeStreams()) stopNativeStreamSession(session.id);
     active?.destroy();
     app.server.closeIdleConnections();
     await app.close();

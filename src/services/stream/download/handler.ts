@@ -1,3 +1,4 @@
+import { castStreamResponse } from '@/lib/cast-stream';
 import { videoEncodeSlotsFromStreams } from '@/media/encode-capacity';
 import { prepareHardwareEncoding } from '@/lib/native-hardware';
 import { getMediaEngineSettings } from '@/lib/media-settings';
@@ -306,6 +307,7 @@ async function handleGET(request: HttpRequest) {
 
   // Video strategy: copy video stream directly (fastest, lossless, zero CPU)
   const sourceVideo = await probeStreamVideo(probeSource, probeHeaders);
+  if (searchParams.get('receiver') === 'cast') return castStreamResponse(request, probeSource, sourceVideo, probeHeaders);
   if (startSec === 0 && canDirectStreamSource(sourceVideo, searchParams, ext)) {
     const type = ext === '.mkv' ? 'video/x-matroska' : ext === '.webm' ? 'video/webm' : 'video/mp4';
     return torrentResponse(request, resolvedPath, targetFileSize || stat.size, type, pieceSource);

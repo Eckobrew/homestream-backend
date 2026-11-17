@@ -118,6 +118,8 @@ export async function startNativeHlsTranscode(options: {
   startSeconds?: number;
   copyVideo?: boolean;
   h264Profile?: string;
+  hlsSegmentType?: 'fmp4';
+  inputHeaders?: string;
   maxWidth?: number;
   maxHeight?: number;
 }): Promise<ActiveStreamSession> {
@@ -129,7 +131,7 @@ export async function startNativeHlsTranscode(options: {
   const sourceRev = (options.file as NativeMediaFileRow & { source_revision?: number }).source_revision || 1;
   const sessionKey = JSON.stringify([
     options.file.id, sourceRev, options.profileId, options.audioIndex, options.burnSubtitleIndex, startSec, Boolean(options.copyVideo),
-    options.maxWidth ?? null, options.maxHeight ?? null, options.h264Profile ?? null,
+    options.maxWidth ?? null, options.maxHeight ?? null, options.h264Profile ?? null, options.hlsSegmentType ?? null,
     acceleration, settings.vaapiDevice, settings.hdrToneMapping, settings.burnInImageSubtitles,
     settings.maxTranscodeBitrateMbps, settings.hlsSegmentSeconds, settings.transcodePreset, settings.transcodeTempDir,
   ]);
@@ -196,6 +198,7 @@ export async function startNativeHlsTranscode(options: {
     const args = ['-y', '-hide_banner', '-loglevel', 'warning'];
     if (startSec > 0) args.push('-ss', String(startSec));
     args.push(...hardwareDeviceArgs(encoder, settings.vaapiDevice));
+    if (options.inputHeaders) args.push('-headers', options.inputHeaders);
     args.push('-i', options.file.file_path);
     const videoFilters = [...filters, ...hardwareVideoFilters(encoder)];
     if (bitmapBurnIdx !== undefined) {
@@ -208,6 +211,7 @@ export async function startNativeHlsTranscode(options: {
     args.push('-map', options.audioIndex !== undefined ? `0:${options.audioIndex}` : '0:a:0?');
 
     args.push('-c:v', encoder);
+    if (encoder === 'copy' && options.file.video_codec.toLowerCase() === 'hevc' && options.hlsSegmentType === 'fmp4') args.push('-tag:v', 'hvc1');
     if (encoder !== 'copy') {
       if (options.h264Profile) args.push('-profile:v', options.h264Profile);
       args.push('-force_key_frames', `expr:gte(t,n_forced*${settings.hlsSegmentSeconds || 4})`);
@@ -230,7 +234,8 @@ export async function startNativeHlsTranscode(options: {
       ...(startSec > 0 ? ['-avoid_negative_ts', 'make_zero'] : []),
       '-f', 'hls', '-hls_time', String(settings.hlsSegmentSeconds || 4),
       '-hls_playlist_type', 'event', '-hls_flags', 'temp_file',
-      '-hls_segment_filename', path.join(dir, 'seg_%05d.ts'), playlistPath,
+      ...(options.hlsSegmentType === 'fmp4' ? ['-hls_segment_type', 'fmp4', '-hls_fmp4_init_filename', 'init.mp4'] : []),
+      '-hls_segment_filename', path.join(dir, options.hlsSegmentType === 'fmp4' ? 'seg_%05d.m4s' : 'seg_%05d.ts'), playlistPath,
     );
 
     const releaseEncode = encoder === 'copy' ? undefined : reserveVideoEncode(videoEncodeSlotsFromStreams(options.file.streams_json));

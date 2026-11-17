@@ -14,7 +14,7 @@ import {
 
 function mimeForFile(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
-  if (ext === '.mp4' || ext === '.m4v') return 'video/mp4';
+  if (ext === '.mp4' || ext === '.m4v' || ext === '.m4s') return 'video/mp4';
   if (ext === '.webm') return 'video/webm';
   if (ext === '.mkv') return 'video/x-matroska';
   if (ext === '.avi') return 'video/x-msvideo';
@@ -107,9 +107,10 @@ async function handleGET(request: HttpRequest) {
     if (!fs.existsSync(full)) return HttpResponse.json({ error: 'Segment not ready' }, { status: 404 });
     if (asset.endsWith('.m3u8')) {
       let text = fs.readFileSync(full, 'utf8').replace(
-        /^(seg_\d+\.ts)$/gm,
+        /^(seg_\d+\.(?:ts|m4s))$/gm,
         `?hls=${encodeURIComponent(hlsSessionId)}&segment=$1`
       );
+      text = text.replace(/URI="(init\.mp4)"/g, `URI="?hls=${encodeURIComponent(hlsSessionId)}&segment=$1"`);
       if (!text.includes('#EXT-X-START:')) {
         text = text.replace(/^#EXTM3U\r?\n/, '#EXTM3U\n#EXT-X-START:TIME-OFFSET=0,PRECISE=YES\n');
       }
@@ -118,7 +119,7 @@ async function handleGET(request: HttpRequest) {
         headers: { 'Content-Type': 'application/vnd.apple.mpegurl', 'Cache-Control': 'no-cache' },
       });
     }
-    const headers = { 'Content-Type': 'video/mp2t', 'Content-Length': String(fs.statSync(full).size) };
+    const headers = { 'Content-Type': mimeForFile(full), 'Content-Length': String(fs.statSync(full).size) };
     if (request.method === 'HEAD') return new HttpResponse(null, { status: 200, headers });
     const stream = fs.createReadStream(full);
     return new HttpResponse(Readable.toWeb(stream) as ReadableStream, {

@@ -1,3 +1,4 @@
+import { castStreamResponse } from '@/lib/cast-stream';
 import { videoEncodeSlotsFromStreams } from '@/media/encode-capacity';
 import { prepareHardwareEncoding } from '@/lib/native-hardware';
 import { getMediaEngineSettings } from '@/lib/media-settings';
@@ -176,6 +177,7 @@ async function handleGET(request: HttpRequest) {
     }
 
     const sourceVideo = await probeStreamVideo(sourceUrl);
+    if (searchParams.get('receiver') === 'cast') return castStreamResponse(request, sourceUrl, sourceVideo);
     if (startSec === 0 && canDirectStreamSource(sourceVideo, searchParams, ext)) {
       return torrentStreamFileResponse(request, targetFile, types[ext] || 'video/mp4',
         () => active.acquireReader(), () => active.releaseReader(targetFile));
