@@ -1,3 +1,4 @@
+import { probeStreamVideo, streamVideoStrategy, canDirectStreamSource, streamAudioArguments } from '@/lib/stream-capabilities';
 import { startConversion, ConversionCapacityError } from '@/media/conversions';
 import { log } from '@/log';
 import { withParentalControls } from '@/lib/parental-controls';
@@ -69,8 +70,7 @@ async function handleGET(request: HttpRequest) {
   const fileIndex = fileIndexParam !== null ? parseInt(fileIndexParam, 10) : undefined;
   const seasonParam = searchParams.get('season');
   const episodeParam = searchParams.get('episode');
-  const startSec = parseFloat(searchParams.get('start') || '0');
-  const receiver = searchParams.get('receiver');
+  const startSec = parseFloat(searchParams.get('start') || String(Number(searchParams.get('startTimeTicks') || 0) / 10000000));
   const forceTranscode = searchParams.get('forceTranscode') === 'true' || searchParams.get('transcode') === '1';
 
   if (!Number.isFinite(startSec) || startSec < 0 ||
@@ -261,14 +261,6 @@ async function handleGET(request: HttpRequest) {
 
   const ext = path.extname(resolvedPath.replace(/\.!qB$/i, '')).toLowerCase();
 
-  // If download is already 100% complete and directly playable (e.g. MP4/AAC)
-  const isDirectWebPlayable =
-    !isActivelyDownloading &&
-    !forceTranscode &&
-    receiver !== 'cast' &&
-    receiver !== 'native-tv' &&
-    (ext === '.mp4' || ext === '.m4v' || ext === '.webm');
-
   const sourceRequest = searchParams.get('source') === '1';
   const nativeRequest = searchParams.get('native') === '1' && !forceTranscode;
   if (nativeRequest && pieceSource) {
@@ -281,7 +273,7 @@ async function handleGET(request: HttpRequest) {
       return HttpResponse.json({ error: 'Waiting for the selected video file to buffer' }, { status: 425 });
     }
   }
-  if (isDirectWebPlayable || sourceRequest || nativeRequest) {
+  if (sourceRequest || nativeRequest) {
     const types: Record<string, string> = { '.mkv': 'video/x-matroska', '.webm': 'video/webm', '.ts': 'video/mp2t', '.avi': 'video/x-msvideo', '.mov': 'video/quicktime' };
     return torrentResponse(request, resolvedPath, targetFileSize || stat.size, types[ext] || 'video/mp4', pieceSource);
   }
@@ -294,23 +286,32 @@ async function handleGET(request: HttpRequest) {
     ffmpegArgs.push('-ss', startSec.toString());
   }
 
+  let probeSource = resolvedPath;
+  let probeHeaders: string | undefined;
   if (pieceSource && torrentHash && selectedFileIndex !== undefined) {
     // HTTP byte ranges let FFmpeg seek to MP4 headers while the source endpoint
     // waits for verified pieces. Reading the sparse file directly is unsafe.
     const token = process.env.HOMESTREAM_MOBILE_TOKEN || '';
     if (token.length < 32) return HttpResponse.json({ error: 'Configure mobile streaming credentials before streaming incomplete downloads' }, { status: 503 });
     const sourceUrl = `${process.env.HOMESTREAM_INTERNAL_URL || `http://127.0.0.1:${process.env.PORT || '3001'}`}/api/mobile/v1/stream/download?hash=${encodeURIComponent(torrentHash)}&fileIndex=${selectedFileIndex}&source=1`;
-    ffmpegArgs.push('-headers', `Authorization: Bearer ${token}\r\n`, '-rw_timeout', '120000000', '-i', sourceUrl);
+    probeSource = sourceUrl;
+    probeHeaders = `Authorization: Bearer ${token}\r\n`;
+    ffmpegArgs.push('-headers', probeHeaders, '-rw_timeout', '120000000', '-i', sourceUrl);
   } else ffmpegArgs.push('-i', resolvedPath);
 
   ffmpegArgs.push('-map', '0:v:0', '-map', '0:a:0?', '-sn', '-dn');
 
   // Video strategy: copy video stream directly (fastest, lossless, zero CPU)
-  if (forceTranscode) ffmpegArgs.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p');
-  else ffmpegArgs.push('-c:v', 'copy');
+  const sourceVideo = await probeStreamVideo(probeSource, probeHeaders);
+  if (startSec === 0 && canDirectStreamSource(sourceVideo, searchParams, ext)) {
+    const type = ext === '.mkv' ? 'video/x-matroska' : ext === '.webm' ? 'video/webm' : 'video/mp4';
+    return torrentResponse(request, resolvedPath, targetFileSize || stat.size, type, pieceSource);
+  }
+  const videoStrategy = streamVideoStrategy(sourceVideo, searchParams);
+  ffmpegArgs.push(...videoStrategy.args);
 
-  // Audio strategy: transcode audio to standard stereo AAC for universal browser playback
-  ffmpegArgs.push('-c:a', 'aac', '-b:a', '192k', '-ac', '2');
+  // Preserve supported MP4 audio; convert other formats to stereo AAC.
+  ffmpegArgs.push(...streamAudioArguments(sourceVideo, searchParams));
 
   // Output format: Fragmented MP4 (fMP4) playable live without moov header at end
   ffmpegArgs.push(

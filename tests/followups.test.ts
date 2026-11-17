@@ -216,6 +216,12 @@ test('evaluateNativeFit supports MKV DirectPlay on mobile/native-tv and rejects 
       audioCodecs: ['aac'],
     }, settings);
     assert.equal(androidFit.canDirectPlay, true);
+    const audioOnly = evaluateNativeFit({ ...hevcMkvFile, audio_codec: 'dts' }, {
+      videoCodecs: ['h264', 'hevc'], audioCodecs: ['aac'], receiver: 'native-tv',
+    }, settings);
+    assert.equal(audioOnly.canDirectPlay, false);
+    assert.equal(audioOnly.canCopyVideo, true, 'native HEVC audio conversion preserves supported video');
+
 
     const browserFit = evaluateNativeFit(hevcMkvFile, {
       receiver: 'browser',

@@ -1,3 +1,4 @@
+import { h264OutputProfile } from './stream-capabilities';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
@@ -115,6 +116,7 @@ export async function startNativeHlsTranscode(options: {
   burnSubtitleIndex?: number;
   startSeconds?: number;
   copyVideo?: boolean;
+  h264Profile?: string;
   maxWidth?: number;
   maxHeight?: number;
 }): Promise<ActiveStreamSession> {
@@ -126,7 +128,7 @@ export async function startNativeHlsTranscode(options: {
   const sourceRev = (options.file as NativeMediaFileRow & { source_revision?: number }).source_revision || 1;
   const sessionKey = JSON.stringify([
     options.file.id, sourceRev, options.profileId, options.audioIndex, options.burnSubtitleIndex, startSec, Boolean(options.copyVideo),
-    options.maxWidth ?? null, options.maxHeight ?? null,
+    options.maxWidth ?? null, options.maxHeight ?? null, options.h264Profile ?? null,
     acceleration, settings.vaapiDevice, settings.hdrToneMapping, settings.burnInImageSubtitles,
     settings.maxTranscodeBitrateMbps, settings.hlsSegmentSeconds, settings.transcodePreset, settings.transcodeTempDir,
   ]);
@@ -212,6 +214,7 @@ export async function startNativeHlsTranscode(options: {
 
     args.push('-c:v', encoder);
     if (encoder !== 'copy') {
+      if (options.h264Profile) args.push('-profile:v', options.h264Profile);
       args.push('-force_key_frames', `expr:gte(t,n_forced*${settings.hlsSegmentSeconds || 4})`);
       if (encoder === 'libx264') {
         args.push('-preset', settings.transcodePreset || 'veryfast', '-pix_fmt', 'yuv420p', '-crf', '20');
@@ -474,7 +477,7 @@ export function evaluateNativeFit(
     !options?.forceTranscode &&
     !sourceExceeds &&
     supportedVideo &&
-    vCodec === 'h264' &&
+    (vCodec === 'h264' || (vCodec === 'hevc' && options?.receiver !== 'browser' && options?.receiver !== 'cast')) &&
     !(settings.hdrToneMapping && candidate.has_hdr) &&
     options?.burnSubtitleIndex === undefined;
 
@@ -661,6 +664,7 @@ export async function negotiateNativePlayback(
     burnSubtitleIndex: options?.burnSubtitleIndex,
     startSeconds: options?.startSeconds,
     copyVideo: fit.canCopyVideo,
+    h264Profile: h264OutputProfile(options?.videoCapabilities),
     maxWidth: fit.exceedsMaxDimensions ? fit.maxWidth : undefined,
     maxHeight: fit.exceedsMaxDimensions ? fit.maxHeight : undefined,
   });

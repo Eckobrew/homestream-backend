@@ -1,4 +1,5 @@
 import { withParentalControls } from '@/lib/parental-controls';
+import { forwardStreamCapabilities } from '@/lib/stream-capabilities';
 import { parseTvCapabilities } from '@/lib/tv-playback-profile';
 import { HttpRequest, HttpResponse } from '@/http';
 import { resolveProfileId } from '@/lib/profiles';
@@ -29,7 +30,7 @@ async function handleGET(request: HttpRequest) {
       const hash = itemId.slice(3);
       const season = searchParams.get('season');
       const episode = searchParams.get('episode');
-      const streamUrl = `/api/stream/download?hash=${encodeURIComponent(hash)}${season ? `&season=${season}` : ''}${episode ? `&episode=${episode}` : ''}${cast ? '&receiver=cast' : nativeTv ? '&receiver=native-tv' : ''}${canPlayHevc ? '&canPlayHevc=true' : ''}${forceTranscode ? '&forceTranscode=true' : ''}`;
+      const streamUrl = `/api/stream/download?hash=${encodeURIComponent(hash)}${season ? `&season=${season}` : ''}${episode ? `&episode=${episode}` : ''}${forwardStreamCapabilities(searchParams)}`;
       return HttpResponse.json({
         streamUrl,
         transport: 'file',
@@ -73,7 +74,7 @@ async function handleGET(request: HttpRequest) {
       }
     } catch {}
 
-    const streamUrl = `/api/stream/torrent?tmdbId=${tmdbId}&type=${type}${season ? `&season=${season}` : ''}${episode ? `&episode=${episode}` : ''}${title ? `&title=${encodeURIComponent(title)}` : ''}${cast ? '&receiver=cast' : nativeTv ? '&receiver=native-tv' : ''}${canPlayHevc ? '&canPlayHevc=true' : ''}${forceTranscode ? '&forceTranscode=true' : ''}`;
+    const streamUrl = `/api/stream/torrent?tmdbId=${tmdbId}&type=${type}${season ? `&season=${season}` : ''}${episode ? `&episode=${episode}` : ''}${title ? `&title=${encodeURIComponent(title)}` : ''}${forwardStreamCapabilities(searchParams)}`;
 
     return HttpResponse.json({
       streamUrl,
@@ -88,17 +89,17 @@ async function handleGET(request: HttpRequest) {
 
   const profileId = (await resolveProfileId(searchParams.get('userId') || request.cookies.get('homeflix_profile_id')?.value)) || 'default';
   const receiver = nativeTv ? 'native-tv' : cast ? 'cast' : searchParams.get('receiver') === 'browser' ? 'browser' : undefined;
-  const tvCapabilities = nativeTv || cast ? parseTvCapabilities(searchParams.get('videoCapabilities')) : [];
+  const tvCapabilities = parseTvCapabilities(searchParams.get('videoCapabilities'));
   if ((cast || nativeTv) && !tvCapabilities.some(capability => capability.codec === 'h264')) {
     tvCapabilities.push({ codec: 'h264', width: 1920, height: 1080, profiles: ['baseline', 'main', 'high'] });
   }
-  if ((cast || nativeTv) && canPlayHevc && !tvCapabilities.some(capability => capability.codec === 'hevc')) {
+  if ((cast || nativeTv) && !searchParams.get('videoCapabilities') && canPlayHevc && !tvCapabilities.some(capability => capability.codec === 'hevc')) {
     tvCapabilities.push({ codec: 'hevc', width: 1920, height: 1080, profiles: ['main', 'main 10'] });
   }
-  const videoCodecs = nativeTv || cast
+  const videoCodecs = nativeTv || cast || tvCapabilities.length > 0
     ? tvCapabilities.map(capability => capability.codec)
     : searchParams.get('videoCodecs')?.split(',').filter(codec => ['h264', 'hevc', 'vp8', 'vp9', 'av1'].includes(codec));
-  const audioCodecs = (searchParams.get('audioCodecs') || 'aac,mp3').split(',').filter(codec => ['aac', 'mp3', 'opus', 'flac', 'vorbis', 'ac3', 'eac3', 'dts'].includes(codec));
+  const audioCodecs = (searchParams.get('audioCodecs') ?? 'aac,mp3').split(',').filter(codec => ['aac', 'mp3', 'opus', 'flac', 'vorbis', 'ac3', 'eac3', 'dts'].includes(codec));
 
   const rawAudio = searchParams.get('audioIndex');
   const rawBurn = searchParams.get('burnSubtitleIndex');
@@ -114,7 +115,7 @@ async function handleGET(request: HttpRequest) {
     forceTranscode,
     receiver,
     videoCodecs,
-    videoCapabilities: nativeTv || cast ? tvCapabilities : undefined,
+    videoCapabilities: tvCapabilities.length ? tvCapabilities : undefined,
     audioCodecs,
     maxWidth: parsedMaxWidth,
     maxHeight: parsedMaxHeight,

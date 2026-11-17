@@ -1,3 +1,4 @@
+import { probeStreamVideo, streamVideoStrategy, canDirectStreamSource, streamAudioArguments } from '@/lib/stream-capabilities';
 import { HttpRequest, HttpResponse } from '@/http';
 import { withParentalControls } from '@/lib/parental-controls';
 import { RadarrClient } from '@/lib/radarr';
@@ -9,24 +10,6 @@ import { startConversion, ConversionCapacityError } from '@/media/conversions';
 import { spawn } from 'node:child_process';
 import path from 'path';
 import { log } from '@/log';
-
-async function probeVideoCodec(url: string): Promise<string | null> {
-  return new Promise((resolve) => {
-    const proc = spawn('ffprobe', [
-      '-v', 'error',
-      '-select_streams', 'v:0',
-      '-show_entries', 'stream=codec_name',
-      '-of', 'default=noprint_wrappers=1:nokey=1',
-      '-rw_timeout', '10000000',
-      url
-    ]);
-    let out = '';
-    proc.stdout.on('data', d => { out += d.toString(); });
-    const timer = setTimeout(() => { proc.kill('SIGKILL'); resolve(null); }, 4000);
-    proc.once('close', () => { clearTimeout(timer); resolve(out.trim().toLowerCase() || null); });
-    proc.once('error', () => { clearTimeout(timer); resolve(null); });
-  });
-}
 
 async function probeDuration(url: string): Promise<number> {
   return new Promise((resolve) => {
@@ -54,12 +37,10 @@ async function handleGET(request: HttpRequest) {
     const seasonParam = searchParams.get('season');
     const episodeParam = searchParams.get('episode');
     const titleParam = searchParams.get('title') || '';
-    const receiver = searchParams.get('receiver');
     const forceTranscode = searchParams.get('forceTranscode') === 'true' || searchParams.get('transcode') === '1';
-    const canPlayHevc = searchParams.get('canPlayHevc') === 'true';
     const sourceParam = searchParams.get('source') === '1';
     const probeParam = searchParams.get('probe') === '1';
-    const startSec = parseFloat(searchParams.get('start') || '0');
+    const startSec = parseFloat(searchParams.get('start') || String(Number(searchParams.get('startTimeTicks') || 0) / 10000000));
 
     let torrentSource: string | Buffer | null = magnetParam || null;
 
@@ -168,10 +149,9 @@ async function handleGET(request: HttpRequest) {
       );
     }
 
-    const isDirectWebPlayable = !forceTranscode && receiver !== 'cast' && receiver !== 'native-tv' && (ext === '.mp4' || ext === '.webm');
     const nativeRequest = searchParams.get('native') === '1' && !forceTranscode;
 
-    if (!probeParam && (isDirectWebPlayable || nativeRequest)) {
+    if (!probeParam && nativeRequest) {
       return torrentStreamFileResponse(
         request,
         targetFile,
@@ -192,6 +172,11 @@ async function handleGET(request: HttpRequest) {
       return HttpResponse.json({ durationSeconds: await probeDuration(sourceUrl) });
     }
 
+    const sourceVideo = await probeStreamVideo(sourceUrl);
+    if (startSec === 0 && canDirectStreamSource(sourceVideo, searchParams, ext)) {
+      return torrentStreamFileResponse(request, targetFile, types[ext] || 'video/mp4',
+        () => active.acquireReader(), () => active.releaseReader(targetFile));
+    }
     if (request.method === 'HEAD') {
       return new HttpResponse(null, {
         status: 200,
@@ -203,7 +188,7 @@ async function handleGET(request: HttpRequest) {
       });
     }
 
-    const detectedCodec = await probeVideoCodec(sourceUrl);
+    const videoStrategy = streamVideoStrategy(sourceVideo, searchParams);
 
     const ffmpegArgs: string[] = ['-hide_banner', '-loglevel', 'error'];
 
@@ -214,21 +199,9 @@ async function handleGET(request: HttpRequest) {
     ffmpegArgs.push('-rw_timeout', '120000000', '-i', sourceUrl);
     ffmpegArgs.push('-map', '0:v:0', '-map', '0:a:0?', '-sn', '-dn');
 
-    if (forceTranscode) {
-      ffmpegArgs.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p');
-    } else if (detectedCodec === 'h264') {
-      ffmpegArgs.push('-c:v', 'copy');
-    } else if (detectedCodec === 'hevc' && canPlayHevc) {
-      ffmpegArgs.push('-c:v', 'copy', '-tag:v', 'hvc1');
-    } else if (detectedCodec === 'hevc' && !canPlayHevc) {
-      ffmpegArgs.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p');
-    } else if (!detectedCodec && ext === '.mkv') {
-      ffmpegArgs.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p');
-    } else {
-      ffmpegArgs.push('-c:v', 'copy');
-    }
+    ffmpegArgs.push(...videoStrategy.args);
 
-    ffmpegArgs.push('-c:a', 'aac', '-b:a', '192k', '-ac', '2');
+    ffmpegArgs.push(...streamAudioArguments(sourceVideo, searchParams));
 
     ffmpegArgs.push(
       '-f',

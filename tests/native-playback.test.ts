@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync, execFileSync } from 'node:child_process';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -37,6 +37,7 @@ test('native video serves byte ranges and mobile HLS segments across remux and t
     stateDatabase().prepare(
       'INSERT INTO native_media_files (id, item_id, file_path, file_size, video_codec, audio_codec, streams_json, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
     ).run('native-file', 'nat-movie', file, source.length, 'h264', 'aac', JSON.stringify([
+      { codec_type: 'video', index: 0, profile: 'High', width: 160, height: 90 },
       { codec_type: 'audio', index: 1, tags: { title: 'Original', language: 'eng' } },
       { codec_type: 'audio', index: 2, tags: { title: 'Alternate', language: 'spa' } },
     ]), new Date().toISOString());
@@ -51,6 +52,27 @@ test('native video serves byte ranges and mobile HLS segments across remux and t
     };
     const delivery = await negotiate('audioCodecs=aac');
     assert.equal(delivery.transport, 'file');
+    const bounded = (profiles: string[]) => encodeURIComponent(JSON.stringify([
+      { codec: 'h264', width: 1280, height: 720, profiles },
+    ]));
+    const nativePhone = await negotiate(`audioCodecs=aac&videoCapabilities=${bounded(['high'])}`);
+    assert.equal(nativePhone.transport, 'file');
+    const browser = await negotiate(`receiver=browser&audioCodecs=aac&videoCapabilities=${bounded(['high'])}`);
+    assert.equal(browser.transport, 'file');
+    const unsupportedProfile = await negotiate(`audioCodecs=aac&videoCapabilities=${bounded(['baseline'])}`);
+    assert.equal(unsupportedProfile.transport, 'HLS', 'phone profile bounds must reach the backend');
+    const profileManifest = new URL(unsupportedProfile.streamUrl, origin);
+    const profilePlaylist = await (await fetch(`${base}native/stream${profileManifest.search}`, { headers })).text();
+    const profileSegment = profilePlaylist.split('\n').find((line: string) => line.startsWith('?hls='));
+    assert.ok(profileSegment);
+    const profileBytes = await (await fetch(new URL(profileSegment, `${base}native/stream`), { headers })).arrayBuffer();
+    const profileFile = join(directory, 'baseline.ts');
+    await writeFile(profileFile, Buffer.from(profileBytes));
+    const outputProfile = execFileSync('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=profile', '-of', 'default=nw=1:nk=1', profileFile], { encoding: 'utf8' });
+    assert.match(outputProfile, /Baseline/);
+
+    for (const session of listActiveNativeStreams()) stopNativeStreamSession(session.id);
+
     assert.deepEqual(delivery.audioTracks.map((track: { title: string }) => track.title), ['Original', 'Alternate']);
     const direct = `${base}native/stream?fileId=native-file`;
     const range = { ...headers, Range: 'bytes=-32' };
