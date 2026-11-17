@@ -131,7 +131,10 @@ try {
   await api('subtitles?itemId=episode&mediaSourceId=../secret&index=0', 400);
   await api('subtitles?itemId=episode&index=1oops', 400);
   for (const route of ['stream/download', 'youtube/stream-local']) {
-    const url = `${origin}/api/mobile/v1/${route}?path=clip.mp4`;
+    // This text fixture tests raw byte delivery. Decoder negotiation is covered
+    // with real media in native-playback and torrent integration tests.
+    const source = route === 'stream/download' ? '&source=1' : '';
+    const url = `${origin}/api/mobile/v1/${route}?path=clip.mp4${source}`;
     for (const [range, expected, content] of [['bytes=2-5', 206, '2345'], ['bytes=-4', 206, 'cdef'], ['bytes=12-999', 206, 'cdef'], ['bytes=99-', 416, null], ['bytes=4-2', 416, null], ['bytes=0-1,4-5', 416, null]]) {
       const response = await fetch(url, { headers: { Authorization: `Bearer ${token}`, Range: range } });
       assert.equal(response.status, expected, `${route} ${range}`);
@@ -148,8 +151,8 @@ try {
 
   // Native local profile & parental controls checks
   const dob = `${new Date().getUTCFullYear() - 5}-01-01`;
-  await api('profiles', 400, { action: 'create', mode: 'local', name: 'Child', avatarId: 'fox', isKids: true, kidsDateOfBirth: '2999-01-01', parentPin: '2468' }, legacyDeviceToken);
-  const added = await api('profiles', 200, { action: 'create', mode: 'local', name: 'Child', avatarId: 'fox', isKids: true, kidsDateOfBirth: dob, parentPin: '2468' }, legacyDeviceToken);
+  await api('profiles', 400, { action: 'create', mode: 'native', name: 'Child', avatarId: 'fox', isKids: true, kidsDateOfBirth: '2999-01-01', parentPin: '2468' }, legacyDeviceToken);
+  const added = await api('profiles', 200, { action: 'create', mode: 'native', name: 'Child', avatarId: 'fox', isKids: true, kidsDateOfBirth: dob, parentPin: '2468' }, legacyDeviceToken);
   assert.equal(added.profile.kidsRating, 'PG');
   await api('profiles/select', 200, { profileId: added.profile.id }, legacyDeviceToken);
   await api('downloads', 403, undefined, legacyDeviceToken);
