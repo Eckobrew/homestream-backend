@@ -5,10 +5,11 @@ import { spawn, ChildProcess, execFile } from 'child_process';
 import { promisify } from 'util';
 import { stateDatabase } from '@/state/database';
 import { getMediaEngineSettings } from '@/lib/media-settings';
-import { ensureNativeMediaTables, NativeMediaFileRow } from '@/lib/native-media';
+import { activeLibraryFileClause, ensureNativeMediaTables, NativeMediaFileRow, resolveTrickplayUrlForFile } from '@/lib/native-media';
 import { MediaAudioTrack, MediaVersion, SkipSegment, SubtitleTrack } from '@/types';
 import { log } from '@/log';
 import { getNativeHardwareAcceleration, hardwareDeviceArgs, hardwareEncoders, hardwareVideoFilters } from './native-hardware';
+import type { TvVideoCapability } from './tv-playback-profile';
 
 const execFileAsync = promisify(execFile);
 
@@ -82,17 +83,18 @@ export function stopNativeStreamSession(sessionId: string): boolean {
 export function resolveNativeFileByItemOrFileId(targetId: string, versionId?: string): NativeMediaFileRow | null {
   ensureNativeMediaTables();
   const db = stateDatabase();
+  const libFile = activeLibraryFileClause('f');
   if (versionId) {
     const byVer = db.prepare(
-      'SELECT * FROM native_media_files WHERE id = ? AND (item_id = ? OR episode_id = ? OR id = ?)'
-    ).get(versionId, targetId, targetId, targetId) as NativeMediaFileRow | undefined;
-    if (byVer) return byVer;
+      `SELECT f.* FROM native_media_files f WHERE f.id = ? AND (f.item_id = ? OR f.episode_id = ? OR f.id = ?) AND ${libFile.clause}`
+    ).get(versionId, targetId, targetId, targetId, ...libFile.params) as NativeMediaFileRow | undefined;
+    return byVer || null;
   }
-  const byFile = db.prepare('SELECT * FROM native_media_files WHERE id = ?').get(targetId) as NativeMediaFileRow | undefined;
+  const byFile = db.prepare(`SELECT f.* FROM native_media_files f WHERE f.id = ? AND ${libFile.clause}`).get(targetId, ...libFile.params) as NativeMediaFileRow | undefined;
   if (byFile) return byFile;
-  const byEp = db.prepare('SELECT * FROM native_media_files WHERE episode_id = ? LIMIT 1').get(targetId) as NativeMediaFileRow | undefined;
+  const byEp = db.prepare(`SELECT f.* FROM native_media_files f WHERE f.episode_id = ? AND ${libFile.clause} LIMIT 1`).get(targetId, ...libFile.params) as NativeMediaFileRow | undefined;
   if (byEp) return byEp;
-  const byItem = db.prepare('SELECT * FROM native_media_files WHERE item_id = ? LIMIT 1').get(targetId) as NativeMediaFileRow | undefined;
+  const byItem = db.prepare(`SELECT f.* FROM native_media_files f WHERE f.item_id = ? AND ${libFile.clause} LIMIT 1`).get(targetId, ...libFile.params) as NativeMediaFileRow | undefined;
   return byItem || null;
 }
 
@@ -104,14 +106,18 @@ export async function startNativeHlsTranscode(options: {
   burnSubtitleIndex?: number;
   startSeconds?: number;
   copyVideo?: boolean;
+  maxWidth?: number;
+  maxHeight?: number;
 }): Promise<ActiveStreamSession> {
   const settings = getMediaEngineSettings();
   const acceleration = settings.hwAccel === 'auto'
     ? (options.copyVideo ? 'none' : (await getNativeHardwareAcceleration(settings.vaapiDevice))[0] || 'none')
     : settings.hwAccel;
   const startSec = options.startSeconds && options.startSeconds > 0 ? Math.floor(options.startSeconds) : 0;
+  const sourceRev = (options.file as NativeMediaFileRow & { source_revision?: number }).source_revision || 1;
   const sessionKey = JSON.stringify([
-    options.file.id, options.profileId, options.audioIndex, options.burnSubtitleIndex, startSec, Boolean(options.copyVideo),
+    options.file.id, sourceRev, options.profileId, options.audioIndex, options.burnSubtitleIndex, startSec, Boolean(options.copyVideo),
+    options.maxWidth ?? null, options.maxHeight ?? null,
     acceleration, settings.vaapiDevice, settings.hdrToneMapping, settings.burnInImageSubtitles,
     settings.maxTranscodeBitrateMbps, settings.hlsSegmentSeconds, settings.transcodePreset, settings.transcodeTempDir,
   ]);
@@ -123,6 +129,12 @@ export async function startNativeHlsTranscode(options: {
     return existing;
   }
   if (existing) stopNativeStreamSession(sessionId);
+
+  const running = [...activeSessions.values()].filter((s) => s.process && s.process.exitCode === null && !s.process.killed);
+  if (running.length >= 4) {
+    running.sort((a, b) => a.lastAccessAt - b.lastAccessAt);
+    stopNativeStreamSession(running[0].id);
+  }
 
   const dir = path.join(settings.transcodeTempDir || '/tmp/homestream-transcode', sessionId);
   fs.mkdirSync(dir, { recursive: true });
@@ -151,6 +163,11 @@ export async function startNativeHlsTranscode(options: {
     }
   }
 
+  if (options.maxWidth || options.maxHeight) {
+    const maxW = options.maxWidth || 3840;
+    const maxH = options.maxHeight || 2160;
+    filters.push(`scale='min(${maxW},iw)':'min(${maxH},ih)':force_original_aspect_ratio=decrease:force_divisible_by=2`);
+  }
   const bitrateMbps = settings.maxTranscodeBitrateMbps || 20;
   const videoCodec = options.copyVideo && filters.length === 0 && bitmapBurnIdx === undefined
     ? 'copy' : acceleration === 'none' ? 'libx264' : hardwareEncoders[acceleration] || 'libx264';
@@ -243,16 +260,17 @@ export function getNativeTranscodeSession(sessionId: string): ActiveStreamSessio
 
 export function listNativeSubtitlesForFile(file: NativeMediaFileRow): SubtitleTrack[] {
   const tracks: SubtitleTrack[] = [];
+  const settings = getMediaEngineSettings();
   try {
     const streams = JSON.parse(file.streams_json || '[]') as Array<Record<string, unknown>>;
     for (const s of streams) {
       if (s.codec_type !== 'subtitle') continue;
       const index = Number(s.index);
       const codec = String(s.codec_name || '').toLowerCase();
+      const tags = (s.tags || {}) as Record<string, unknown>;
+      const disp = (s.disposition || {}) as Record<string, unknown>;
       // Text-based subtitles can be extracted to WebVTT directly
       if (['subrip', 'srt', 'ass', 'ssa', 'webvtt', 'mov_text'].includes(codec)) {
-        const tags = (s.tags || {}) as Record<string, unknown>;
-        const disp = (s.disposition || {}) as Record<string, unknown>;
         tracks.push({
           id: `${file.id}-${index}`,
           index,
@@ -261,6 +279,18 @@ export function listNativeSubtitlesForFile(file: NativeMediaFileRow): SubtitleTr
           isDefault: Boolean(disp.default),
           isForced: Boolean(disp.forced),
           src: `/api/native/stream?subtitle=${encodeURIComponent(file.id)}&index=${index}`,
+        });
+      } else if (settings.burnInImageSubtitles && ['hdmv_pgs_subtitle', 'pgssub', 'dvd_subtitle', 'vobsub', 'dvb_subtitle'].includes(codec)) {
+        const label = String(tags.title || tags.language || `Track ${index}`);
+        tracks.push({
+          id: `${file.id}-${index}`,
+          index,
+          title: `${label} (Burn-in)`,
+          language: String(tags.language || 'und'),
+          isDefault: Boolean(disp.default),
+          isForced: Boolean(disp.forced),
+          burnIn: true,
+          src: '',
         });
       }
     }
@@ -322,20 +352,22 @@ export async function extractNativeSubtitleVtt(file: NativeMediaFileRow, index?:
   const settings = getMediaEngineSettings();
   const cacheDir = path.join(settings.artworkCacheDir || '/app/data/artwork', 'subtitles');
   fs.mkdirSync(cacheDir, { recursive: true });
+  const sourceRev = (file as NativeMediaFileRow & { source_revision?: number }).source_revision || 1;
 
   if (sidecar) {
     const safeName = path.basename(sidecar);
     const full = path.join(path.dirname(file.file_path), safeName);
     if (!fs.existsSync(full)) return null;
     if (full.toLowerCase().endsWith('.vtt')) return fs.readFileSync(full, 'utf8');
-    const cached = path.join(cacheDir, `${file.id}-${safeName}.vtt`);
+    const sidecarMtime = Math.floor(fs.statSync(full).mtimeMs);
+    const cached = path.join(cacheDir, `${file.id}-r${sourceRev}-${sidecarMtime}-${safeName}.vtt`);
     if (fs.existsSync(cached)) return fs.readFileSync(cached, 'utf8');
     await execFileAsync('ffmpeg', ['-y', '-i', full, '-f', 'webvtt', cached], { timeout: 30000 });
     return fs.existsSync(cached) ? fs.readFileSync(cached, 'utf8') : null;
   }
 
   if (index === undefined || Number.isNaN(index)) return null;
-  const cached = path.join(cacheDir, `${file.id}-${index}.vtt`);
+  const cached = path.join(cacheDir, `${file.id}-r${sourceRev}-${index}.vtt`);
   if (fs.existsSync(cached)) return fs.readFileSync(cached, 'utf8');
 
   const pending = inFlightSubtitles.get(cached);
@@ -357,6 +389,95 @@ export async function extractNativeSubtitleVtt(file: NativeMediaFileRow, index?:
   return job;
 }
 
+function evaluateNativeFit(
+  candidate: NativeMediaFileRow,
+  options: {
+    forceTranscode?: boolean;
+    receiver?: string;
+    videoCodecs?: string[];
+    videoCapabilities?: TvVideoCapability[];
+    audioCodecs?: string[];
+    maxWidth?: number;
+    maxHeight?: number;
+    audioIndex?: number;
+    burnSubtitleIndex?: number;
+  } | undefined,
+  settings: ReturnType<typeof getMediaEngineSettings>
+) {
+  const ext = path.extname(candidate.file_path).toLowerCase();
+  const vCodec = (candidate.video_codec || '').toLowerCase();
+  const aCodec = (candidate.audio_codec || '').toLowerCase();
+  let videoWidth = 0;
+  let videoHeight = 0;
+  let videoProfile = '';
+  try {
+    const parsedStreams = JSON.parse(candidate.streams_json || '[]') as Array<Record<string, unknown>>;
+    const vStream = parsedStreams.find((s) => s.codec_type === 'video');
+    videoWidth = Number(vStream?.width) || 0;
+    videoHeight = Number(vStream?.height) || 0;
+    videoProfile = String(vStream?.profile || '').toLowerCase().trim();
+  } catch {}
+  if (!videoWidth || !videoHeight) {
+    const resMap: Record<string, [number, number]> = { '4K': [3840, 2160], '1080p': [1920, 1080], '720p': [1280, 720], '480p': [854, 480] };
+    const fallback = resMap[candidate.resolution];
+    if (fallback) {
+      videoWidth = videoWidth || fallback[0];
+      videoHeight = videoHeight || fallback[1];
+    }
+  }
+  const sourceCap = options?.videoCapabilities?.find((c) => c.codec === vCodec);
+  const normalizedProfile = videoProfile.replace(/^constrained\s+/, '');
+  const profileSupported = !sourceCap?.profiles?.length || !normalizedProfile
+    || sourceCap.profiles.some((p) => p.toLowerCase() === videoProfile || p.toLowerCase() === normalizedProfile);
+  const supportedVideo = (!options?.videoCodecs || options.videoCodecs.includes(vCodec)) && profileSupported;
+  const supportedAudio = !aCodec || !options?.audioCodecs || options.audioCodecs.includes(aCodec);
+  const containerSupported = ext === '.mp4' || ext === '.m4v' || ext === '.webm'
+    || (ext === '.mkv' && vCodec === 'h264' && options?.receiver !== 'browser' && options?.receiver !== 'cast');
+
+  const sourceMaxW = [options?.maxWidth, sourceCap?.width].filter((v): v is number => typeof v === 'number' && v > 0).reduce((a, b) => Math.min(a, b), Infinity);
+  const sourceMaxH = [options?.maxHeight, sourceCap?.height].filter((v): v is number => typeof v === 'number' && v > 0).reduce((a, b) => Math.min(a, b), Infinity);
+  const sourceExceeds = Boolean((Number.isFinite(sourceMaxW) && videoWidth > sourceMaxW) || (Number.isFinite(sourceMaxH) && videoHeight > sourceMaxH));
+
+  const canDirectPlay =
+    settings.allowDirectPlay &&
+    !options?.forceTranscode &&
+    !sourceExceeds &&
+    options?.burnSubtitleIndex === undefined &&
+    options?.audioIndex === undefined &&
+    containerSupported &&
+    supportedVideo &&
+    supportedAudio;
+
+  const canCopyVideo =
+    settings.allowDirectStream &&
+    !options?.forceTranscode &&
+    !sourceExceeds &&
+    supportedVideo &&
+    vCodec === 'h264' &&
+    !(settings.hdrToneMapping && candidate.has_hdr) &&
+    options?.burnSubtitleIndex === undefined;
+
+  const outputCodec = (canDirectPlay || canCopyVideo) ? vCodec : 'h264';
+  const outputCap = options?.videoCapabilities?.find((c) => c.codec === outputCodec);
+  const effW = [options?.maxWidth, outputCap?.width].filter((v): v is number => typeof v === 'number' && v > 0).reduce((a, b) => Math.min(a, b), Infinity);
+  const effH = [options?.maxHeight, outputCap?.height].filter((v): v is number => typeof v === 'number' && v > 0).reduce((a, b) => Math.min(a, b), Infinity);
+  const maxWidth = Number.isFinite(effW) ? effW : undefined;
+  const maxHeight = Number.isFinite(effH) ? effH : undefined;
+  const exceedsMaxDimensions = Boolean((maxWidth && videoWidth > maxWidth) || (maxHeight && videoHeight > maxHeight));
+
+  const reasons: string[] = [];
+  if (options?.forceTranscode) reasons.push('forced');
+  if (exceedsMaxDimensions) reasons.push('exceeds-dimensions');
+  if (!supportedVideo) reasons.push('unsupported-video-codec');
+  if (!supportedAudio) reasons.push('unsupported-audio-codec');
+  if (!containerSupported) reasons.push('unsupported-container');
+  if (options?.burnSubtitleIndex !== undefined) reasons.push('burn-subtitles');
+  if (options?.audioIndex !== undefined) reasons.push('audio-track-switch');
+  if (settings.hdrToneMapping && candidate.has_hdr) reasons.push('hdr-tonemap');
+
+  return { ext, canDirectPlay, canCopyVideo, maxWidth, maxHeight, exceedsMaxDimensions, videoWidth, videoHeight, transcodeReasons: reasons.join(', ') };
+}
+
 export async function negotiateNativePlayback(
   itemId: string,
   profileId: string,
@@ -365,7 +486,10 @@ export async function negotiateNativePlayback(
     forceTranscode?: boolean;
     receiver?: string;
     videoCodecs?: string[];
+    videoCapabilities?: TvVideoCapability[];
     audioCodecs?: string[];
+    maxWidth?: number;
+    maxHeight?: number;
     audioIndex?: number;
     burnSubtitleIndex?: number;
     startSeconds?: number;
@@ -373,6 +497,12 @@ export async function negotiateNativePlayback(
 ): Promise<{
   streamUrl: string;
   isTranscoding: boolean;
+  playMethod?: 'DirectPlay' | 'DirectStream' | 'Transcode';
+  resolution?: string;
+  selectedVersionId?: string;
+  sourceVideoCodec?: string;
+  sourceAudioCodec?: string;
+  transcodeReasons?: string;
   contentType?: string;
   durationSeconds?: number;
   totalDurationTicks?: number;
@@ -384,14 +514,34 @@ export async function negotiateNativePlayback(
   error?: string;
 }> {
   ensureNativeMediaTables();
-  const file = resolveNativeFileByItemOrFileId(itemId, options?.versionId);
+  const db = stateDatabase();
+  const settings = getMediaEngineSettings();
+  const libFile = activeLibraryFileClause('f');
+  const explicitPinned = Boolean(options?.versionId || itemId.startsWith('nat-f-'));
+  let file = resolveNativeFileByItemOrFileId(itemId, options?.versionId);
+
+  const siblingFiles = file
+    ? (db.prepare(`SELECT f.* FROM native_media_files f WHERE f.item_id = ? AND COALESCE(f.episode_id, '') = COALESCE(?, '') AND ${libFile.clause}`).all(file.item_id, file.episode_id, ...libFile.params) as unknown as NativeMediaFileRow[])
+    : (db.prepare(`SELECT f.* FROM native_media_files f WHERE (f.item_id = ? OR f.episode_id = ? OR f.id = ?) AND ${libFile.clause}`).all(itemId, itemId, itemId, ...libFile.params) as unknown as NativeMediaFileRow[]);
+
+  if (!explicitPinned && siblingFiles.length > 0) {
+    const existingSiblings = siblingFiles.filter((f) => fs.existsSync(f.file_path));
+    if (existingSiblings.length > 0) {
+      const scored = existingSiblings
+        .map((f) => {
+          const fit = evaluateNativeFit(f, options, settings);
+          const score = (fit.canDirectPlay ? 1000 : fit.canCopyVideo ? 500 : 100) + Math.min(fit.videoHeight, 2160) / 100;
+          return { f, score };
+        })
+        .sort((a, b) => b.score - a.score);
+      file = scored[0].f;
+    }
+  }
+
   if (!file || !fs.existsSync(file.file_path)) {
     return { streamUrl: '', isTranscoding: false, subtitles: [], error: 'Native media file not found' };
   }
 
-  const settings = getMediaEngineSettings();
-  const db = stateDatabase();
-  const siblingFiles = db.prepare('SELECT id, version_label, resolution, video_codec, audio_codec, file_size FROM native_media_files WHERE item_id = ? AND COALESCE(episode_id, \'\') = COALESCE(?, \'\')').all(file.item_id, file.episode_id) as unknown as NativeMediaFileRow[];
   const versions: MediaVersion[] | undefined = siblingFiles.length > 1
     ? siblingFiles.map((f) => ({
         id: f.id,
@@ -406,14 +556,13 @@ export async function negotiateNativePlayback(
   let skipSegments: SkipSegment[] | undefined;
   if (settings.enableSkipIntroCredits) {
     try {
-      const parsed = JSON.parse(file.chapters_json || '[]') as SkipSegment[];
+      const manualRaw = (file as NativeMediaFileRow & { manual_skip_json?: string | null }).manual_skip_json;
+      const parsed = JSON.parse(manualRaw || file.chapters_json || '[]') as SkipSegment[];
       if (parsed.length > 0) skipSegments = parsed;
     } catch {}
   }
 
-  const trickplayUrl = file.trickplay_vtt_path
-    ? `/api/native/stream?trickplay=${encodeURIComponent(file.id)}&asset=trickplay.vtt`
-    : undefined;
+  const trickplayUrl = resolveTrickplayUrlForFile(file as NativeMediaFileRow & { source_revision?: number });
   const subtitles = listNativeSubtitlesForFile(file);
   const audioTracks = nativeAudioTracks(file);
   const preferredTrack = audioTracks.find(track => track.language?.toLowerCase() === settings.defaultAudioLanguage?.toLowerCase());
@@ -422,27 +571,11 @@ export async function negotiateNativePlayback(
     return { streamUrl: '', isTranscoding: false, subtitles, audioTracks, error: 'Audio track not found' };
   }
 
-  const ext = path.extname(file.file_path).toLowerCase();
-  const vCodec = (file.video_codec || '').toLowerCase();
-  const aCodec = (file.audio_codec || '').toLowerCase();
-  const supportedVideo = !options?.videoCodecs || options.videoCodecs.includes(vCodec);
-  const supportedAudio = !aCodec || !options?.audioCodecs || options.audioCodecs.includes(aCodec);
-  const containerSupported = ext === '.mp4' || ext === '.m4v' || ext === '.webm'
-    || (ext === '.mkv' && vCodec === 'h264' && options?.receiver !== 'browser' && options?.receiver !== 'cast');
-
-  const canDirectPlay =
-    settings.allowDirectPlay &&
-    !options?.forceTranscode &&
-    options?.burnSubtitleIndex === undefined &&
-    audioIndex === undefined &&
-    containerSupported &&
-    supportedVideo &&
-    supportedAudio;
-
+  const fit = evaluateNativeFit(file, { ...options, audioIndex }, settings);
   const totalDurationTicks = file.duration_ticks || 0;
   const durationSeconds = totalDurationTicks > 0 ? Math.round(totalDurationTicks / 10_000_000) : undefined;
 
-  if (canDirectPlay) {
+  if (fit.canDirectPlay) {
     const mimeByExt: Record<string, string> = {
       '.mp4': 'video/mp4',
       '.m4v': 'video/mp4',
@@ -454,7 +587,12 @@ export async function negotiateNativePlayback(
     return {
       streamUrl: `/api/native/stream?fileId=${encodeURIComponent(file.id)}`,
       isTranscoding: false,
-      contentType: mimeByExt[ext] || 'video/mp4',
+      playMethod: 'DirectPlay',
+      resolution: file.resolution || (fit.videoHeight ? `${fit.videoHeight}p` : undefined),
+      selectedVersionId: file.id,
+      sourceVideoCodec: file.video_codec || undefined,
+      sourceAudioCodec: file.audio_codec || undefined,
+      contentType: mimeByExt[fit.ext] || 'video/mp4',
       durationSeconds,
       totalDurationTicks: totalDurationTicks || undefined,
       versions,
@@ -465,14 +603,6 @@ export async function negotiateNativePlayback(
     };
   }
 
-  const canCopyVideo =
-    settings.allowDirectStream &&
-    !options?.forceTranscode &&
-    supportedVideo &&
-    vCodec === 'h264' &&
-    !(settings.hdrToneMapping && file.has_hdr) &&
-    options?.burnSubtitleIndex === undefined;
-
   const itemRow = db.prepare('SELECT title FROM native_media_items WHERE id = ?').get(file.item_id) as { title?: string } | undefined;
   const session = await startNativeHlsTranscode({
     file,
@@ -481,12 +611,24 @@ export async function negotiateNativePlayback(
     audioIndex,
     burnSubtitleIndex: options?.burnSubtitleIndex,
     startSeconds: options?.startSeconds,
-    copyVideo: canCopyVideo,
+    copyVideo: fit.canCopyVideo,
+    maxWidth: fit.exceedsMaxDimensions ? fit.maxWidth : undefined,
+    maxHeight: fit.exceedsMaxDimensions ? fit.maxHeight : undefined,
   });
+
+  const outRes = fit.exceedsMaxDimensions && fit.maxHeight
+    ? `${fit.maxHeight}p`
+    : (file.resolution || (fit.videoHeight ? `${fit.videoHeight}p` : undefined));
 
   return {
     streamUrl: `/api/native/stream?hls=${encodeURIComponent(session.id)}&segment=master.m3u8`,
     isTranscoding: true,
+    playMethod: fit.canCopyVideo ? 'DirectStream' : 'Transcode',
+    resolution: outRes,
+    selectedVersionId: file.id,
+    sourceVideoCodec: file.video_codec || undefined,
+    sourceAudioCodec: file.audio_codec || undefined,
+    transcodeReasons: fit.transcodeReasons || undefined,
     contentType: 'application/x-mpegURL',
     durationSeconds,
     totalDurationTicks: totalDurationTicks || undefined,

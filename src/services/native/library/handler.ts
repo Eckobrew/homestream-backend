@@ -1,14 +1,19 @@
 import { HttpRequest, HttpResponse } from '@/http';
 import { getMediaEngineSettings, saveMediaEngineSettings } from '@/lib/media-settings';
 import {
+  bumpNativeLibraryRevision,
   deleteNativeItem,
   editNativeItemMetadata,
   generateTrickplayForFile,
   getNativeScanStatus,
   getNativeWatchStats,
+  getTrickplayBackfillStatus,
   identifyNativeItem,
   listNativeLibraryItems,
+  refreshNativeMetadata,
   scanNativeLibraries,
+  setManualSkipSegments,
+  startTrickplayBackfill,
 } from '@/lib/native-media';
 import { listActiveNativeStreams, stopNativeStreamSession } from '@/lib/native-transcode';
 import { importJellyfinWatchHistory } from '@/lib/jellyfin-history-import';
@@ -41,12 +46,15 @@ export async function GET(request: HttpRequest) {
   const unmatchedOnly = searchParams.get('unmatched') === '1';
   const typeParam = searchParams.get('type');
   const type = typeParam === 'Movie' || typeParam === 'Series' ? typeParam : undefined;
+  const limit = Number(searchParams.get('limit') || 0) || undefined;
+  const offset = Number(searchParams.get('offset') || 0) || undefined;
 
   return HttpResponse.json({
     settings,
     hardwareAcceleration: await getNativeHardwareAcceleration(settings.vaapiDevice),
     scanStatus: getNativeScanStatus(),
-    items: listNativeLibraryItems({ type, unmatchedOnly }),
+    trickplayBackfill: getTrickplayBackfillStatus(),
+    items: listNativeLibraryItems({ type, unmatchedOnly, limit, offset }),
     activeStreams: listActiveNativeStreams(),
     stats: getNativeWatchStats(profileId),
   });
@@ -69,16 +77,27 @@ export async function POST(request: HttpRequest) {
       return HttpResponse.json({ error: 'Administrator access required' }, { status: 403 });
     }
     try {
-      return HttpResponse.json({ success: true, ...await importJellyfinWatchHistory() });
+      const overrides = (body.overrides && typeof body.overrides === 'object' && !Array.isArray(body.overrides))
+        ? Object.fromEntries(Object.entries(body.overrides as Record<string, unknown>).map(([k, v]) => [k, String(v)]))
+        : undefined;
+      return HttpResponse.json({
+        success: true,
+        ...await importJellyfinWatchHistory({ dryRun: Boolean(body.dryRun), overrides }),
+      });
     } catch (error) {
       return HttpResponse.json({ error: error instanceof Error ? error.message : 'Watch history import failed' }, { status: 400 });
     }
   }
 
   if (action === 'saveSettings') {
+    const prev = getMediaEngineSettings();
     const patch = (body.settings && typeof body.settings === 'object' ? body.settings : body) as Record<string, unknown>;
     const updated = saveMediaEngineSettings(patch);
-    return HttpResponse.json({ success: true, settings: updated });
+    bumpNativeLibraryRevision();
+    if (!prev.enableTrickplay && updated.enableTrickplay) {
+      startTrickplayBackfill();
+    }
+    return HttpResponse.json({ success: true, settings: updated, trickplayBackfill: getTrickplayBackfillStatus() });
   }
 
   if (action === 'addLibrary') {
@@ -117,7 +136,27 @@ export async function POST(request: HttpRequest) {
     const next = saveMediaEngineSettings({
       libraries: current.libraries.filter((l) => l.id !== libraryId),
     });
+    bumpNativeLibraryRevision();
     return HttpResponse.json({ success: true, settings: next });
+  }
+
+  if (action === 'refreshMetadata') {
+    const itemId = typeof body.itemId === 'string' && body.itemId.trim() ? body.itemId.trim() : undefined;
+    const result = await refreshNativeMetadata(itemId);
+    return HttpResponse.json({ success: true, ...result });
+  }
+
+  if (action === 'backfillTrickplay') {
+    const result = startTrickplayBackfill();
+    return HttpResponse.json({ success: true, ...result });
+  }
+
+  if (action === 'setSkipSegments') {
+    const fileId = String(body.fileId || '').trim();
+    const segments = Array.isArray(body.segments) ? body.segments : [];
+    if (!fileId) return HttpResponse.json({ error: 'fileId required' }, { status: 400 });
+    const ok = setManualSkipSegments(fileId, segments);
+    return ok ? HttpResponse.json({ success: true }) : HttpResponse.json({ error: 'File not found' }, { status: 404 });
   }
 
   if (action === 'scan') {

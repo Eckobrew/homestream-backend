@@ -38,7 +38,7 @@ add('accounts','GET',object({accounts:list(),profiles:list(profile),needsFirstSt
 add('accounts','POST',object({success:boolean,account:object(),accounts:list()}),{},object({action:{type:'string',enum:['bootstrap','create','set-password','set-admin','delete']},accountId:id,username:text,displayName:text,password:text,isAdmin:boolean,parentPin:{type:'string',pattern:'^\\d{4,8}$'}},['action']));
 add('native/library','GET',object({settings:object(),scanStatus:object(),items:list(),activeStreams:list(),stats:object(),hardwareAcceleration:list(text)}),{view:text,profileId:id,unmatched:natural,type:text});
 add('native/library','POST',object({success:boolean,settings:object(),scanStatus:object()}),{},object({action:text},['action']));
-add('native/stream','GET',object(),{fileId:id,itemId:id,versionId:id,hls:id,segment:text,trickplay:id,asset:text,artwork:text,subtitle:id,index:natural,sidecar:text},undefined,{binary:true});
+add('native/stream','GET',object(),{fileId:id,itemId:id,versionId:id,hls:id,segment:text,trickplay:id,rev:text,asset:text,artwork:text,subtitle:id,index:natural,sidecar:text},undefined,{binary:true});
 add('syncplay','GET',object({room:object()}),{code:text});
 add('syncplay','POST',object({success:boolean,room:object()}),{},object({action:text,code:text,itemId:id,episodeId:id,title:text,positionTicks:integer,isPaused:boolean},['action']));
 add('search','GET',object({results:list(media),isDemoMode:boolean}),{q:text});
@@ -51,7 +51,7 @@ add('playback/progress','POST',success,{},progress);
 add('request','GET',object({profiles:list(),defaultProfileId:{type:'integer'}}),{type:{type:'string',enum:['movie','tv']}});
 add('request','POST',success,{},request);
 add('preview-stream','GET',object(),{itemId:id,ticks:natural},undefined,{requiredQuery:['itemId'],binary:true});
-add('subtitles','GET',object({subtitles:list()}),{itemId:id,mediaSourceId:id,versionId:id,index:natural},undefined,{requiredQuery:['itemId']});
+add('subtitles','GET',object({subtitles:list(),subtitleMode:text}),{itemId:id,mediaSourceId:id,versionId:id,index:natural},undefined,{requiredQuery:['itemId']});
 add('trailer','GET',object({success:boolean,trailer:{anyOf:[object(),{type:'null'}]}}),{itemId:id,tmdbId:natural,type:{type:'string',enum:['movie','tv']}});
 add('stream/download','GET',object(),{hash:id,path:text,fileIndex:natural,season:natural,episode:natural,start:{type:'string',pattern:'^\\d+(\\.\\d+)?$'},transcode:{type:'string',enum:['0','1']},native:{type:'string',enum:['0','1']},source:{type:'string',enum:['0','1']},probe:{type:'string',enum:['0','1']},growing:{type:'string',enum:['0','1']}},undefined,{binary:true});
 add('stream/torrent','GET',object(),{tmdbId:natural,type:text,season:natural,episode:natural,title:text,magnet:text,forceTranscode:flag,canPlayHevc:flag,receiver:text,start:{type:'string',pattern:'^\\d+(\\.\\d+)?$'},transcode:{type:'string',enum:['0','1']},native:{type:'string',enum:['0','1']},source:{type:'string',enum:['0','1']},probe:{type:'string',enum:['0','1']}},undefined,{binary:true});

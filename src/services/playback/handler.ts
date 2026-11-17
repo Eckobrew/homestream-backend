@@ -111,14 +111,21 @@ async function handleGET(request: HttpRequest) {
     const profileId = searchParams.get('userId') || request.cookies.get('homeflix_profile_id')?.value || 'default';
     const rawAudio = searchParams.get('audioIndex');
     const rawBurn = searchParams.get('burnSubtitleIndex');
+    const rawMaxWidth = searchParams.get('maxWidth');
+    const rawMaxHeight = searchParams.get('maxHeight');
     const parsedAudio = rawAudio !== null && /^\d+$/.test(rawAudio) ? Number(rawAudio) : undefined;
     const parsedBurn = rawBurn !== null && /^\d+$/.test(rawBurn) ? Number(rawBurn) : undefined;
+    const parsedMaxWidth = rawMaxWidth !== null && /^\d+$/.test(rawMaxWidth) && Number(rawMaxWidth) > 0 ? Number(rawMaxWidth) : undefined;
+    const parsedMaxHeight = rawMaxHeight !== null && /^\d+$/.test(rawMaxHeight) && Number(rawMaxHeight) > 0 ? Number(rawMaxHeight) : undefined;
     const nativeResult = await negotiateNativePlayback(itemId, profileId, {
       versionId: searchParams.get('versionId') || undefined,
       forceTranscode,
       receiver,
       videoCodecs,
+      videoCapabilities: nativeTv || cast ? tvCapabilities : undefined,
       audioCodecs,
+      maxWidth: parsedMaxWidth,
+      maxHeight: parsedMaxHeight,
       audioIndex: parsedAudio,
       burnSubtitleIndex: parsedBurn,
       startSeconds: startTimeTicks && startTimeTicks > 0 ? Math.floor(startTimeTicks / 10_000_000) : undefined,

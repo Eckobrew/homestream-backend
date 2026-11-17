@@ -46,13 +46,15 @@ async function handleGET(request: HttpRequest) {
   const trickplayFileId = searchParams.get('trickplay');
   if (trickplayFileId) {
     const safeId = path.basename(trickplayFileId);
+    const rev = searchParams.get('rev') ? path.basename(searchParams.get('rev')!) : '';
     const asset = path.basename(searchParams.get('asset') || 'trickplay.vtt');
-    const full = path.join(settings.artworkCacheDir || '/app/data/artwork', 'trickplay', safeId, asset);
+    const root = path.join(settings.artworkCacheDir || '/app/data/artwork', 'trickplay');
+    const full = rev ? path.join(root, `${safeId}-r${rev}`, asset) : path.join(root, safeId, asset);
     if (!fs.existsSync(full)) return HttpResponse.json({ error: 'Trickplay not found' }, { status: 404 });
     const buf = fs.readFileSync(full);
     return new HttpResponse(buf, {
       status: 200,
-      headers: { 'Content-Type': mimeForFile(full), 'Cache-Control': 'public, max-age=3600' },
+      headers: { 'Content-Type': mimeForFile(full), 'Cache-Control': rev ? 'public, max-age=86400, immutable' : 'public, max-age=3600' },
     });
   }
 

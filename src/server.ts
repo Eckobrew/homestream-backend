@@ -5,6 +5,8 @@ import { ensureYouTubeTables, processNextDownload, pollAllSubscribedChannels } f
 import { ensureMusicTables, startDownloadMonitor, processNextPlaylistTrack } from './lib/music';
 import { ensureBookTables, startBooksMonitor } from './lib/books';
 import { startNativeLibraryMonitor } from './lib/native-media';
+import { getMediaEngineSettings } from './lib/media-settings';
+import { getNativeHardwareAcceleration } from './lib/native-hardware';
 const app = createApp();
 for (const signal of ['SIGTERM', 'SIGINT'] as const) process.once(signal, async () => { shutdownConversions(); await app.close(); });
 try {
@@ -17,6 +19,7 @@ try {
   ensureBookTables();
   startBooksMonitor();
   startNativeLibraryMonitor();
+  void getNativeHardwareAcceleration(getMediaEngineSettings().vaapiDevice).catch(() => {});
   startPreviewCleanup();
   processNextPlaylistTrack();
   const youtubePoller = setInterval(() => {

@@ -12,7 +12,7 @@ import { getNativeUserRequests } from '@/lib/user-requests';
 import { QBittorrentClient } from '@/lib/qbittorrent';
 import { resolveJellyfinUserId } from '@/lib/profiles';
 import { getMediaEngineSettings } from '@/lib/media-settings';
-import { getNativeResumeItems, listNativeLibraryItems } from '@/lib/native-media';
+import { getNativeBecauseYouWatched, getNativeResumeItems, listNativeLibraryItems } from '@/lib/native-media';
 import {
   MOCK_HERO_ITEM,
   MOCK_CONTINUE_WATCHING,
@@ -126,11 +126,9 @@ async function handleGET(request: HttpRequest) {
     const [resumeItems, latestMovies, latestSeries, topRated] = useNative
       ? [
           getNativeResumeItems(targetUserId || 'default', 15),
-          listNativeLibraryItems({ type: 'Movie' }).slice(0, 15),
-          listNativeLibraryItems({ type: 'Series' }).slice(0, 15),
-          [...listNativeLibraryItems({ type: 'Movie' }), ...listNativeLibraryItems({ type: 'Series' })]
-            .sort((a, b) => (b.communityRating || 0) - (a.communityRating || 0))
-            .slice(0, 15),
+          listNativeLibraryItems({ type: 'Movie', sort: 'recent', limit: 15 }),
+          listNativeLibraryItems({ type: 'Series', sort: 'recent', limit: 15 }),
+          listNativeLibraryItems({ sort: 'rating', limit: 15 }),
         ]
       : await Promise.all([
           jellyfin.getResumeItems(),
@@ -298,11 +296,24 @@ async function handleGET(request: HttpRequest) {
       });
     }
 
+    if (useNative) {
+      const byw = getNativeBecauseYouWatched(targetUserId || 'default', 15);
+      if (byw && byw.items.length > 0) {
+        sections.push({
+          id: 'because-you-watched',
+          title: `Because You Watched ${byw.seedTitle}`,
+          items: byw.items,
+        });
+      }
+    }
+
     const requestSections: MediaRowSection[] = [];
 
     if (tmdb.isConfigured()) {
       try {
         const engine = new SmartRecommendationEngine(tmdb);
+        const tmdbTimeout = <T,>(p: Promise<T>, fallback: T): Promise<T> =>
+          Promise.race([p, new Promise<T>((r) => setTimeout(() => r(fallback), 2500))]);
         const [
           nativeRequests,
           personalizedSections,
@@ -311,10 +322,10 @@ async function handleGET(request: HttpRequest) {
           popularTv,
         ] = await Promise.all([
           getNativeUserRequests(targetUserId),
-          engine.getPersonalizedSections(jellyfin, targetUserId),
-          tmdb.getTrending(),
-          tmdb.getPopularMovies(),
-          tmdb.getPopularTv(),
+          useNative ? Promise.resolve([]) : tmdbTimeout(engine.getPersonalizedSections(jellyfin, targetUserId), []),
+          tmdbTimeout(tmdb.getTrending(), []),
+          tmdbTimeout(tmdb.getPopularMovies(), []),
+          tmdbTimeout(tmdb.getPopularTv(), []),
         ]);
 
         const releasedTrending = trending.filter(isReleasedItem);

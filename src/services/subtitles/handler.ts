@@ -6,6 +6,7 @@ import { HttpRequest, HttpResponse } from '@/http';
 import { JellyfinClient } from '@/lib/jellyfin';
 import { readSession } from '@/lib/session';
 import { extractNativeSubtitleVtt, listNativeSubtitlesForFile, resolveNativeFileByItemOrFileId } from '@/lib/native-transcode';
+import { getMediaEngineSettings } from '@/lib/media-settings';
 
 
 
@@ -28,13 +29,16 @@ async function handleGET(request: HttpRequest) {
 
   if (itemId.startsWith('nat-')) {
     const fileRow = resolveNativeFileByItemOrFileId(itemId, searchParams.get('versionId') || undefined);
-    if (!fileRow) return HttpResponse.json({ subtitles: [] });
+    if (!fileRow) return HttpResponse.json({ subtitles: [], subtitleMode: getMediaEngineSettings().subtitleMode });
     if (indexStr !== null && indexStr !== undefined) {
       const vtt = await extractNativeSubtitleVtt(fileRow, parseInt(indexStr, 10));
       if (!vtt) return HttpResponse.json({ error: 'Subtitle not found' }, { status: 404 });
       return new HttpResponse(vtt, { status: 200, headers: { 'Content-Type': 'text/vtt; charset=utf-8' } });
     }
-    return HttpResponse.json({ subtitles: listNativeSubtitlesForFile(fileRow) });
+    return HttpResponse.json({
+      subtitles: listNativeSubtitlesForFile(fileRow),
+      subtitleMode: getMediaEngineSettings().subtitleMode,
+    });
   }
 
   const jellyfin = new JellyfinClient();

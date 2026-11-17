@@ -3,6 +3,8 @@ import { timingSafeEqual } from 'crypto';
 import { readSession } from '@/lib/session';
 import { HttpRequest, HttpResponse } from '@/http';
 import { QBittorrentClient } from '@/lib/qbittorrent';
+import { getMediaEngineSettings } from '@/lib/media-settings';
+import { scanNativeLibraries } from '@/lib/native-media';
 
 
 
@@ -27,6 +29,19 @@ export async function POST(request: HttpRequest) {
     if (!['grab', 'download', 'import', 'upgrade'].includes(eventType.toLowerCase())) return HttpResponse.json({ success: true, action: 'ignored' });
     if (downloadId !== undefined && (typeof downloadId !== 'string' || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i.test(downloadId))) return HttpResponse.json({ error: 'Invalid torrent hash' }, { status: 400 });
     console.info('[Arr Webhook] Accepted media event');
+
+    const normalizedEvent = eventType.toLowerCase();
+    if (['download', 'import', 'upgrade'].includes(normalizedEvent)) {
+      const settings = getMediaEngineSettings();
+      const targetType = payload.movie ? 'movie' : (payload.series || payload.episodes || payload.episodeFile) ? 'tv' : undefined;
+      const targetLibs = settings.libraries.filter((l) => l.enabled && (!targetType || l.type === targetType));
+      for (const lib of targetLibs) {
+        void scanNativeLibraries(lib.id).catch(() => {});
+      }
+      if (!downloadId) {
+        return HttpResponse.json({ success: true, action: 'library_scan_queued', libraries: targetLibs.map((l) => l.id) });
+      }
+    }
 
     const client = new QBittorrentClient();
     if (!client.isConfigured()) {
