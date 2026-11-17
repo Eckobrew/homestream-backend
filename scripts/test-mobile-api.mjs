@@ -130,11 +130,10 @@ try {
   await api('request', 400, { mediaType: 'bad', mediaId: 1 });
   await api('subtitles?itemId=episode&mediaSourceId=../secret&index=0', 400);
   await api('subtitles?itemId=episode&index=1oops', 400);
-  for (const route of ['stream/download', 'youtube/stream-local']) {
+  for (const route of ['youtube/stream-local']) {
     // This text fixture tests raw byte delivery. Decoder negotiation is covered
     // with real media in native-playback and torrent integration tests.
-    const source = route === 'stream/download' ? '&source=1' : '';
-    const url = `${origin}/api/mobile/v1/${route}?path=clip.mp4${source}`;
+    const url = `${origin}/api/mobile/v1/${route}?path=clip.mp4`;
     for (const [range, expected, content] of [['bytes=2-5', 206, '2345'], ['bytes=-4', 206, 'cdef'], ['bytes=12-999', 206, 'cdef'], ['bytes=99-', 416, null], ['bytes=4-2', 416, null], ['bytes=0-1,4-5', 416, null]]) {
       const response = await fetch(url, { headers: { Authorization: `Bearer ${token}`, Range: range } });
       assert.equal(response.status, expected, `${route} ${range}`);
@@ -145,9 +144,9 @@ try {
     assert.equal(head.status, 206, route);
     assert.equal(head.headers.get('content-length'), '4');
   }
-  await api('stream/download?path=../outside.mp4', 403);
-  await api('stream/download?path=escape.mp4', 403);
-  await api('stream/download?start=NaN&path=clip.mp4', 400);
+  await api('stream/download?path=../outside.mp4', 404);
+  await api('stream/download?path=escape.mp4', 404);
+  await api('stream/download?start=NaN&path=clip.mp4', 404);
 
   // Native local profile & parental controls checks
   const dob = `${new Date().getUTCFullYear() - 5}-01-01`;

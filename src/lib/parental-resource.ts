@@ -98,10 +98,8 @@ export async function parentalResource(request: HttpRequest): Promise<Response> 
       isInternalNative ||
       (ticket.kind === 'stream' &&
         (target.pathname === '/api/stream/torrent' ||
-          target.pathname === '/api/stream/download' ||
           target.pathname === '/api/subtitles' ||
           target.pathname === '/api/mobile/v1/stream/torrent' ||
-          target.pathname === '/api/mobile/v1/stream/download' ||
           target.pathname === '/api/mobile/v1/subtitles'));
 
     if (

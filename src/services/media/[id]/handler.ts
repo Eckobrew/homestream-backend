@@ -2,7 +2,6 @@ import { log } from '@/log';
 import { withParentalControls } from '@/lib/parental-controls';
 import { HttpRequest, HttpResponse } from '@/http';
 import { TmdbClient } from '@/lib/tmdb';
-import { QBittorrentClient } from '@/lib/qbittorrent';
 import { resolveProfileId } from '@/lib/profiles';
 import { getStreamProgressMap } from '@/lib/stream-progress';
 import { getNativeItemById, getNativeTmdbIdMap } from '@/lib/native-media';
@@ -42,48 +41,7 @@ async function handleGET(
   const tmdb = new TmdbClient();
 
   if (id.startsWith('dl-')) {
-    const hash = id.replace('dl-', '');
-    const qb = new QBittorrentClient();
-    if (qb.isConfigured()) {
-      try {
-        const torrents = await qb.getAllActiveTorrents();
-        const torrent = torrents.find((t) => t.hash.toLowerCase() === hash.toLowerCase());
-        if (torrent) {
-          const cleanTitle = torrent.name
-            .replace(/[._]/g, ' ')
-            .replace(/\b(19\d\d|20\d\d)\b.*$/i, '')
-            .replace(/\b(1080p|720p|2160p|4k|web-dl|bluray|x264|x265|hevc|ddp\d\.\d).*$/i, '')
-            .trim();
-
-          if (tmdb.isConfigured() && cleanTitle) {
-            const searchResults = await tmdb.search(cleanTitle);
-            const matched = searchResults.find(
-              (r) =>
-                r.title.toLowerCase().includes(cleanTitle.toLowerCase()) ||
-                cleanTitle.toLowerCase().includes(r.title.toLowerCase())
-            );
-            if (matched && matched.tmdbId) {
-              const fullDetails =
-                matched.type === 'Series'
-                  ? await tmdb.getTvDetails(matched.tmdbId)
-                  : await tmdb.getMovieDetails(matched.tmdbId);
-              if (fullDetails) {
-                fullDetails.id = id;
-                fullDetails.torrentHash = hash;
-                fullDetails.isDownloading = true;
-                fullDetails.downloadProgress = Math.round(torrent.progress * 100);
-                fullDetails.downloadSpeed = torrent.dlspeed;
-                fullDetails.videoStreamUrl = `/api/stream/download?hash=${hash}`;
-                fullDetails.downloadStreamUrl = `/api/stream/download?hash=${hash}`;
-                return HttpResponse.json({ item: fullDetails });
-              }
-            }
-          }
-        }
-      } catch (err) {
-        log.warn('Failed resolving dl- torrent details:', err);
-      }
-    }
+    return HttpResponse.json({ error: 'Download playback has been removed. Open this title from search or the library.' }, { status: 410 });
   }
 
   if (tmdb.isConfigured() && (id.startsWith('seerr-') || id.startsWith('tmdb-') || /^\d+$/.test(id))) {

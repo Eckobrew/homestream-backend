@@ -2,7 +2,6 @@ import { log } from '@/log';
 import { withParentalControls } from '@/lib/parental-controls';
 import { HttpRequest, HttpResponse } from '@/http';
 import { TmdbClient } from '@/lib/tmdb';
-import { QBittorrentClient } from '@/lib/qbittorrent';
 import {
   MOCK_DISCOVERY_SEARCH_RESULTS,
   MOCK_RECENT_MOVIES,
@@ -21,7 +20,6 @@ async function handleGET(request: HttpRequest) {
   }
 
   const tmdb = new TmdbClient();
-  const qb = new QBittorrentClient();
   const localResults = searchNativeMedia(query);
   const deduplicate = (items: MediaItem[]) => {
     const seen = new Set<string>();
@@ -64,34 +62,6 @@ async function handleGET(request: HttpRequest) {
     const discovery = await tmdb.search(query);
     const results = deduplicate([...localResults, ...discovery]);
 
-    if (qb.isConfigured()) {
-      try {
-        const dlList = await qb.getStreamableDownloads();
-        if (dlList.length > 0) {
-          results.forEach((item) => {
-            if (item.source === 'native' || item.status === 'available') return;
-            const cleanTitle = (item.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-            const matchedDl = dlList.find((d) => {
-              if (!d.streamUrl || (!d.streamable && d.progressPercent === 0)) return false;
-              const cleanD = (d.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-              return cleanD === cleanTitle || (cleanD.startsWith(cleanTitle) && cleanTitle.length >= 3);
-            });
-            if (matchedDl && matchedDl.streamUrl) {
-              item.isDownloading = true;
-              item.downloadProgress = matchedDl.progressPercent;
-              item.downloadSpeed = matchedDl.downloadSpeed;
-              item.downloadEta = matchedDl.eta;
-              item.torrentHash = matchedDl.hash;
-              item.videoStreamUrl = matchedDl.streamUrl;
-              item.downloadStreamUrl = matchedDl.streamUrl;
-              item.status = 'processing';
-            }
-          });
-        }
-      } catch (qbErr) {
-        log.warn('Failed querying qBittorrent downloads during search:', qbErr);
-      }
-    }
 
     return HttpResponse.json({
       results,

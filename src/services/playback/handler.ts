@@ -28,19 +28,7 @@ async function handleGET(request: HttpRequest) {
 
   if (isDl || isVirtual) {
     if (isDl) {
-      const hash = itemId.slice(3);
-      const season = searchParams.get('season');
-      const episode = searchParams.get('episode');
-      const streamUrl = `/api/stream/download?hash=${encodeURIComponent(hash)}${season ? `&season=${season}` : ''}${episode ? `&episode=${episode}` : ''}${forwardStreamCapabilities(searchParams)}`;
-      return HttpResponse.json({
-        streamUrl,
-        transport: cast ? 'HLS' : 'file',
-        contentType: cast ? 'application/vnd.apple.mpegurl' : 'video/mp4',
-        isTranscoding: true,
-        playMethod: 'Transcode',
-        durationSeconds: 7200,
-        totalDurationTicks: 7200 * 10000000,
-      });
+      return HttpResponse.json({ error: 'Download playback has been removed. Stream this title from its TMDB entry or play it after library import.' }, { status: 410 });
     }
 
     let tmdbId = Number(searchParams.get('tmdbId') || 0);

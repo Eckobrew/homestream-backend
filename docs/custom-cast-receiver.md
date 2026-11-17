@@ -14,6 +14,6 @@ The receiver also accepts `{type:"idle",items:[{title,artwork}]}` from Android. 
 
 Verify a fresh load, Continue, reconnect while paused, seek, subtitle selection, episode autoplay, stop, and a Kids profile switch. Run the checks on Chromecast Ultra and Chromecast with Google TV HD. Check that the receiver remains idle after a profile switch and that the previous profile's media ticket is rejected.
 
-Cast torrent and download playback uses fMP4 HLS with addressable initialization and media segments. Compatible H.264/HEVC video is copied; unsupported video uses the configured encoder. The standalone torrent route still obtains verified pieces from its own BitTorrent engine. HLS avoids restarting a progressive MP4 conversion at the beginning when the receiver seeks.
+Cast torrent playback uses fMP4 HLS with addressable initialization and media segments. Compatible H.264/HEVC video is copied; unsupported video uses the configured encoder. The standalone torrent route still obtains verified pieces from its own BitTorrent engine. HLS avoids restarting a progressive MP4 conversion at the beginning when the receiver seeks.
 
 A custom receiver can also answer `{type:"playback-status-request",requestId}` with `{type:"playback-status",requestId,receiverVersion,state,playingUi,videos}`. Video diagnostics include dimensions, readiness, current position and decoded/dropped frame counts where the media element exposes them. Responses omit media URLs and credentials.

@@ -1038,22 +1038,6 @@ data class WebGetTrailerResponse(
 )
 
 @Serializable
-data class WebGetStreamDownloadQuery(
-    @SerialName("userId") val `userId`: String? = null,
-    @SerialName("hash") val `hash`: String? = null,
-    @SerialName("path") val `path`: String? = null,
-    @SerialName("fileIndex") val `fileIndex`: String? = null,
-    @SerialName("season") val `season`: String? = null,
-    @SerialName("episode") val `episode`: String? = null,
-    @SerialName("start") val `start`: String? = null,
-    @SerialName("transcode") val `transcode`: String? = null,
-    @SerialName("native") val `native`: String? = null,
-    @SerialName("source") val `source`: String? = null,
-    @SerialName("probe") val `probe`: String? = null,
-    @SerialName("growing") val `growing`: String? = null
-)
-
-@Serializable
 data class WebGetStreamTorrentQuery(
     @SerialName("userId") val `userId`: String? = null,
     @SerialName("tmdbId") val `tmdbId`: String? = null,
@@ -2302,22 +2286,6 @@ data class MobileGetTrailerQuery(
 data class MobileGetTrailerResponse(
     @SerialName("success") val `success`: Boolean? = null,
     @SerialName("trailer") val `trailer`: JsonElement? = null
-)
-
-@Serializable
-data class MobileGetStreamDownloadQuery(
-    @SerialName("userId") val `userId`: String? = null,
-    @SerialName("hash") val `hash`: String? = null,
-    @SerialName("path") val `path`: String? = null,
-    @SerialName("fileIndex") val `fileIndex`: String? = null,
-    @SerialName("season") val `season`: String? = null,
-    @SerialName("episode") val `episode`: String? = null,
-    @SerialName("start") val `start`: String? = null,
-    @SerialName("transcode") val `transcode`: String? = null,
-    @SerialName("native") val `native`: String? = null,
-    @SerialName("source") val `source`: String? = null,
-    @SerialName("probe") val `probe`: String? = null,
-    @SerialName("growing") val `growing`: String? = null
 )
 
 @Serializable

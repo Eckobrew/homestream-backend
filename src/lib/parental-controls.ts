@@ -50,7 +50,7 @@ export async function activeProfile(request: HttpRequest): Promise<UserProfile |
     return chosen || null;
   }
   const peer = peerIdentity();
-  if ((request.nextUrl.pathname.endsWith('/stream/download') || request.nextUrl.pathname.endsWith('/stream/torrent')) && request.nextUrl.searchParams.get('source') === '1' && peer?.direct && ['127.0.0.1', '::1'].includes(peer.socketIp)) {
+  if (request.nextUrl.pathname.endsWith('/stream/torrent') && request.nextUrl.searchParams.get('source') === '1' && peer?.direct && ['127.0.0.1', '::1'].includes(peer.socketIp)) {
     return null;
   }
   if (kids.length) throw new ParentalDenied('Use a paired device and select a profile');
@@ -80,7 +80,7 @@ export async function guardKidsRequest(request: HttpRequest, profile: UserProfil
   if (name === 'integrations' || name === 'music' || name.startsWith('music/') || name === 'books' || name.startsWith('books/')) {
     throw new ParentalDenied('Music, books and integration settings are unavailable in Kids mode');
   }
-  if (name === 'downloads' || name === 'downloads/manager' || name.startsWith('stream/download') || name.startsWith('stream/torrent')) {
+  if (name === 'downloads' || name === 'downloads/manager' || name.startsWith('stream/torrent')) {
     throw new ParentalDenied('Downloading torrents are unavailable in Kids mode');
   }
   if (name === 'trailer' || (name === 'request' && request.method === 'GET')) return;

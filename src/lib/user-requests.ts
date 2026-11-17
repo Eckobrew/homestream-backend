@@ -139,8 +139,8 @@ export async function getNativeUserRequests(targetUserId?: string): Promise<Medi
         downloadSpeed,
         downloadEta: etaSeconds,
         torrentHash,
-        videoStreamUrl: torrentHash ? `/api/stream/download?hash=${torrentHash}` : undefined,
-        downloadStreamUrl: torrentHash ? `/api/stream/download?hash=${torrentHash}` : undefined,
+        videoStreamUrl: status !== 'available' ? `/api/stream/torrent?tmdbId=${r.media_id}&type=${r.media_type === 'tv' ? 'tv' : 'movie'}${r.media_type === 'tv' ? '&season=1&episode=1' : ''}` : undefined,
+
         genres: [],
       });
     }

@@ -265,23 +265,6 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         return execute(url.build().toString(), "GET", null, null)
     }
 
-    fun `web_get_stream_download`(query: WebGetStreamDownloadQuery, range: String? = null): okhttp3.Response {
-        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("stream").addPathSegment("download")
-        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
-        query.`hash`?.let { url.addQueryParameter("hash", it.toString()) }
-        query.`path`?.let { url.addQueryParameter("path", it.toString()) }
-        query.`fileIndex`?.let { url.addQueryParameter("fileIndex", it.toString()) }
-        query.`season`?.let { url.addQueryParameter("season", it.toString()) }
-        query.`episode`?.let { url.addQueryParameter("episode", it.toString()) }
-        query.`start`?.let { url.addQueryParameter("start", it.toString()) }
-        query.`transcode`?.let { url.addQueryParameter("transcode", it.toString()) }
-        query.`native`?.let { url.addQueryParameter("native", it.toString()) }
-        query.`source`?.let { url.addQueryParameter("source", it.toString()) }
-        query.`probe`?.let { url.addQueryParameter("probe", it.toString()) }
-        query.`growing`?.let { url.addQueryParameter("growing", it.toString()) }
-        return executeStream(url.build().toString(), "GET", null, range)
-    }
-
     fun `web_get_stream_torrent`(query: WebGetStreamTorrentQuery, range: String? = null): okhttp3.Response {
         val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("stream").addPathSegment("torrent")
         query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
@@ -951,23 +934,6 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         query.`tmdbId`?.let { url.addQueryParameter("tmdbId", it.toString()) }
         query.`type`?.let { url.addQueryParameter("type", it.toString()) }
         return execute(url.build().toString(), "GET", null, null)
-    }
-
-    fun `mobile_get_stream_download`(query: MobileGetStreamDownloadQuery, range: String? = null): okhttp3.Response {
-        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("stream").addPathSegment("download")
-        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
-        query.`hash`?.let { url.addQueryParameter("hash", it.toString()) }
-        query.`path`?.let { url.addQueryParameter("path", it.toString()) }
-        query.`fileIndex`?.let { url.addQueryParameter("fileIndex", it.toString()) }
-        query.`season`?.let { url.addQueryParameter("season", it.toString()) }
-        query.`episode`?.let { url.addQueryParameter("episode", it.toString()) }
-        query.`start`?.let { url.addQueryParameter("start", it.toString()) }
-        query.`transcode`?.let { url.addQueryParameter("transcode", it.toString()) }
-        query.`native`?.let { url.addQueryParameter("native", it.toString()) }
-        query.`source`?.let { url.addQueryParameter("source", it.toString()) }
-        query.`probe`?.let { url.addQueryParameter("probe", it.toString()) }
-        query.`growing`?.let { url.addQueryParameter("growing", it.toString()) }
-        return executeStream(url.build().toString(), "GET", null, range)
     }
 
     fun `mobile_get_stream_torrent`(query: MobileGetStreamTorrentQuery, range: String? = null): okhttp3.Response {

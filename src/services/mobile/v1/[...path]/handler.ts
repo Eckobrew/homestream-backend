@@ -28,7 +28,6 @@ import { GET as search } from '@/services/search/handler';
 import { GET as downloads, POST as downloadsPost } from '@/services/downloads/handler';
 import { GET as categories } from '@/services/categories/[type]/handler';
 import { GET as recommendations } from '@/services/media/[id]/recommendations/handler';
-import { GET as downloadStream } from '@/services/stream/download/handler';
 import { GET as torrentStream } from '@/services/stream/torrent/handler';
 import { GET as nativeStream } from '@/services/native/stream/handler';
 import * as nativeLibrary from '@/services/native/library/handler';
@@ -367,7 +366,6 @@ async function dispatchContent(request: HttpRequest, context: Context) {
   if (get && params.path.length === 3 && params.path[0] === 'media' && params.path[2] === 'recommendations') {
     return recommendations(request, { params: Promise.resolve({ id: params.path[1] }) });
   }
-  if ((get || request.method === 'HEAD') && route === 'stream/download') return downloadStream(request);
   if ((get || request.method === 'HEAD') && route === 'stream/torrent') return torrentStream(request);
   if ((get || request.method === 'HEAD') && route === 'native/stream') return nativeStream(request);
   if (get && route === 'home') return home(request);

@@ -12,7 +12,7 @@ try {
   delete changed.paths['/api/mobile/v1/playback'];
   await writeFile(candidate,JSON.stringify(changed));
   assert.notEqual(spawnSync(process.execPath,['scripts/compare-contract.mjs',base,candidate]).status,0);
-  changed.info.version='2.0.0';await writeFile(candidate,JSON.stringify(changed));
+  changed.info.version=`${Number(current.info.version.split('.')[0])+1}.0.0`;await writeFile(candidate,JSON.stringify(changed));
   assert.equal(spawnSync(process.execPath,['scripts/compare-contract.mjs',base,candidate]).status,0);
   console.info('Breaking operation removal is rejected unless the API major version increases');
 } finally {await rm(directory,{recursive:true,force:true});}

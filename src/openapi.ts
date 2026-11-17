@@ -6,10 +6,10 @@ function describe(operation: Operation, native: boolean) {
   const responses: Record<string,unknown> = { [operation.method === 'OPTIONS' ? '204' : '200']:{description:'Success',content,headers} };
   for (const [status, description] of Object.entries({400:'Invalid input',401:'Authentication required',403:'Policy denied or parent PIN required',404:'Resource not found',429:'Rate limit reached',500:'Internal failure',502:'Upstream rejected request',503:'Service unavailable or conversion capacity reached'})) responses[status] = {description,content:{'application/json':{schema:error}},headers:{...headers,...(['429','503'].includes(status) ? {'Retry-After':{schema:{type:'string'}}} : {})}};
   if (operation.path === 'subtitles') (responses['200'] as {content:Record<string,unknown>}).content['text/vtt'] = {schema:{type:'string'}};
-  if (['music/stream', 'stream/download', 'stream/torrent', 'native/stream', 'parental-resource', 'youtube/stream-video', 'youtube/stream-local'].includes(operation.path)) {
+  if (['music/stream', 'stream/torrent', 'native/stream', 'parental-resource', 'youtube/stream-video', 'youtube/stream-local'].includes(operation.path)) {
     responses['206'] = {description:'Partial content',content,headers:{...headers,'Content-Range':{schema:{type:'string'}},'Accept-Ranges':{schema:{type:'string'}},'Content-Length':{schema:{type:'string'}}}};
     responses['416'] = {description:'Invalid byte range',headers:{'Content-Range':{schema:{type:'string'}}}};
-    if (['music/stream', 'stream/download', 'stream/torrent', 'parental-resource'].includes(operation.path)) responses['425'] = {description:'Torrent pieces are not available yet',content:{'application/json':{schema:error}}};
+    if (['music/stream', 'stream/torrent', 'parental-resource'].includes(operation.path)) responses['425'] = {description:'Torrent pieces are not available yet',content:{'application/json':{schema:error}}};
   }
   if (operation.path === 'preview-stream') for (const status of ['302','307']) responses[status] = {description:'Negotiated stream redirect',headers:{Location:{schema:{type:'string'}}}};
   return {
@@ -29,4 +29,4 @@ for (const [native, operations] of [[false,webOperations],[true,mobileOperations
   const path = `${native ? '/api/mobile/v1/' : '/api/v1/'}${operation.path}`;
   (paths[path] ||= {})[operation.method.toLowerCase()] = describe(operation,native);
 }
-export const openapi = { openapi:'3.1.0',info:{title:'HomeStream API',version:'1.3.0'},servers:[{url:'/'}],paths };
+export const openapi = { openapi:'3.1.0',info:{title:'HomeStream API',version:'2.0.0'},servers:[{url:'/'}],paths };

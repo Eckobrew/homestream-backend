@@ -451,11 +451,6 @@ export class QBittorrentClient {
 
       const mainVideo = allVideoFiles[0];
 
-      // File is streamable once video exists (BuiltinPlayer handles buffering until 15MB)
-      const downloadedBytes = mainVideo ? mainVideo.progress * mainVideo.size : t.downloaded;
-      const minBuffer = 15 * 1024 * 1024; // 15MB initial buffer threshold
-      const isReadyForPlayback = Boolean(mainVideo && (mainVideo.progress === 1 || downloadedBytes >= minBuffer));
-
       let videoInfo: DownloadingTorrentFile | undefined;
       if (mainVideo) {
         videoInfo = {
@@ -481,10 +476,8 @@ export class QBittorrentClient {
         fLPiecePrio: t.f_l_piece_prio,
         category: t.category,
         tags: t.tags,
-        streamable: isReadyForPlayback,
-        streamUrl: mainVideo
-          ? `/api/stream/download?hash=${t.hash}&fileIndex=${videoInfo?.index || 0}`
-          : undefined,
+        streamable: false,
+        streamUrl: undefined,
         videoFile: videoInfo,
         mediaFiles: allVideoFiles,
       });
