@@ -106,10 +106,13 @@ async function handleGET(request: HttpRequest) {
     if (sess.startupFailed) return HttpResponse.json({ error: 'Native transcoding failed to start' }, { status: 503 });
     if (!fs.existsSync(full)) return HttpResponse.json({ error: 'Segment not ready' }, { status: 404 });
     if (asset.endsWith('.m3u8')) {
-      const text = fs.readFileSync(full, 'utf8').replace(
+      let text = fs.readFileSync(full, 'utf8').replace(
         /^(seg_\d+\.ts)$/gm,
         `?hls=${encodeURIComponent(hlsSessionId)}&segment=$1`
       );
+      if (!text.includes('#EXT-X-START:')) {
+        text = text.replace(/^#EXTM3U\r?\n/, '#EXTM3U\n#EXT-X-START:TIME-OFFSET=0,PRECISE=YES\n');
+      }
       return new HttpResponse(text, {
         status: 200,
         headers: { 'Content-Type': 'application/vnd.apple.mpegurl', 'Cache-Control': 'no-cache' },

@@ -229,6 +229,7 @@ export async function startNativeHlsTranscode(options: {
 
     args.push(
       '-c:a', 'aac', '-ac', '2', '-b:a', '192k',
+      ...(startSec > 0 ? ['-avoid_negative_ts', 'make_zero'] : []),
       '-f', 'hls', '-hls_time', String(settings.hlsSegmentSeconds || 4),
       '-hls_playlist_type', 'event', '-hls_flags', 'temp_file',
       '-hls_segment_filename', path.join(dir, 'seg_%05d.ts'), playlistPath,
@@ -527,6 +528,7 @@ export async function negotiateNativePlayback(
   durationSeconds?: number;
   totalDurationTicks?: number;
   startTimeTicks?: number;
+  resumePositionTicks?: number;
   versions?: MediaVersion[];
   skipSegments?: SkipSegment[];
   trickplayUrl?: string;
@@ -612,6 +614,13 @@ export async function negotiateNativePlayback(
   const fit = evaluateNativeFit(file, { ...options, audioIndex }, settings);
   const totalDurationTicks = file.duration_ticks || 0;
   const durationSeconds = totalDurationTicks > 0 ? Math.round(totalDurationTicks / 10_000_000) : undefined;
+  const watchTargetId = file.episode_id || file.item_id;
+  const watchRow = db
+    .prepare('SELECT position_ticks, played FROM native_watch_history WHERE profile_id = ? AND item_id = ?')
+    .get(profileId, watchTargetId) as { position_ticks?: number; played?: number } | undefined;
+  const resumePositionTicks = watchRow && !watchRow.played && Number(watchRow.position_ticks || 0) > 0
+    ? Number(watchRow.position_ticks)
+    : undefined;
 
   if (fit.canDirectPlay) {
     const mimeByExt: Record<string, string> = {
@@ -634,6 +643,7 @@ export async function negotiateNativePlayback(
       durationSeconds,
       totalDurationTicks: totalDurationTicks || undefined,
       startTimeTicks: 0,
+      ...(resumePositionTicks !== undefined ? { resumePositionTicks } : {}),
       versions,
       skipSegments,
       trickplayUrl,
@@ -672,6 +682,7 @@ export async function negotiateNativePlayback(
     durationSeconds,
     totalDurationTicks: totalDurationTicks || undefined,
     startTimeTicks: options?.startSeconds && options.startSeconds > 0 ? Math.floor(options.startSeconds) * 10_000_000 : 0,
+    ...(resumePositionTicks !== undefined ? { resumePositionTicks } : {}),
     versions,
     skipSegments,
     trickplayUrl,

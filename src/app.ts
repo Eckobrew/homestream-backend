@@ -61,7 +61,9 @@ export function createApp() {
         incoming.raw.once('aborted', () => controller.abort());
         reply.raw.once('close', onClose);
         const host = headers.get('host') || 'localhost';
-        const origin = process.env.HOMESTREAM_EXTERNAL_URL || `${incoming.protocol}://${host}`;
+        const forwardedProto = headers.get('x-forwarded-proto')?.split(',')[0]?.trim().toLowerCase();
+        const protocol = forwardedProto === 'https' || forwardedProto === 'http' ? forwardedProto : incoming.protocol;
+        const origin = process.env.HOMESTREAM_EXTERNAL_URL || `${protocol}://${host}`;
         const url = new URL(incoming.raw.url || '/', origin);
         // Canonical v1 endpoints execute the same services and policy as legacy routes.
         if (path.startsWith('/api/v1/')) url.pathname = url.pathname.replace(/^\/api\/v1\//, '/api/');
@@ -119,7 +121,9 @@ export function createApp() {
         incoming.raw.once('aborted', () => controller.abort());
         reply.raw.once('close', onClose);
         const host = headers.get('host') || 'localhost';
-        const origin = process.env.HOMESTREAM_EXTERNAL_URL || `${incoming.protocol}://${host}`;
+        const forwardedProto = headers.get('x-forwarded-proto')?.split(',')[0]?.trim().toLowerCase();
+        const protocol = forwardedProto === 'https' || forwardedProto === 'http' ? forwardedProto : incoming.protocol;
+        const origin = process.env.HOMESTREAM_EXTERNAL_URL || `${protocol}://${host}`;
         const url = new URL(incoming.raw.url || '/', origin);
         const req = new HttpRequest(url, {
           method: incoming.method,
