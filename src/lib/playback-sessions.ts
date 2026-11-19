@@ -166,6 +166,11 @@ export function sendRemoteCommand(
     createdAt: Date.now(),
   };
 
+  const queue = pendingCommands.get(targetDeviceId) || [];
+  queue.push(cmd);
+  if (queue.length > MAX_QUEUED_COMMANDS) queue.shift();
+  pendingCommands.set(targetDeviceId, queue);
+
   const listeners = subscribers.get(targetDeviceId);
   if (listeners && listeners.size > 0) {
     for (const listener of listeners) {
@@ -175,13 +180,16 @@ export function sendRemoteCommand(
         // Ignore broken listener; stream close handler cleans up.
       }
     }
-  } else {
-    const queue = pendingCommands.get(targetDeviceId) || [];
-    queue.push(cmd);
-    if (queue.length > MAX_QUEUED_COMMANDS) queue.shift();
-    pendingCommands.set(targetDeviceId, queue);
   }
   return cmd;
+}
+
+export function drainPendingCommands(deviceId: string): RemoteCommand[] {
+  const queued = pendingCommands.get(deviceId);
+  if (!queued || queued.length === 0) return [];
+  pendingCommands.delete(deviceId);
+  const cutoff = Date.now() - 20_000;
+  return queued.filter((cmd) => cmd.createdAt >= cutoff);
 }
 
 export function subscribeRemoteCommands(

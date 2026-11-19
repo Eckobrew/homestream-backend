@@ -3,6 +3,7 @@ import { isRequestOnLan } from '@/lib/network';
 import { activeProfile } from '@/lib/parental-controls';
 import { readSession } from '@/lib/session';
 import {
+  drainPendingCommands,
   getPlaybackSession,
   listProfileSessions,
   RemoteCommandType,
@@ -199,7 +200,8 @@ export async function POST(request: HttpRequest): Promise<Response> {
       isStopped: Boolean(body.isStopped),
     });
 
-    return HttpResponse.json({ localNetwork: true, recorded: true, session });
+    const commands = Boolean(body.isStopped) ? [] : drainPendingCommands(deviceId);
+    return HttpResponse.json({ localNetwork: true, recorded: true, session, commands });
   }
 
   return HttpResponse.json({ error: 'Unknown sessions endpoint' }, { status: 404 });
