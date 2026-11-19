@@ -23,6 +23,7 @@ import {
   getYouTubeAuth,
   deleteYouTubeAuth,
   getYouTubeRecommendations,
+  getYouTubeMixTracks,
 } from '@/lib/youtube';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -82,6 +83,21 @@ async function handleGET(request: HttpRequest) {
       return HttpResponse.json(data);
     } catch {
       return HttpResponse.json({ hero: null, sections: [] });
+    }
+  }
+
+  if (route === 'youtube/mix') {
+    const profileId = resolveYouTubeProfileId(request);
+    const listId = request.nextUrl.searchParams.get('listId') || '';
+    const seedId = request.nextUrl.searchParams.get('seedId') || undefined;
+    if (!listId.trim()) {
+      return HttpResponse.json({ error: 'listId required' }, { status: 400 });
+    }
+    try {
+      const data = await getYouTubeMixTracks(listId, seedId, profileId);
+      return HttpResponse.json(data);
+    } catch {
+      return HttpResponse.json({ title: 'YouTube Mix', items: [] });
     }
   }
 

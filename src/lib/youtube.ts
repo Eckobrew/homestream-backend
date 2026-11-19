@@ -182,26 +182,44 @@ async function searchYouTubeViaYtDlp(query: string, maxResults = 25, cookieFile?
         for (const e of entries) {
           if (!e || !e.id) continue;
           const idStr = String(e.id);
-          if (e._type === 'playlist' || e.ie_key === 'YoutubeTab' || !/^[a-zA-Z0-9_-]{11}$/.test(idStr)) continue;
+          const thumbs = e.thumbnails || [];
+          const thumbUrlRaw = thumbs[thumbs.length - 1]?.url || '';
+          let videoId = idStr;
+          let isMix = false;
+          let mixPlaylistId: string | undefined;
+
+          if (e._type === 'playlist' || e.ie_key === 'YoutubeTab' || !/^[a-zA-Z0-9_-]{11}$/.test(idStr)) {
+            if (/^RD/i.test(idStr)) {
+              const fromId = idStr.match(/^RD(?:[A-Z]{2})?([a-zA-Z0-9_-]{11})$/)?.[1];
+              const fromThumb = thumbUrlRaw.match(/\/vi\/([a-zA-Z0-9_-]{11})\//)?.[1];
+              const seedId = fromId || fromThumb;
+              if (!seedId) continue;
+              videoId = seedId;
+              isMix = true;
+              mixPlaylistId = idStr;
+            } else {
+              continue;
+            }
+          }
           if (results.length >= maxResults) break;
           const durationSec = Number(e.duration) || 0;
-          const thumbs = e.thumbnails || [];
-          const thumbUrl = thumbs[thumbs.length - 1]?.url || `https://i.ytimg.com/vi/${e.id}/hqdefault.jpg`;
-          const isShort = durationSec > 0 && durationSec <= 60;
+          const thumbUrl = thumbUrlRaw || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+          const isShort = !isMix && durationSec > 0 && durationSec <= 60;
 
           results.push({
-            id: String(e.id),
+            id: videoId,
             title: String(e.title || ''),
             channelId: String(e.channel_id || ''),
-            channelTitle: String(e.channel || e.uploader || ''),
+            channelTitle: String(e.channel || e.uploader || (isMix ? 'YouTube Mix' : '')),
             durationSeconds: durationSec,
-            durationFormatted: formatDuration(durationSec),
+            durationFormatted: isMix ? 'Mix' : formatDuration(durationSec),
             thumbnailUrl: thumbUrl.startsWith('//') ? `https:${thumbUrl}` : thumbUrl,
             uploadDate: e.upload_date,
             viewCount: e.view_count ? String(e.view_count) : undefined,
             description: String(e.description || ''),
             isShort,
-            isDownloaded: downloadedIds.has(e.id),
+            isDownloaded: downloadedIds.has(videoId),
+            ...(isMix ? { isMix: true, mixPlaylistId } : {}),
           });
         }
         resolve(results);
@@ -1590,4 +1608,44 @@ export async function getYouTubeRecommendations(profileId?: string, forceRefresh
   }
 
   return result;
+}
+
+/**
+ * Resolves the playable track list for a YouTube Mix / Radio playlist
+ */
+export async function getYouTubeMixTracks(
+  listId: string,
+  seedId?: string,
+  profileId?: string
+): Promise<{ title: string; items: YouTubeSearchResult[] }> {
+  ensureYouTubeTables();
+  const cleanList = listId.trim();
+  const cleanSeed =
+    (seedId && /^[a-zA-Z0-9_-]{11}$/.test(seedId.trim()) ? seedId.trim() : '') ||
+    cleanList.match(/^RD(?:[A-Z]{2})?([a-zA-Z0-9_-]{11})$/)?.[1] ||
+    '';
+
+  if (!cleanList || !/^[a-zA-Z0-9_-]+$/.test(cleanList) || !cleanSeed) {
+    return { title: 'YouTube Mix', items: [] };
+  }
+
+  let cookieFile: string | undefined;
+  if (profileId) {
+    const auth = getYouTubeAuth(profileId);
+    if (auth.connected && auth.cookiesText) {
+      try {
+        cookieFile = path.join(os.tmpdir(), `yt_cookie_${profileId}.txt`);
+        if (!fs.existsSync(cookieFile)) {
+          fs.writeFileSync(cookieFile, auth.cookiesText, 'utf-8');
+        }
+      } catch {}
+    }
+  }
+
+  const mixUrl = `https://www.youtube.com/watch?v=${cleanSeed}&list=${cleanList}`;
+  const items = await searchYouTubeViaYtDlp(mixUrl, 20, cookieFile).catch(() => []);
+  return {
+    title: items[0]?.title ? `Mix · ${items[0].title}` : 'YouTube Mix',
+    items: items.filter((item) => !item.isMix && /^[a-zA-Z0-9_-]{11}$/.test(item.id)),
+  };
 }
