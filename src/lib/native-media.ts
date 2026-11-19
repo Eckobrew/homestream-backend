@@ -620,17 +620,17 @@ async function fetchTmdbMetadata(
 async function fetchTmdbSeasonEpisodes(
   tmdbId: number,
   seasonNumber: number,
-  cache: Map<string, Map<number, { name: string; overview?: string }>>
-): Promise<Map<number, { name: string; overview?: string }>> {
+  cache: Map<string, Map<number, { name: string; overview?: string; stillPath?: string }>>
+): Promise<Map<number, { name: string; overview?: string; stillPath?: string }>> {
   const key = `${tmdbId}:${seasonNumber}`;
   const hit = cache.get(key);
   if (hit) return hit;
 
-  const map = new Map<number, { name: string; overview?: string }>();
+  const map = new Map<number, { name: string; overview?: string; stillPath?: string }>();
   const { tmdbApiKey } = getServerConfig();
   const settings = getMediaEngineSettings();
   try {
-    let episodes: Array<{ episode_number?: number; episodeNumber?: number; name?: string; overview?: string }> = [];
+    let episodes: Array<{ episode_number?: number; episodeNumber?: number; name?: string; overview?: string; still_path?: string }> = [];
     if (tmdbApiKey) {
       const params = new URLSearchParams({ api_key: tmdbApiKey, language: settings.metadataLanguage || 'en-US' });
       const res = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}/season/${seasonNumber}?${params}`, {
@@ -644,7 +644,10 @@ async function fetchTmdbSeasonEpisodes(
     for (const ep of episodes) {
       const num = ep.episode_number ?? ep.episodeNumber;
       if (typeof num === 'number' && ep.name) {
-        map.set(num, { name: ep.name, overview: ep.overview });
+        const stillPath = ep.still_path
+          ? await cacheArtworkIfNeeded(`https://image.tmdb.org/t/p/w500${ep.still_path}`, `ep-${tmdbId}-s${seasonNumber}-e${num}`)
+          : undefined;
+        map.set(num, { name: ep.name, overview: ep.overview, stillPath: stillPath || undefined });
       }
     }
   } catch {
@@ -1148,22 +1151,23 @@ export async function scanNativeLibraries(libraryId?: string): Promise<ScanStatu
       }
     }
 
-    // Backfill generic "Episode N" names from TMDB / Seerr season metadata
-    const seasonCache = new Map<string, Map<number, { name: string; overview?: string }>>();
+    // Backfill generic "Episode N" names and missing episode still images from TMDB season metadata
+    const seasonCache = new Map<string, Map<number, { name: string; overview?: string; stillPath?: string }>>();
     const genericEps = db
       .prepare(`
-        SELECT e.id, e.season_number, e.episode_number, s.tmdb_id
+        SELECT e.id, e.name, e.season_number, e.episode_number, s.tmdb_id
         FROM native_media_episodes e
         JOIN native_media_items s ON s.id = e.series_id
-        WHERE s.tmdb_id IS NOT NULL AND e.name LIKE 'Episode %'
+        WHERE s.tmdb_id IS NOT NULL AND (e.name LIKE 'Episode %' OR e.still_path IS NULL OR e.still_path = '')
       `)
-      .all() as Array<{ id: string; season_number: number; episode_number: number; tmdb_id: number }>;
+      .all() as Array<{ id: string; name: string; season_number: number; episode_number: number; tmdb_id: number }>;
     for (const ep of genericEps) {
       const seasonMap = await fetchTmdbSeasonEpisodes(ep.tmdb_id, ep.season_number, seasonCache);
       const meta = seasonMap.get(ep.episode_number);
-      if (meta?.name) {
-        db.prepare("UPDATE native_media_episodes SET name = ?, overview = COALESCE(NULLIF(overview, ''), ?) WHERE id = ?")
-          .run(meta.name, meta.overview || null, ep.id);
+      if (meta) {
+        const nextName = ep.name.startsWith('Episode ') && meta.name ? meta.name : ep.name;
+        db.prepare("UPDATE native_media_episodes SET name = ?, overview = COALESCE(NULLIF(overview, ''), ?), still_path = COALESCE(NULLIF(still_path, ''), ?) WHERE id = ?")
+          .run(nextName, meta.overview || null, meta.stillPath || null, ep.id);
       }
     }
   } catch (err) {

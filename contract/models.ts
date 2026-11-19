@@ -347,6 +347,8 @@ export interface YouTubeSearchResult {
   description?: string;
   isShort: boolean;
   isDownloaded?: boolean;
+  isMix?: boolean;
+  mixPlaylistId?: string;
 }
 
 export interface YouTubeSearchResponse {

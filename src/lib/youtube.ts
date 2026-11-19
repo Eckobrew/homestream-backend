@@ -158,7 +158,7 @@ async function searchYouTubeViaYtDlp(query: string, maxResults = 25, cookieFile?
       args.push('--cookies', cookieFile);
     }
     if (query.startsWith('http://') || query.startsWith('https://')) {
-      args.push('--playlist-end', String(maxResults + 10), query);
+      args.push('--yes-playlist', '--playlist-end', String(maxResults + 10), query);
     } else {
       args.push(`ytsearch${maxResults}:${query}`);
     }
@@ -1510,13 +1510,15 @@ export async function getYouTubeRecommendations(profileId?: string, forceRefresh
     isDownloaded: true,
   }));
 
-  // 5. Curated topics / search queries across diverse categories (always available whether logged in or not)
-  const [trendingResults, podcastResults, deepDiveResults, musicResults] = await Promise.all([
-    searchYouTubeViaYtDlp('trending videos 2026', 15).catch(() => []),
-    searchYouTubeViaYtDlp('popular podcast interview', 12).catch(() => []),
-    searchYouTubeViaYtDlp('science documentary full interview', 12).catch(() => []),
-    searchYouTubeViaYtDlp('trending music video official', 12).catch(() => []),
-  ]);
+  // 5. Only run generic fallback queries when personalized recommendations are unavailable
+  const [trendingResults, podcastResults, deepDiveResults] =
+    personalizedFeed.length === 0 && subscriptionFeed.length === 0
+      ? await Promise.all([
+          searchYouTubeViaYtDlp('trending videos 2026', 15).catch(() => []),
+          searchYouTubeViaYtDlp('popular podcast interview', 12).catch(() => []),
+          searchYouTubeViaYtDlp('science documentary full interview', 12).catch(() => []),
+        ])
+      : [[], [], []];
 
   // Section: Local NAS archive
   if (localArchiveResults.length > 0) {
@@ -1529,11 +1531,29 @@ export async function getYouTubeRecommendations(profileId?: string, forceRefresh
 
   // Section: Logged in personalized recommendations
   if (personalizedFeed.length > 0) {
-    sections.push({
-      id: 'personalized',
-      title: 'Recommended For You',
-      items: personalizedFeed.slice(0, 15),
-    });
+    const mixes = personalizedFeed.filter((v) => v.isMix);
+    const videos = personalizedFeed.filter((v) => !v.isMix);
+    if (videos.length > 0) {
+      sections.push({
+        id: 'personalized',
+        title: 'Recommended For You',
+        items: videos.slice(0, 15),
+      });
+    }
+    if (mixes.length > 0) {
+      sections.push({
+        id: 'mixes',
+        title: 'Mixes & Playlists For You',
+        items: mixes.slice(0, 12),
+      });
+    }
+    if (videos.length > 15) {
+      sections.push({
+        id: 'more-recommended',
+        title: 'More From Your Feed',
+        items: videos.slice(15, 30),
+      });
+    }
   }
 
   // Section: Logged in YouTube subscriptions
@@ -1554,7 +1574,7 @@ export async function getYouTubeRecommendations(profileId?: string, forceRefresh
     });
   }
 
-  // Section: Trending Worldwide
+  // Fallback sections when not signed into YouTube
   if (trendingResults.length > 0) {
     sections.push({
       id: 'trending',
@@ -1563,7 +1583,6 @@ export async function getYouTubeRecommendations(profileId?: string, forceRefresh
     });
   }
 
-  // Section: Podcasts
   if (podcastResults.length > 0) {
     sections.push({
       id: 'podcasts',
@@ -1572,21 +1591,11 @@ export async function getYouTubeRecommendations(profileId?: string, forceRefresh
     });
   }
 
-  // Section: Documentaries & Deep Dives
   if (deepDiveResults.length > 0) {
     sections.push({
       id: 'deep-dives',
       title: 'Documentaries & Deep Dives',
       items: deepDiveResults.slice(0, 12),
-    });
-  }
-
-  // Section: Music Hits
-  if (musicResults.length > 0) {
-    sections.push({
-      id: 'music',
-      title: 'Music Hits & Live Performances',
-      items: musicResults.slice(0, 12),
     });
   }
 
