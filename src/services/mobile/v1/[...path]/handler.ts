@@ -236,7 +236,7 @@ async function dispatchContent(request: HttpRequest, context: Context) {
   if (get && route === 'profiles') {
     const all = await getHomeflixProfiles();
     const profiles = session?.accountId ? profilesForAccount(all, session.accountId) : all;
-    const canManage = session ? Boolean(session.admin) : true;
+    const canManage = session ? Boolean(session.accountId || session.admin) : true;
     return HttpResponse.json({
       profiles,
       canManage,
@@ -281,7 +281,7 @@ async function dispatchContent(request: HttpRequest, context: Context) {
     if (!body || typeof body !== 'object' || Array.isArray(body)) return HttpResponse.json({ error: 'Profile details required' }, { status: 400 });
     if (!await allowLogin(request)) return HttpResponse.json({ error: 'Too many profile changes. Try again shortly.' }, { status: 429 });
     try {
-      return HttpResponse.json({ success: true, ...await manageProfile(body, session && !session.admin ? session.id : undefined, session?.name) });
+      return HttpResponse.json({ success: true, ...await manageProfile(body, session && !session.admin ? session.id : undefined, session?.name, session?.accountId) });
     } catch (error) {
       if (error instanceof ProfileError) return HttpResponse.json({ error: error.message }, { status: error.status });
       log.error('Could not save profile');

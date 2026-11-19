@@ -4,7 +4,7 @@ import { isKids, KIDS_LIMITS, KidsRating, parentPinConfigured, requireParentPin 
 import crypto from 'crypto';
 import { getHomeflixProfiles, saveHomeflixProfiles, PROFILE_PALETTES, getInitials } from './profiles';
 import { UserProfile } from '@/types';
-import { getPrimaryAccount } from './accounts';
+import { getPrimaryAccount, profilesForAccount } from './accounts';
 
 export const STOCK_AVATARS = ['fox', 'owl', 'panda', 'cat', 'bear', 'penguin', 'robot', 'astronaut'];
 export class ProfileError extends Error {
@@ -13,7 +13,7 @@ export class ProfileError extends Error {
 let writes: Promise<unknown> = Promise.resolve();
 
 /** Serialize profile edits so simultaneous phone/TV changes do not overwrite one another. */
-export function manageProfile(body: Record<string, unknown>, ownUserId?: string, ownName?: string): Promise<{ profile?: UserProfile; passwordMode?: string }> {
+export function manageProfile(body: Record<string, unknown>, ownUserId?: string, ownName?: string, accountId?: string): Promise<{ profile?: UserProfile; passwordMode?: string }> {
   const result = writes.then(() => withProfileTransaction(async () => {
     const profiles = await getHomeflixProfiles();
     const requestedKids = body.isKids === true;
@@ -29,11 +29,14 @@ export function manageProfile(body: Record<string, unknown>, ownUserId?: string,
     const action = body.action;
 
     if (action === 'delete') {
-      if (ownUserId) throw new ProfileError('Only a household administrator can delete profiles', 403);
       const target = profiles.find(p => p.id === body.profileId);
       if (!target) throw new ProfileError('Profile not available', 404);
-      if (target.isAdministrator) throw new ProfileError('Cannot delete an administrator profile', 403);
-      if (profiles.length <= 1) throw new ProfileError('Cannot delete the last remaining profile', 400);
+      const effectiveAccountId = accountId || target.accountId;
+      const scoped = effectiveAccountId ? profilesForAccount(profiles, effectiveAccountId) : profiles;
+      if (ownUserId && accountId && !scoped.some(p => p.id === target.id)) {
+        throw new ProfileError('You can only delete profiles on your own account', 403);
+      }
+      if (scoped.length <= 1) throw new ProfileError('Cannot delete the last remaining profile', 400);
       await saveHomeflixProfiles(profiles.filter(p => p.id !== target.id));
       return { profile: target };
     }
@@ -52,24 +55,25 @@ export function manageProfile(body: Record<string, unknown>, ownUserId?: string,
           name: ownName || 'Viewer',
           ...palette,
           initials: getInitials(ownName || 'Viewer'),
+          ...(accountId ? { accountId } : {}),
         };
         profiles.push(profile);
       }
-      if (!profile || (ownUserId && profile.id !== ownUserId)) {
+      const allowedForOwnAccount = !ownUserId || !accountId || profilesForAccount(profiles, accountId).some(p => p.id === profile?.id);
+      if (!profile || !allowedForOwnAccount) {
         throw new ProfileError('Profile not available', 404);
       }
       const name = typeof body.name === 'string' ? body.name.trim() : profile.name;
       if (!name || name.length > 64) throw new ProfileError('Profile name must contain 1–64 characters');
-      if (!ownUserId && profiles.some(p => p.id !== profile!.id && p.name.toLowerCase() === name.toLowerCase())) {
+      const scoped = (accountId || profile.accountId) ? profilesForAccount(profiles, accountId || profile.accountId) : profiles;
+      if (scoped.some(p => p.id !== profile!.id && p.name.toLowerCase() === name.toLowerCase())) {
         throw new ProfileError('That profile name already exists', 409);
       }
-      profile.name = ownUserId ? profile.name : name;
+      profile.name = name;
       profile.initials = getInitials(profile.name);
       profile.avatarId = avatarId;
       profile.avatarUrl = `/profile-avatars/${avatarId}.png`;
-      if (requestedKids && profile.isAdministrator) {
-        throw new ProfileError('Kids profiles cannot use an administrator account', 403);
-      }
+      profile.isAdministrator = false;
       profile.kidsDateOfBirth = requestedKids ? String(body.kidsDateOfBirth) : undefined;
       profile.isKids = requestedKids;
       profile.kidsRating = requestedKids ? requestedRating as KidsRating : undefined;
@@ -78,10 +82,12 @@ export function manageProfile(body: Record<string, unknown>, ownUserId?: string,
     }
 
     if (action !== 'create') throw new ProfileError('Unknown profile action');
-    if (profiles.length >= 32) throw new ProfileError('A household can have up to 32 profiles');
+    const targetAccountId = accountId || getPrimaryAccount()?.id;
+    const scopedProfiles = targetAccountId ? profilesForAccount(profiles, targetAccountId) : profiles;
+    if (scopedProfiles.length >= 32) throw new ProfileError('An account can have up to 32 profiles');
     const name = typeof body.name === 'string' ? body.name.trim() : '';
     if (!name || name.length > 64) throw new ProfileError('Profile name must contain 1–64 characters');
-    if (profiles.some(profile => profile.name.toLowerCase() === name.toLowerCase())) {
+    if (scopedProfiles.some(profile => profile.name.toLowerCase() === name.toLowerCase())) {
       throw new ProfileError('That profile name already exists', 409);
     }
 
@@ -93,7 +99,7 @@ export function manageProfile(body: Record<string, unknown>, ownUserId?: string,
       avatarUrl: `/profile-avatars/${avatarId}.png`,
       ...palette,
       initials: getInitials(name),
-      accountId: getPrimaryAccount()?.id,
+      accountId: targetAccountId,
       isAdministrator: false,
       isKids: requestedKids,
       kidsDateOfBirth: requestedKids ? String(body.kidsDateOfBirth) : undefined,
