@@ -536,6 +536,15 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         return execute(url.build().toString(), "GET", null, null)
     }
 
+    fun `web_get_youtube_mix`(query: WebGetYoutubeMixQuery): ApiResponse<WebGetYoutubeMixResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("youtube").addPathSegment("mix")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`listId`.let { url.addQueryParameter("listId", it.toString()) }
+        query.`seedId`?.let { url.addQueryParameter("seedId", it.toString()) }
+        query.`profileId`?.let { url.addQueryParameter("profileId", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
     fun `web_get_youtube_stream`(query: WebGetYoutubeStreamQuery): ApiResponse<YouTubeStreamResponse> {
         val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("v1").addPathSegment("youtube").addPathSegment("stream")
         query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
@@ -1186,6 +1195,15 @@ class HomeStreamClient(private val baseUrl: String, private val bearerToken: Str
         val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("youtube").addPathSegment("search")
         query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
         query.`q`?.let { url.addQueryParameter("q", it.toString()) }
+        return execute(url.build().toString(), "GET", null, null)
+    }
+
+    fun `mobile_get_youtube_mix`(query: MobileGetYoutubeMixQuery): ApiResponse<MobileGetYoutubeMixResponse> {
+        val url = baseUrl.toHttpUrl().newBuilder().addPathSegment("api").addPathSegment("mobile").addPathSegment("v1").addPathSegment("youtube").addPathSegment("mix")
+        query.`userId`?.let { url.addQueryParameter("userId", it.toString()) }
+        query.`listId`.let { url.addQueryParameter("listId", it.toString()) }
+        query.`seedId`?.let { url.addQueryParameter("seedId", it.toString()) }
+        query.`profileId`?.let { url.addQueryParameter("profileId", it.toString()) }
         return execute(url.build().toString(), "GET", null, null)
     }
 

@@ -454,7 +454,9 @@ data class YouTubeSearchResult(
     @SerialName("viewCount") val `viewCount`: String? = null,
     @SerialName("description") val `description`: String? = null,
     @SerialName("isShort") val `isShort`: Boolean,
-    @SerialName("isDownloaded") val `isDownloaded`: Boolean? = null
+    @SerialName("isDownloaded") val `isDownloaded`: Boolean? = null,
+    @SerialName("isMix") val `isMix`: Boolean? = null,
+    @SerialName("mixPlaylistId") val `mixPlaylistId`: String? = null
 )
 
 @Serializable
@@ -1503,6 +1505,20 @@ data class WebPostIntegrationsBody(
 data class WebGetYoutubeSearchQuery(
     @SerialName("userId") val `userId`: String? = null,
     @SerialName("q") val `q`: String? = null
+)
+
+@Serializable
+data class WebGetYoutubeMixQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("listId") val `listId`: String,
+    @SerialName("seedId") val `seedId`: String? = null,
+    @SerialName("profileId") val `profileId`: String? = null
+)
+
+@Serializable
+data class WebGetYoutubeMixResponse(
+    @SerialName("title") val `title`: String? = null,
+    @SerialName("items") val `items`: List<JsonElement>? = null
 )
 
 @Serializable
@@ -2708,6 +2724,20 @@ data class MobilePostIntegrationsBody(
 data class MobileGetYoutubeSearchQuery(
     @SerialName("userId") val `userId`: String? = null,
     @SerialName("q") val `q`: String? = null
+)
+
+@Serializable
+data class MobileGetYoutubeMixQuery(
+    @SerialName("userId") val `userId`: String? = null,
+    @SerialName("listId") val `listId`: String,
+    @SerialName("seedId") val `seedId`: String? = null,
+    @SerialName("profileId") val `profileId`: String? = null
+)
+
+@Serializable
+data class MobileGetYoutubeMixResponse(
+    @SerialName("title") val `title`: String? = null,
+    @SerialName("items") val `items`: List<JsonElement>? = null
 )
 
 @Serializable
