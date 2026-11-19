@@ -166,11 +166,6 @@ export function sendRemoteCommand(
     createdAt: Date.now(),
   };
 
-  const queue = pendingCommands.get(targetDeviceId) || [];
-  queue.push(cmd);
-  if (queue.length > MAX_QUEUED_COMMANDS) queue.shift();
-  pendingCommands.set(targetDeviceId, queue);
-
   const listeners = subscribers.get(targetDeviceId);
   if (listeners && listeners.size > 0) {
     for (const listener of listeners) {
@@ -180,7 +175,13 @@ export function sendRemoteCommand(
         // Ignore broken listener; stream close handler cleans up.
       }
     }
+    return cmd;
   }
+
+  const queue = pendingCommands.get(targetDeviceId) || [];
+  queue.push(cmd);
+  if (queue.length > MAX_QUEUED_COMMANDS) queue.shift();
+  pendingCommands.set(targetDeviceId, queue);
   return cmd;
 }
 
