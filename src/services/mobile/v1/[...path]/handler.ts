@@ -349,7 +349,10 @@ async function dispatchContent(request: HttpRequest, context: Context) {
   if (get && params.path.length === 3 && params.path[0] === 'media' && params.path[2] === 'collection') {
     const id = params.path[1];
     const uid = (await resolveProfileId(session?.id || request.nextUrl.searchParams.get('userId') || 'default')) || 'default';
-    let tmdbId = /^(?:seerr|tmdb)-(?:movie-)?(\d+)$/.exec(id)?.[1] || (/^\d+$/.test(id) ? id : '');
+    let tmdbId =
+      request.nextUrl.searchParams.get('tmdbId')?.trim() ||
+      /^(?:seerr|tmdb)-(?:movie-)?(\d+)$/.exec(id)?.[1] ||
+      (/^\d+$/.test(id) ? id : '');
     if (!tmdbId && id.startsWith('nat-')) {
       const collection = getNativeMovieCollection(id, uid);
       if (collection) return HttpResponse.json({ collection });
