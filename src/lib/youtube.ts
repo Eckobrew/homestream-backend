@@ -158,7 +158,7 @@ async function searchYouTubeViaYtDlp(query: string, maxResults = 25, cookieFile?
       args.push('--cookies', cookieFile);
     }
     if (query.startsWith('http://') || query.startsWith('https://')) {
-      args.push('--playlist-end', String(maxResults), query);
+      args.push('--playlist-end', String(maxResults + 10), query);
     } else {
       args.push(`ytsearch${maxResults}:${query}`);
     }
@@ -181,6 +181,9 @@ async function searchYouTubeViaYtDlp(query: string, maxResults = 25, cookieFile?
 
         for (const e of entries) {
           if (!e || !e.id) continue;
+          const idStr = String(e.id);
+          if (e._type === 'playlist' || e.ie_key === 'YoutubeTab' || !/^[a-zA-Z0-9_-]{11}$/.test(idStr)) continue;
+          if (results.length >= maxResults) break;
           const durationSec = Number(e.duration) || 0;
           const thumbs = e.thumbnails || [];
           const thumbUrl = thumbs[thumbs.length - 1]?.url || `https://i.ytimg.com/vi/${e.id}/hqdefault.jpg`;
