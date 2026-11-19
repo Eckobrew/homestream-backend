@@ -26,11 +26,22 @@ export function manageProfile(body: Record<string, unknown>, ownUserId?: string,
     } catch (error) {
       throw new ProfileError(error instanceof Error ? error.message : 'Parent PIN required', 403);
     }
+    const action = body.action;
+
+    if (action === 'delete') {
+      if (ownUserId) throw new ProfileError('Only a household administrator can delete profiles', 403);
+      const target = profiles.find(p => p.id === body.profileId);
+      if (!target) throw new ProfileError('Profile not available', 404);
+      if (target.isAdministrator) throw new ProfileError('Cannot delete an administrator profile', 403);
+      if (profiles.length <= 1) throw new ProfileError('Cannot delete the last remaining profile', 400);
+      await saveHomeflixProfiles(profiles.filter(p => p.id !== target.id));
+      return { profile: target };
+    }
+
     const avatarId = body.avatarId;
     if (typeof avatarId !== 'string' || !STOCK_AVATARS.includes(avatarId)) {
       throw new ProfileError('Choose a profile picture');
     }
-    const action = body.action;
 
     if (action === 'update') {
       let profile = profiles.find(p => p.id === body.profileId);
