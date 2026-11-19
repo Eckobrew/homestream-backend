@@ -158,7 +158,7 @@ async function searchYouTubeViaYtDlp(query: string, maxResults = 25, cookieFile?
       args.push('--cookies', cookieFile);
     }
     if (query.startsWith('http://') || query.startsWith('https://')) {
-      args.push(query);
+      args.push('--playlist-end', String(maxResults), query);
     } else {
       args.push(`ytsearch${maxResults}:${query}`);
     }
@@ -1279,6 +1279,17 @@ export function deleteYouTubeProgress(profileId: string, videoId: string): boole
   }
 }
 
+export function invalidateYouTubeRecommendationsCache(profileId?: string): void {
+  if (profileId) {
+    delete recommendationsCache[profileId];
+    if (profileId === 'default') delete recommendationsCache['global'];
+  } else {
+    for (const key of Object.keys(recommendationsCache)) {
+      delete recommendationsCache[key];
+    }
+  }
+}
+
 /**
  * Store connected YouTube cookies/session for a profile
  */
@@ -1294,6 +1305,7 @@ export function saveYouTubeAuth(profileId: string, cookiesText: string, accountN
       cookies_text = excluded.cookies_text,
       updated_at = excluded.updated_at
   `).run(profileId, accountName || 'Connected YouTube User', cookiesText, now);
+  invalidateYouTubeRecommendationsCache(profileId);
 }
 
 /**
@@ -1319,6 +1331,7 @@ export function deleteYouTubeAuth(profileId: string): boolean {
   try {
     const db = stateDatabase();
     db.prepare('DELETE FROM youtube_profile_auth WHERE profile_id = ?').run(profileId);
+    invalidateYouTubeRecommendationsCache(profileId);
     return true;
   } catch {
     return false;
@@ -1375,7 +1388,7 @@ const RECOMMENDATIONS_CACHE_TTL = 15 * 60 * 1000; // 15 minutes
 /**
  * Returns Netflix-style media sections and hero for the YouTube Hub
  */
-export async function getYouTubeRecommendations(profileId?: string): Promise<{
+export async function getYouTubeRecommendations(profileId?: string, forceRefresh = false): Promise<{
   hero: YouTubeSearchResult | null;
   sections: Array<{ id: string; title: string; items: YouTubeSearchResult[] }>;
 }> {
@@ -1386,7 +1399,7 @@ export async function getYouTubeRecommendations(profileId?: string): Promise<{
   const now = Date.now();
 
   // If we have valid cached recommendations with actual sections, return immediately (<1ms)
-  if (existing && existing.data.sections.length > 0 && now - existing.timestamp < RECOMMENDATIONS_CACHE_TTL) {
+  if (!forceRefresh && existing && existing.data.sections.length > 0 && now - existing.timestamp < RECOMMENDATIONS_CACHE_TTL) {
     // Refresh local archive dynamically so newly downloaded videos appear right away
     const archive = getLocalYouTubeArchive();
     const localArchiveResults: YouTubeSearchResult[] = archive.slice(0, 15).map((a) => ({
@@ -1411,7 +1424,7 @@ export async function getYouTubeRecommendations(profileId?: string): Promise<{
     }
 
     return {
-      hero: localArchiveResults[0] || existing.data.hero,
+      hero: existing.data.hero || localArchiveResults[0] || null,
       sections: updatedSections,
     };
   }

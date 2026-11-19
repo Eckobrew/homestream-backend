@@ -53,6 +53,7 @@ function resolveYouTubeProfileId(request: HttpRequest, body?: Record<string, unk
     fromBody ||
     request.nextUrl.searchParams.get('profileId') ||
     request.nextUrl.searchParams.get('userId') ||
+    request.headers.get('x-homestream-profile')?.trim() ||
     request.cookies.get('homeflix_profile_id')?.value ||
     'default'
   );
@@ -75,8 +76,9 @@ async function handleGET(request: HttpRequest) {
 
   if (route === 'youtube/recommendations') {
     const profileId = resolveYouTubeProfileId(request);
+    const forceRefresh = request.nextUrl.searchParams.get('refresh') === '1';
     try {
-      const data = await getYouTubeRecommendations(profileId);
+      const data = await getYouTubeRecommendations(profileId, forceRefresh);
       return HttpResponse.json(data);
     } catch {
       return HttpResponse.json({ hero: null, sections: [] });
