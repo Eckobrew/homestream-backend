@@ -1,5 +1,6 @@
 import { getServerConfig, sanitizeUrl } from './config';
 import { matchesMovieRelease } from './release-match';
+import { loadArrReleasePolicy, rankArrReleases } from './arr-release-policy';
 
 export interface RadarrMovie {
   id: number;
@@ -8,6 +9,7 @@ export interface RadarrMovie {
   year?: number;
   path?: string;
   monitored?: boolean;
+  runtime?: number;
   qualityProfileId?: number;
 }
 
@@ -24,6 +26,7 @@ export interface RadarrRelease {
   indexer?: string;
   quality?: {
     quality?: {
+      id?: number;
       name?: string;
       resolution?: number;
     };
@@ -32,6 +35,7 @@ export interface RadarrRelease {
   infoHash?: string;
   tmdbId?: number;
   movieTitles?: string[];
+  approved?: boolean;
   rejected?: boolean;
   rejections?: string[];
 }
@@ -229,7 +233,10 @@ export class RadarrClient {
     const movie = await this.ensureMovie(tmdbId);
     if (!movie?.id) return null;
 
-    const releases = await this.getReleases(movie.id);
+    const [releases, policy] = await Promise.all([
+      this.getReleases(movie.id),
+      loadArrReleasePolicy(this.baseUrl, this.apiKey, movie.qualityProfileId),
+    ]);
     const torrents = releases.filter(
       r =>
         (r.protocol === 'torrent' || !r.protocol) &&
@@ -238,22 +245,6 @@ export class RadarrClient {
         matchesMovieRelease(r, movie.title, tmdbId, movie.year)
     );
 
-    if (torrents.length === 0) {
-      return null;
-    }
-
-    // Sort by:
-    // 1. Custom format score descending
-    // 2. Seeders descending
-    // 3. Size reasonable (prefer 1GB - 25GB)
-    torrents.sort((a, b) => {
-      const scoreDiff = (b.customFormatScore || 0) - (a.customFormatScore || 0);
-      if (scoreDiff !== 0) return scoreDiff;
-      const seederDiff = (b.seeders || 0) - (a.seeders || 0);
-      if (seederDiff !== 0) return seederDiff;
-      return (b.size || 0) - (a.size || 0);
-    });
-
-    return torrents[0];
+    return rankArrReleases(torrents, policy, movie.runtime)[0] || null;
   }
 }

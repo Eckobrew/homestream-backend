@@ -1,5 +1,6 @@
 import { getServerConfig, sanitizeUrl } from './config';
 import { matchesSeriesRelease } from './release-match';
+import { loadArrReleasePolicy, rankArrReleases } from './arr-release-policy';
 
 export interface SonarrSeries {
   id: number;
@@ -8,6 +9,7 @@ export interface SonarrSeries {
   year?: number;
   path?: string;
   monitored?: boolean;
+  runtime?: number;
   qualityProfileId?: number;
   seasons?: Array<{
     seasonNumber: number;
@@ -28,11 +30,15 @@ export interface SonarrRelease {
   indexer?: string;
   quality?: {
     quality?: {
+      id?: number;
       name?: string;
       resolution?: number;
     };
   };
   customFormatScore?: number;
+  approved?: boolean;
+  rejected?: boolean;
+  rejections?: string[];
   infoHash?: string;
   seasonNumber?: number;
   episodeNumbers?: number[];
@@ -254,50 +260,29 @@ export class SonarrClient {
     const series = await this.findSeries(titleOrTvdb);
     if (!series?.id) return null;
 
-    let targetEpisodeId: number | undefined;
-    if (episodeNumber !== undefined) {
-      const episodes = await this.getEpisodes(series.id, seasonNumber);
-      const ep = episodes.find(e => e.episodeNumber === episodeNumber);
-      if (ep) targetEpisodeId = ep.id;
-    }
+    const [episodes, policy] = await Promise.all([
+      this.getEpisodes(series.id, seasonNumber),
+      loadArrReleasePolicy(this.baseUrl, this.apiKey, series.qualityProfileId),
+    ]);
+    const target = episodes.find(e => e.episodeNumber === episodeNumber);
+    const runtime = target?.runtime || series.runtime;
+    const seasonCount = new Set(episodes.filter(e => e.seasonNumber === undefined || e.seasonNumber === seasonNumber).map(e => e.episodeNumber)).size;
+    const isPack = (release: SonarrRelease) => Boolean(release.fullSeason ||
+      (release.episodeNumbers && release.episodeNumbers.length > 1) || /season\s*\d+|s\d+\b(?!e\d+)/i.test(release.title));
+    const coveredEpisodes = (release: SonarrRelease): number | undefined => {
+      const explicit = new Set(release.episodeNumbers || []).size;
+      return explicit > 1 ? explicit : isPack(release) ? seasonCount || undefined : 1;
+    };
+    const eligible = (releases: SonarrRelease[]) => rankArrReleases(releases.filter(r =>
+      (r.protocol === 'torrent' || !r.protocol) && (r.downloadUrl || r.magnetUrl) && (r.seeders || 0) > 0 &&
+      matchesSeriesRelease(r, series.title, series.tvdbId, seasonNumber, episodeNumber)), policy, runtime, coveredEpisodes);
 
-    // 1. First search for episode-specific release if episodeNumber provided
-    let releases: SonarrRelease[] = [];
-    if (targetEpisodeId !== undefined) {
-      releases = await this.getReleases(series.id, seasonNumber, targetEpisodeId);
-    }
-
-    // 2. If no direct episode releases, search season releases (which includes full season packs!)
-    if (releases.length === 0) {
-      releases = await this.getReleases(series.id, seasonNumber);
-    }
-
-    const torrents = releases.filter(
-      r =>
-        (r.protocol === 'torrent' || !r.protocol) &&
-        (r.downloadUrl || r.magnetUrl) &&
-        (r.seeders || 0) > 0 &&
-        matchesSeriesRelease(r, series.title, series.tvdbId, seasonNumber, episodeNumber)
-    );
-
-    if (torrents.length === 0) return null;
-
-    // Categorize season packs vs individual episodes
-    torrents.sort((a, b) => {
-      // Prioritize releases that have more seeders and higher customFormatScore
-      const scoreDiff = (b.customFormatScore || 0) - (a.customFormatScore || 0);
-      if (scoreDiff !== 0) return scoreDiff;
-      const seederDiff = (b.seeders || 0) - (a.seeders || 0);
-      if (seederDiff !== 0) return seederDiff;
-      return (b.size || 0) - (a.size || 0);
-    });
-
+    let torrents = target?.id !== undefined ? eligible(await this.getReleases(series.id, seasonNumber, target.id)) : [];
+    // A rejected episode result must not prevent trying an approved season pack.
+    if (torrents.length === 0) torrents = eligible(await this.getReleases(series.id, seasonNumber));
     const chosen = torrents[0];
-    const isSeasonPack = Boolean(
-      chosen.fullSeason ||
-      (chosen.episodeNumbers && chosen.episodeNumbers.length > 1) ||
-      /season\s*\d+|s\d+\b(?!e\d+)/i.test(chosen.title)
-    );
+    if (!chosen) return null;
+    const isSeasonPack = isPack(chosen);
 
     return {
       release: chosen,
