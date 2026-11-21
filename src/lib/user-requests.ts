@@ -2,6 +2,8 @@ import { stateDatabase } from '@/state/database';
 import { MediaItem } from '@/types';
 import { QBittorrentClient } from './qbittorrent';
 import { getNativeTmdbIdMap } from './native-media';
+import { ensureUserRequestsTable } from './request-state';
+export { ensureUserRequestsTable } from './request-state';
 
 export interface StoredRequest {
   id: string;
@@ -13,38 +15,6 @@ export interface StoredRequest {
   releaseDate?: string;
   posterUrl?: string;
   overview?: string;
-}
-
-let tableInitialized = false;
-
-export function ensureUserRequestsTable() {
-  if (tableInitialized) return;
-  try {
-    const db = stateDatabase();
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS user_requests (
-        id TEXT PRIMARY KEY,
-        user_id TEXT DEFAULT 'global',
-        media_type TEXT NOT NULL,
-        media_id INTEGER NOT NULL,
-        title TEXT NOT NULL,
-        status TEXT NOT NULL,
-        requested_at TEXT NOT NULL,
-        release_date TEXT,
-        poster_url TEXT,
-        overview TEXT
-      );
-    `);
-    try {
-      db.exec("ALTER TABLE user_requests ADD COLUMN user_id TEXT DEFAULT 'global'");
-    } catch {}
-    try {
-      db.exec('ALTER TABLE user_requests ADD COLUMN release_date TEXT');
-    } catch {}
-    tableInitialized = true;
-  } catch (err) {
-    console.warn('[user-requests] Table init failed:', err);
-  }
 }
 
 export function saveUserRequest(req: StoredRequest) {

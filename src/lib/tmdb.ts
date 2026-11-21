@@ -1,4 +1,5 @@
 import { getServerConfig } from './config';
+import { catalogRequestState } from './request-state';
 import { MediaItem, Season, Episode, CastMember } from '@/types';
 
 export interface TmdbRawItem {
@@ -262,7 +263,7 @@ export class TmdbClient {
       genres,
       source: 'tmdb',
       tmdbId: raw.id,
-      status: 'not_requested',
+      ...catalogRequestState(isTv ? 'tv' : 'movie', raw.id),
       trailerKey,
       trailerUrl,
       cast,

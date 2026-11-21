@@ -1,5 +1,6 @@
 import { stateDatabase } from '@/state/database';
 import { TmdbClient } from './tmdb';
+import { catalogRequestState } from './request-state';
 import type { MediaItem } from '@/types';
 
 const progressDatabases = new WeakSet<ReturnType<typeof stateDatabase>>();
@@ -97,7 +98,7 @@ async function catalogStreamItem(id: string): Promise<MediaItem | null> {
     ...(tv ? { seriesId: `tmdb-tv-${tmdbId}`, seriesName: item.title, seasonNumber: season, episodeNumber: episode,
       title: ep?.name || item.title, totalDurationTicks: ep?.totalDurationTicks,
       durationMinutes: ep?.durationMinutes || item.durationMinutes } : {}),
-    seasons: undefined, source: 'tmdb', status: 'requested', videoStreamUrl: `/api/stream/torrent?${query}`,
+    seasons: undefined, source: 'tmdb', ...catalogRequestState(tv ? 'tv' : 'movie', tmdbId), videoStreamUrl: `/api/stream/torrent?${query}`,
     downloadStreamUrl: undefined };
 }
 
@@ -143,7 +144,7 @@ export async function getStreamResumeItems(profileId = 'default', limit = 15): P
     if (!item) continue;
     const duration = row.duration_ticks || item.totalDurationTicks || (item.durationMinutes || 0) * 60 * 10000000;
     if (duration > 0 && row.position_ticks >= duration * 0.95) continue;
-    result.push({ ...item, playbackPositionTicks: row.position_ticks, totalDurationTicks: duration || undefined,
+    result.push({ ...item, ...catalogRequestState(item.type === 'Movie' ? 'movie' : 'tv', Number(item.tmdbId)), playbackPositionTicks: row.position_ticks, totalDurationTicks: duration || undefined,
       progressPercent: duration > 0 ? Math.max(1, Math.min(94, Math.round(row.position_ticks / duration * 100))) : 1 });
     if (result.length >= limit) break;
   }
@@ -154,5 +155,5 @@ export async function getCatalogStreamDetails(profileId: string, itemId: string)
   const db = resumeTable();
   const row = db.prepare('SELECT metadata_json FROM stream_resume_metadata WHERE profile_id=? AND item_id=?').get(profileId, itemId) as { metadata_json: string } | undefined;
   const item = row ? JSON.parse(row.metadata_json) as MediaItem : await catalogStreamItem(itemId);
-  return item ? { ...item, playbackPositionTicks: getStreamProgress(profileId, itemId) } : null;
+  return item ? { ...item, ...catalogRequestState(item.type === 'Movie' ? 'movie' : 'tv', Number(item.tmdbId)), playbackPositionTicks: getStreamProgress(profileId, itemId) } : null;
 }

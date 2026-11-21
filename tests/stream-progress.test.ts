@@ -6,7 +6,8 @@ import { join } from 'node:path';
 import { createApp } from '../src/app';
 import { TmdbClient } from '../src/lib/tmdb';
 import { getStreamResumeItems, getStreamProgress } from '../src/lib/stream-progress';
-import { writeState, closeStateDatabases } from '../src/state/database';
+import { writeState, closeStateDatabases, stateDatabase } from '../src/state/database';
+import { saveUserRequest } from '../src/lib/user-requests';
 import type { MediaItem } from '../src/types';
 
 test('catalog streams persist per-profile movie and episode resume state in the home feed', async () => {
@@ -34,6 +35,7 @@ test('catalog streams persist per-profile movie and episode resume state in the 
     await report('tmdb-ep-202-1-2', 45);
     const resume = await getStreamResumeItems('viewer-a');
     assert.equal(resume.length, 2);
+    assert.ok(resume.every(item => item.status === 'not_requested'));
     const episode = resume.find(item => item.id === 'tmdb-ep-202-1-2')!;
     assert.equal(episode.playbackPositionTicks, 450000000); assert.equal(episode.seriesName, 'Fixture series');
     assert.equal(episode.seasonNumber, 1); assert.equal(episode.episodeNumber, 2);
@@ -45,6 +47,17 @@ test('catalog streams persist per-profile movie and episode resume state in the 
     assert.ok(home.sections.find((section: any) => section.id === 'continue-watching').items.some((item: any) => item.id === episode.id));
     const detail = await fetch(origin + '/api/v1/media/tmdb-ep-202-1-2?userId=viewer-a').then(r => r.json());
     assert.equal(detail.item.playbackPositionTicks, 450000000);
+    assert.equal(detail.item.status, 'not_requested');
+    stateDatabase().exec("UPDATE stream_resume_metadata SET metadata_json=json_set(metadata_json,'$.status','requested','$.requestStatus','approved')");
+    const corrected = await getStreamResumeItems('viewer-a');
+    assert.ok(corrected.every(item => item.status === 'not_requested' && item.requestStatus === undefined));
+    saveUserRequest({ id: 'tmdb-movie-101', mediaType: 'movie', mediaId: 101, title: movie.title, status: 'processing', requestedAt: new Date().toISOString() });
+    saveUserRequest({ id: 'tmdb-tv-202', mediaType: 'tv', mediaId: 202, title: 'Fixture series', status: 'pending', requestedAt: new Date().toISOString() });
+    const requestedResume = await getStreamResumeItems('viewer-a');
+    assert.equal(requestedResume.find(item => item.id === movie.id)!.status, 'processing');
+    assert.equal(requestedResume.find(item => item.id === episode.id)!.status, 'requested');
+    assert.equal(getStreamProgress('viewer-a', episode.id), 450000000);
+
     closeStateDatabases(); // Reopen the on-disk database, not an in-memory playback session.
     assert.equal((await getStreamResumeItems('viewer-a')).length, 2);
     await report('tmdb-ep-202-1-2', 45, 'viewer-a', now + 1, 'hideContinueWatching');

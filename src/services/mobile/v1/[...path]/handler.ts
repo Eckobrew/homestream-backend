@@ -328,7 +328,9 @@ async function dispatchContent(request: HttpRequest, context: Context) {
           seriesName: show.title,
           tmdbId,
           source: show.source,
-          status: 'processing' as const,
+          status: show.status,
+          requestStatus: show.requestStatus,
+          requestedAt: show.requestedAt,
           genres: show.genres,
         })));
         return HttpResponse.json({ items: allEpisodes });
