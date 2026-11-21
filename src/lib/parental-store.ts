@@ -43,7 +43,7 @@ export function requireParentPin(pin: unknown, initialize = false): Promise<void
   return check;
 }
 export function kidsPolicyRevision(profile: UserProfile) {
-  return crypto.createHash('sha256').update(`${profile.id}|${profile.jellyfinUserId}|${profile.isKids}|${profile.kidsRating}|${profile.kidsDateOfBirth}`).digest('hex').slice(0, 24);
+  return crypto.createHash('sha256').update(`${profile.id}|${profile.historyUserId}|${profile.isKids}|${profile.kidsRating}|${profile.kidsDateOfBirth}`).digest('hex').slice(0, 24);
 }
 export function isKids(profile: UserProfile | null | undefined): profile is UserProfile & { kidsRating: KidsRating } {
   return Boolean(profile?.isKids && profile.kidsRating && Object.hasOwn(KIDS_LIMITS, profile.kidsRating));
@@ -63,5 +63,5 @@ export function backupPolicy(userId: string, policy: Record<string, unknown>) {
 export async function denyPasswordlessAdultLogin(userId: string, password: unknown, username = ''): Promise<boolean> {
   if (typeof password === 'string' && password.trim() && password.trim().toLowerCase() !== username.trim().toLowerCase()) return false;
   const profiles = await getHomeflixProfiles();
-  return profiles.some(isKids) && !profiles.some(p => (p.jellyfinUserId || p.id) === userId && isKids(p));
+  return profiles.some(isKids) && !profiles.some(p => (p.historyUserId || p.id) === userId && isKids(p));
 }

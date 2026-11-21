@@ -19,7 +19,7 @@ export interface PlaybackResponse {
   subtitles?: SubtitleTrack[];
   audioTracks?: MediaAudioTrack[];
 }
-export interface PublicConfig { appName: string; isConfigured: boolean; mediaEngine?: 'jellyfin' | 'native'; jellyfinUrl: string; hasJellyfinKey: boolean; jellyfinUserId: string; seerrUrl: string; hasSeerrKey: boolean; qbittorrentUrl?: string; qbittorrentUsername?: string; hasQbittorrentPassword: boolean; downloadsPath: string; isJellyfinConfigured: boolean; isSeerrConfigured: boolean; isQbittorrentConfigured: boolean; isSetupNeeded: boolean; profilesCount: number; }
-export interface Capabilities { apiVersion: number; appName: string; cast: boolean; jellyfinLogin?: boolean; canManageIntegrations?: boolean; }
+export interface PublicConfig { appName: string; isConfigured: boolean; mediaEngine?: 'native'; qbittorrentUrl?: string; qbittorrentUsername?: string; hasQbittorrentPassword: boolean; downloadsPath: string; isQbittorrentConfigured: boolean; isSetupNeeded: boolean; profilesCount: number; }
+export interface Capabilities { apiVersion: number; appName: string; cast: boolean; canManageIntegrations?: boolean; }
 
 export type { MusicAlbum, MusicTrack, MusicResponse, MusicAlbumResponse, BookItem, BookRequestItem, BookProgress, BooksResponse, BookSearchResponse, BookDetailResponse, BookQueueItem, BookQueueResponse, RequestedItem, RequestedResponse, IntegrationSummary, IntegrationsResponse, YouTubeSearchResult, YouTubeSearchResponse, YouTubeStreamResponse, YouTubeSubscription, YouTubeSubscriptionsResponse, YouTubeDownloadItem, YouTubeQueueResponse, YouTubeArchiveItem, YouTubeArchiveResponse } from './types';

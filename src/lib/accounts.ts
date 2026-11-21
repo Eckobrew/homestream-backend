@@ -8,7 +8,6 @@ export interface AccountRecord {
   displayName: string;
   isAdmin: boolean;
   hasPassword: boolean;
-  legacyJellyfinAuth: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -19,7 +18,6 @@ interface AccountRow {
   display_name: string;
   password_hash: string | null;
   is_admin: number;
-  legacy_jellyfin_auth: number;
   created_at: string;
   updated_at: string;
 }
@@ -36,7 +34,6 @@ export function ensureAccountTables() {
         display_name TEXT NOT NULL,
         password_hash TEXT,
         is_admin INTEGER NOT NULL DEFAULT 0,
-        legacy_jellyfin_auth INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       );
@@ -69,7 +66,6 @@ function toAccountRecord(row: AccountRow): AccountRecord {
     displayName: row.display_name,
     isAdmin: row.is_admin === 1,
     hasPassword: Boolean(row.password_hash),
-    legacyJellyfinAuth: row.legacy_jellyfin_auth === 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -95,8 +91,8 @@ function migrateLegacyProfilesIfNeeded() {
   const accountId = `acct-${nathanProfile?.id || 'nathan'}`;
 
   db.prepare(`
-    INSERT OR IGNORE INTO accounts (id, username, display_name, password_hash, is_admin, legacy_jellyfin_auth, created_at, updated_at)
-    VALUES (?, ?, ?, NULL, 1, 1, ?, ?)
+    INSERT OR IGNORE INTO accounts (id, username, display_name, password_hash, is_admin, created_at, updated_at)
+    VALUES (?, ?, ?, NULL, 1, ?, ?)
   `).run(accountId, 'nathan', nathanProfile?.name || 'Nathan', now, now);
 
   let updated = false;
@@ -166,8 +162,8 @@ export function createAccount(input: {
   const isAdmin = input.isAdmin ? 1 : 0;
 
   stateDatabase().prepare(`
-    INSERT INTO accounts (id, username, display_name, password_hash, is_admin, legacy_jellyfin_auth, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, 0, ?, ?)
+    INSERT INTO accounts (id, username, display_name, password_hash, is_admin, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(id, username, displayName, passwordHash, isAdmin, now, now);
 
   return getAccountById(id)!;
@@ -177,7 +173,7 @@ export function setAccountPassword(accountId: string, password: string): boolean
   ensureAccountTables();
   const hash = hashPassword(password);
   const res = stateDatabase().prepare(`
-    UPDATE accounts SET password_hash = ?, legacy_jellyfin_auth = 0, updated_at = ? WHERE id = ?
+    UPDATE accounts SET password_hash = ?, updated_at = ? WHERE id = ?
   `).run(hash, new Date().toISOString(), accountId);
   return res.changes > 0;
 }

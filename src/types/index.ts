@@ -48,7 +48,7 @@ export interface Episode {
   totalDurationTicks?: number;
   progressPercent?: number;
   played?: boolean;
-  jellyfinId?: string;
+  nativeId?: string;
   videoStreamUrl?: string;
   downloadStreamUrl?: string;
   airDate?: string;
@@ -97,9 +97,8 @@ export interface MediaItem {
   durationMinutes?: number;
   genres: string[];
   seasonsCount?: number;
-  source: 'jellyfin' | 'native' | 'seerr' | 'tmdb' | 'demo' | 'youtube';
-  jellyfinId?: string;
-  seerrId?: number;
+  source: 'native' | 'tmdb' | 'demo' | 'youtube';
+  nativeId?: string;
   tmdbId?: number;
   playableEpisodeId?: string;
   versions?: MediaVersion[];
@@ -143,11 +142,6 @@ export interface MediaRowSection {
 
 export interface ServerConfig {
   appName?: string;
-  jellyfinUrl: string;
-  jellyfinApiKey: string;
-  jellyfinUserId: string;
-  seerrUrl: string;
-  seerrApiKey: string;
   tmdbApiKey?: string;
   slskdUrl?: string;
   slskdApiKey?: string;
@@ -209,9 +203,9 @@ export interface UserProfile {
   avatarColor: string; // Tailwind gradient e.g. "from-red-600 to-red-800"
   avatarBg: string;    // Tailwind bg color e.g. "bg-red-600"
   initials: string;    // e.g. "NA"
-  avatarUrl?: string;  // Jellyfin avatar image URL if available
+  avatarUrl?: string;  // Profile avatar image URL if available
   isAdministrator?: boolean;
-  jellyfinUserId?: string;
+  historyUserId?: string;
   accountId?: string;
 }
 
@@ -335,7 +329,7 @@ export interface RequestedItem {
   id: string;
   title: string;
   kind: 'movie' | 'tv' | 'music';
-  source: 'seerr' | 'tmdb' | 'qbittorrent' | 'slskd' | 'bookshelf' | 'radarr' | 'sonarr';
+  source: 'tmdb' | 'qbittorrent' | 'slskd' | 'bookshelf' | 'radarr' | 'sonarr';
   status: string;
   artist?: string;
   posterUrl?: string;
@@ -348,7 +342,7 @@ export interface RequestedItem {
 }
 export interface RequestedResponse { items: RequestedItem[]; warnings: string[]; updatedAt: string; }
 export interface IntegrationSummary {
-  id: 'jellyfin' | 'seerr' | 'qbittorrent' | 'slskd' | 'bookshelf' | 'radarr' | 'sonarr' | 'tmdb' | 'spotify';
+  id: 'qbittorrent' | 'slskd' | 'bookshelf' | 'radarr' | 'sonarr' | 'tmdb' | 'spotify';
   name: string;
   url: string;
   configured: boolean;

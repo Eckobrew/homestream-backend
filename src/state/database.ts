@@ -58,7 +58,7 @@ export function writeDevices(devices: Record<string, unknown>) {
 function object(value: unknown): value is Record<string, unknown> { return Boolean(value && typeof value === 'object' && !Array.isArray(value)); }
 export function validateLegacyState(config: unknown, profiles: unknown, devices: unknown, parental: unknown) {
   if (!object(config)) throw new Error('Invalid legacy configuration');
-  for (const key of ['appName','jellyfinUrl','jellyfinApiKey','jellyfinUserId','seerrUrl','seerrApiKey','qbittorrentUrl','qbittorrentUsername','qbittorrentPassword','downloadsPath']) if (config[key] !== undefined && typeof config[key] !== 'string') throw new Error(`Invalid configuration field: ${key}`);
+  for (const key of ['appName','qbittorrentUrl','qbittorrentUsername','qbittorrentPassword','downloadsPath']) if (config[key] !== undefined && typeof config[key] !== 'string') throw new Error(`Invalid configuration field: ${key}`);
   if (!Array.isArray(profiles) || profiles.some(p => !object(p) || typeof p.id !== 'string' || !p.id || typeof p.name !== 'string' || (p.isKids && !['U','PG','12','15','18'].includes(String(p.kidsRating))))) throw new Error('Invalid legacy profiles');
   if (new Set(profiles.map(p => p.id)).size !== profiles.length) throw new Error('Duplicate legacy profile identifiers');
   if (!object(devices) || Object.entries(devices).some(([token, device]) => !/^hst_dev_[a-f0-9]{48}$/.test(token) || !object(device) || device.token !== token || typeof device.deviceId !== 'string' || typeof device.client !== 'string')) throw new Error('Invalid legacy devices');

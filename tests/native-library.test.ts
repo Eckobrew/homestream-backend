@@ -10,14 +10,11 @@ import { stateDatabase } from '../src/state/database';
 
 const ffmpegAvailable = spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' }).status === 0;
 
-test('native-only installation scans versions, serves playback extras and saves progress without Jellyfin', {
+test('native-only installation scans versions, serves playback extras and saves progress with native playback', {
   skip: !ffmpegAvailable || spawnSync('ffprobe', ['-version'], { stdio: 'ignore' }).status !== 0,
 }, async () => {
   const directory = await mkdtemp(join(tmpdir(), 'homestream-native-library-'));
   process.env.DATA_DIR = directory;
-  process.env.JELLYFIN_URL = '';
-  process.env.NEXT_PUBLIC_JELLYFIN_URL = '';
-  process.env.JELLYFIN_API_KEY = '';
   process.env.TMDB_API_KEY = '';
   process.env.HOMESTREAM_SESSION_SECRET = 'native-library-test-session-secret-at-least-32';
   process.env.HOMESTREAM_MOBILE_TOKEN = 'native-library-test-mobile-token-at-least-32';
@@ -99,7 +96,7 @@ test('native-only installation scans versions, serves playback extras and saves 
 
     const config = (await app.inject('/api/v1/config')).json();
     assert.equal(config.mediaEngine, 'native');
-    assert.equal(config.isJellyfinConfigured, false);
+    assert.equal('jellyfinUrl' in config, false);
     assert.equal(config.isSetupNeeded, false);
     assert.equal((await app.inject('/api/v1/library/movies')).json().items[0].id, item.id);
     assert.equal((await app.inject('/api/v1/search?q=Fixture')).json().results[0].id, item.id);

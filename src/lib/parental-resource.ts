@@ -25,7 +25,7 @@ export function resourceUrl(url: string, profile: UserProfile, kind: Ticket['kin
   const body: Ticket = {
     url,
     profile: profile.id,
-    user: profile.jellyfinUserId || profile.id,
+    user: profile.historyUserId || profile.id,
     revision: kidsPolicyRevision(profile),
     expires: Date.now() + 6 * 3600000,
     kind,
@@ -75,7 +75,7 @@ export async function parentalResource(request: HttpRequest): Promise<Response> 
     const ticket: Ticket = JSON.parse(Buffer.concat([decoder.update(bytes.subarray(28)), decoder.final()]).toString());
     const profiles = await getHomeflixProfiles();
     const profile =
-      profiles.find(p => p.id === ticket.profile && (p.jellyfinUserId || p.id) === ticket.user) ||
+      profiles.find(p => p.id === ticket.profile && (p.historyUserId || p.id) === ticket.user) ||
       (!ticket.device ? { id: ticket.profile, name: '', avatarColor: '', avatarBg: '', initials: '' } : undefined);
     if (!profile) throw new Error('Profile no longer exists');
     if (

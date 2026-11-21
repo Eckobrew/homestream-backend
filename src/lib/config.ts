@@ -11,12 +11,6 @@ export const sanitizeUrl = (url: string): string => {
 export const getServerConfig = (): ServerConfig => {
   const fileConfig = readState<Partial<ServerConfig>>('config', {});
 
-  const jellyfinUrl = '';
-  const jellyfinApiKey = '';
-  const jellyfinUserId = '';
-  const seerrUrl = '';
-  const seerrApiKey = '';
-
   const qbittorrentUrl =
     fileConfig.qbittorrentUrl ??
     process.env.QBITTORRENT_URL ??
@@ -66,22 +60,9 @@ export const getServerConfig = (): ServerConfig => {
     process.env.NEXT_PUBLIC_APP_NAME ||
     'HomeStream';
 
-  const isConfigured = Boolean(
-    tmdbApiKey ||
-    (radarrUrl && radarrApiKey) ||
-    (sonarrUrl && sonarrApiKey) ||
-    (qbittorrentUrl && qbittorrentUsername) ||
-    fileConfig.slskdUrl ||
-    fileConfig.bookshelfUrl
-  );
 
-  return {
+  const config: ServerConfig = {
     appName,
-    jellyfinUrl: '',
-    jellyfinApiKey: '',
-    jellyfinUserId: '',
-    seerrUrl: '',
-    seerrApiKey: '',
     tmdbApiKey,
     slskdUrl: sanitizeUrl(fileConfig.slskdUrl ?? process.env.SLSKD_URL ?? ''),
     slskdApiKey: fileConfig.slskdApiKey || process.env.SLSKD_API_KEY || '',
@@ -102,59 +83,40 @@ export const getServerConfig = (): ServerConfig => {
     slskdQualityPreference: fileConfig.slskdQualityPreference,
     spotifyClientId: fileConfig.spotifyClientId || process.env.SPOTIFY_CLIENT_ID || '',
     spotifyClientSecret: fileConfig.spotifyClientSecret || process.env.SPOTIFY_CLIENT_SECRET || '',
-    isConfigured,
+    isConfigured: false,
   };
+  config.isConfigured = hasConfiguredIntegration(config);
+  return config;
 };
 
 export const saveServerConfig = (newConfig: Partial<ServerConfig>): ServerConfig => {
   const current = getServerConfig();
-  const merged: ServerConfig = {
-    ...current,
-    ...newConfig,
-    appName: newConfig.appName || current.appName || 'HomeStream',
-    jellyfinUrl: '',
-    seerrUrl: '',
-    jellyfinApiKey: '',
-    seerrApiKey: '',
-    tmdbApiKey: newConfig.tmdbApiKey !== undefined ? newConfig.tmdbApiKey : current.tmdbApiKey,
-    jellyfinUserId: '',
-    slskdUrl: sanitizeUrl(newConfig.slskdUrl !== undefined ? newConfig.slskdUrl : current.slskdUrl || ''),
-    slskdApiKey: newConfig.slskdApiKey !== undefined ? newConfig.slskdApiKey : current.slskdApiKey,
-    musicPath: newConfig.musicPath !== undefined ? newConfig.musicPath : current.musicPath,
-    bookshelfUrl: sanitizeUrl(newConfig.bookshelfUrl !== undefined ? newConfig.bookshelfUrl : current.bookshelfUrl || ''),
-    bookshelfApiKey: newConfig.bookshelfApiKey !== undefined ? newConfig.bookshelfApiKey : current.bookshelfApiKey,
-    booksPath: newConfig.booksPath !== undefined ? newConfig.booksPath : current.booksPath,
-    qbittorrentUrl: sanitizeUrl(newConfig.qbittorrentUrl !== undefined ? newConfig.qbittorrentUrl : current.qbittorrentUrl || ''),
-    qbittorrentUsername: newConfig.qbittorrentUsername !== undefined ? newConfig.qbittorrentUsername : current.qbittorrentUsername,
-    qbittorrentPassword: newConfig.qbittorrentPassword !== undefined ? newConfig.qbittorrentPassword : current.qbittorrentPassword,
-    downloadsPath: newConfig.downloadsPath !== undefined ? newConfig.downloadsPath : current.downloadsPath,
-    radarrUrl: sanitizeUrl(newConfig.radarrUrl !== undefined ? newConfig.radarrUrl : current.radarrUrl || ''),
-    radarrApiKey: newConfig.radarrApiKey !== undefined ? newConfig.radarrApiKey : current.radarrApiKey,
-    radarrQualityProfileId: newConfig.radarrQualityProfileId !== undefined ? newConfig.radarrQualityProfileId : current.radarrQualityProfileId,
-    sonarrUrl: sanitizeUrl(newConfig.sonarrUrl !== undefined ? newConfig.sonarrUrl : current.sonarrUrl || ''),
-    sonarrApiKey: newConfig.sonarrApiKey !== undefined ? newConfig.sonarrApiKey : current.sonarrApiKey,
-    sonarrQualityProfileId: newConfig.sonarrQualityProfileId !== undefined ? newConfig.sonarrQualityProfileId : current.sonarrQualityProfileId,
-    slskdQualityPreference: newConfig.slskdQualityPreference !== undefined ? newConfig.slskdQualityPreference : current.slskdQualityPreference,
-    spotifyClientId: newConfig.spotifyClientId !== undefined ? newConfig.spotifyClientId : current.spotifyClientId,
-    spotifyClientSecret: newConfig.spotifyClientSecret !== undefined ? newConfig.spotifyClientSecret : current.spotifyClientSecret,
-    isConfigured: false,
-  };
-
-  merged.isConfigured = Boolean(
-    merged.tmdbApiKey ||
-    (merged.radarrUrl && merged.radarrApiKey) ||
-    (merged.sonarrUrl && merged.sonarrApiKey) ||
-    (merged.qbittorrentUrl && merged.qbittorrentUsername) ||
-    merged.slskdUrl ||
-    merged.bookshelfUrl
-  );
+  // Ignore undefined fields and unknown keys while preserving intentional empty values.
+  const merged = Object.fromEntries(Object.entries(current).map(([key, value]) => [
+    key, newConfig[key as keyof ServerConfig] !== undefined ? newConfig[key as keyof ServerConfig] : value,
+  ])) as unknown as ServerConfig;
+  merged.appName = newConfig.appName || current.appName || 'HomeStream';
+  for (const key of ['slskdUrl', 'bookshelfUrl', 'qbittorrentUrl', 'radarrUrl', 'sonarrUrl'] as const) {
+    merged[key] = sanitizeUrl(merged[key] || '');
+  }
+  merged.isConfigured = hasConfiguredIntegration(merged);
 
   try {
     writeState('config', merged);
-  } catch (err) {
-    log.error('Failed writing config.json');
+  } catch {
+    log.error('Failed writing server configuration');
     throw new Error('Configuration storage unavailable');
   }
 
   return merged;
 };
+
+function hasConfiguredIntegration(config: ServerConfig): boolean {
+  return Boolean(
+    config.tmdbApiKey ||
+    (config.radarrUrl && config.radarrApiKey) ||
+    (config.sonarrUrl && config.sonarrApiKey) ||
+    (config.qbittorrentUrl && config.qbittorrentUsername) ||
+    config.slskdUrl || config.bookshelfUrl
+  );
+}

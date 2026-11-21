@@ -85,7 +85,6 @@ async function dispatch(request: HttpRequest, context: Context) {
       cast: true,
       pairing: 'local',
       localPairing: directLocal(request),
-      jellyfinLogin: false,
     });
   }
   if ((get || request.method === 'HEAD') && route === 'parental-resource') return parentalResource(request);
@@ -218,7 +217,7 @@ async function dispatchContent(request: HttpRequest, context: Context) {
       return HttpResponse.json({ error: 'Method not allowed' }, { status: 405 });
     }
     if (route === 'capabilities') {
-      return HttpResponse.json({ apiVersion: 1, appName: getServerConfig().appName || 'HomeStream', cast: true, jellyfinLogin: false, canManageIntegrations: isAdmin });
+      return HttpResponse.json({ apiVersion: 1, appName: getServerConfig().appName || 'HomeStream', cast: true, canManageIntegrations: isAdmin });
     }
     return HttpResponse.json({ profile, revision: profile ? kidsPolicyRevision(profile) : '', canManageIntegrations: isAdmin });
   }
@@ -309,7 +308,7 @@ async function dispatchContent(request: HttpRequest, context: Context) {
 
     const tmdb = new TmdbClient();
     let tmdbId = 0;
-    const match = /^(?:seerr|tmdb)-(?:tv-|ep-)?(\d+)/.exec(itemId) || (/^\d+$/.test(itemId) ? [null, itemId] : null);
+    const match = /^tmdb-(?:tv-|ep-)?(\d+)/.exec(itemId) || (/^\d+$/.test(itemId) ? [null, itemId] : null);
     if (match) tmdbId = Number(match[1]);
 
     if (tmdbId > 0 && tmdb.isConfigured()) {
@@ -351,7 +350,7 @@ async function dispatchContent(request: HttpRequest, context: Context) {
     const uid = (await resolveProfileId(session?.id || request.nextUrl.searchParams.get('userId') || 'default')) || 'default';
     let tmdbId =
       request.nextUrl.searchParams.get('tmdbId')?.trim() ||
-      /^(?:seerr|tmdb)-(?:movie-)?(\d+)$/.exec(id)?.[1] ||
+      /^tmdb-(?:movie-)?(\d+)$/.exec(id)?.[1] ||
       (/^\d+$/.test(id) ? id : '');
     if (!tmdbId && id.startsWith('nat-')) {
       const collection = getNativeMovieCollection(id, uid);

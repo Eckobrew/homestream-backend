@@ -30,8 +30,7 @@ data class MediaItem(
     @SerialName("genres") val `genres`: List<String>,
     @SerialName("seasonsCount") val `seasonsCount`: Double? = null,
     @SerialName("source") val `source`: String,
-    @SerialName("jellyfinId") val `jellyfinId`: String? = null,
-    @SerialName("seerrId") val `seerrId`: Double? = null,
+    @SerialName("nativeId") val `nativeId`: String? = null,
     @SerialName("tmdbId") val `tmdbId`: Double? = null,
     @SerialName("playableEpisodeId") val `playableEpisodeId`: String? = null,
     @SerialName("versions") val `versions`: List<MediaVersion>? = null,
@@ -122,7 +121,7 @@ data class Episode(
     @SerialName("totalDurationTicks") val `totalDurationTicks`: Double? = null,
     @SerialName("progressPercent") val `progressPercent`: Double? = null,
     @SerialName("played") val `played`: Boolean? = null,
-    @SerialName("jellyfinId") val `jellyfinId`: String? = null,
+    @SerialName("nativeId") val `nativeId`: String? = null,
     @SerialName("videoStreamUrl") val `videoStreamUrl`: String? = null,
     @SerialName("downloadStreamUrl") val `downloadStreamUrl`: String? = null,
     @SerialName("airDate") val `airDate`: String? = null,
@@ -186,7 +185,7 @@ data class UserProfile(
     @SerialName("initials") val `initials`: String,
     @SerialName("avatarUrl") val `avatarUrl`: String? = null,
     @SerialName("isAdministrator") val `isAdministrator`: Boolean? = null,
-    @SerialName("jellyfinUserId") val `jellyfinUserId`: String? = null,
+    @SerialName("historyUserId") val `historyUserId`: String? = null,
     @SerialName("accountId") val `accountId`: String? = null
 )
 
@@ -238,17 +237,10 @@ data class PublicConfig(
     @SerialName("appName") val `appName`: String,
     @SerialName("isConfigured") val `isConfigured`: Boolean,
     @SerialName("mediaEngine") val `mediaEngine`: String? = null,
-    @SerialName("jellyfinUrl") val `jellyfinUrl`: String,
-    @SerialName("hasJellyfinKey") val `hasJellyfinKey`: Boolean,
-    @SerialName("jellyfinUserId") val `jellyfinUserId`: String,
-    @SerialName("seerrUrl") val `seerrUrl`: String,
-    @SerialName("hasSeerrKey") val `hasSeerrKey`: Boolean,
     @SerialName("qbittorrentUrl") val `qbittorrentUrl`: String? = null,
     @SerialName("qbittorrentUsername") val `qbittorrentUsername`: String? = null,
     @SerialName("hasQbittorrentPassword") val `hasQbittorrentPassword`: Boolean,
     @SerialName("downloadsPath") val `downloadsPath`: String,
-    @SerialName("isJellyfinConfigured") val `isJellyfinConfigured`: Boolean,
-    @SerialName("isSeerrConfigured") val `isSeerrConfigured`: Boolean,
     @SerialName("isQbittorrentConfigured") val `isQbittorrentConfigured`: Boolean,
     @SerialName("isSetupNeeded") val `isSetupNeeded`: Boolean,
     @SerialName("profilesCount") val `profilesCount`: Double
@@ -259,7 +251,6 @@ data class Capabilities(
     @SerialName("apiVersion") val `apiVersion`: Double,
     @SerialName("appName") val `appName`: String,
     @SerialName("cast") val `cast`: Boolean,
-    @SerialName("jellyfinLogin") val `jellyfinLogin`: Boolean? = null,
     @SerialName("canManageIntegrations") val `canManageIntegrations`: Boolean? = null
 )
 
@@ -593,11 +584,6 @@ data class WebPostConfigQuery(
 @Serializable
 data class WebPostConfigBody(
     @SerialName("appName") val `appName`: String? = null,
-    @SerialName("jellyfinUrl") val `jellyfinUrl`: String? = null,
-    @SerialName("jellyfinApiKey") val `jellyfinApiKey`: String? = null,
-    @SerialName("jellyfinUserId") val `jellyfinUserId`: String? = null,
-    @SerialName("seerrUrl") val `seerrUrl`: String? = null,
-    @SerialName("seerrApiKey") val `seerrApiKey`: String? = null,
     @SerialName("qbittorrentUrl") val `qbittorrentUrl`: String? = null,
     @SerialName("qbittorrentUsername") val `qbittorrentUsername`: String? = null,
     @SerialName("qbittorrentPassword") val `qbittorrentPassword`: String? = null,
@@ -693,12 +679,9 @@ data class WebPostProfilesBody(
     @SerialName("profileId") val `profileId`: String? = null,
     @SerialName("name") val `name`: String? = null,
     @SerialName("userIds") val `userIds`: List<String>? = null,
-    @SerialName("jellyfinUserIds") val `jellyfinUserIds`: List<String>? = null,
-    @SerialName("jellyfinUserId") val `jellyfinUserId`: String? = null,
     @SerialName("paletteIndex") val `paletteIndex`: Long? = null,
     @SerialName("avatarId") val `avatarId`: String? = null,
     @SerialName("mode") val `mode`: String? = null,
-    @SerialName("jellyfinName") val `jellyfinName`: String? = null,
     @SerialName("password") val `password`: String? = null,
     @SerialName("isKids") val `isKids`: Boolean? = null,
     @SerialName("kidsDateOfBirth") val `kidsDateOfBirth`: String? = null,
@@ -3203,8 +3186,7 @@ data class MobileGetDiscoveryResponse(
     @SerialName("appName") val `appName`: String? = null,
     @SerialName("cast") val `cast`: Boolean? = null,
     @SerialName("pairing") val `pairing`: String? = null,
-    @SerialName("localPairing") val `localPairing`: Boolean? = null,
-    @SerialName("jellyfinLogin") val `jellyfinLogin`: Boolean? = null
+    @SerialName("localPairing") val `localPairing`: Boolean? = null
 )
 
 @Serializable
@@ -3306,12 +3288,9 @@ data class MobilePostProfilesBody(
     @SerialName("profileId") val `profileId`: String? = null,
     @SerialName("name") val `name`: String? = null,
     @SerialName("userIds") val `userIds`: List<String>? = null,
-    @SerialName("jellyfinUserIds") val `jellyfinUserIds`: List<String>? = null,
-    @SerialName("jellyfinUserId") val `jellyfinUserId`: String? = null,
     @SerialName("paletteIndex") val `paletteIndex`: Long? = null,
     @SerialName("avatarId") val `avatarId`: String? = null,
     @SerialName("mode") val `mode`: String? = null,
-    @SerialName("jellyfinName") val `jellyfinName`: String? = null,
     @SerialName("password") val `password`: String? = null,
     @SerialName("isKids") val `isKids`: Boolean? = null,
     @SerialName("kidsDateOfBirth") val `kidsDateOfBirth`: String? = null,

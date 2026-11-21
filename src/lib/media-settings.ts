@@ -16,7 +16,7 @@ export type TranscodePreset = 'ultrafast' | 'superfast' | 'veryfast' | 'faster' 
 export type SubtitleMode = 'default' | 'forced' | 'always' | 'none';
 
 export interface MediaEngineSettings {
-  mediaEngine: 'jellyfin' | 'native';
+  mediaEngine: 'native';
   libraries: MediaLibraryConfig[];
   // Transcoding & Hardware Acceleration
   hwAccel: HwAccelMode;

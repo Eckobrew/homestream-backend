@@ -1,7 +1,13 @@
 import { stateDatabase } from '@/state/database';
+import { TmdbClient } from './tmdb';
+import type { MediaItem } from '@/types';
+
+const progressDatabases = new WeakSet<ReturnType<typeof stateDatabase>>();
+const resumeDatabases = new WeakSet<ReturnType<typeof stateDatabase>>();
 
 function ensureTable() {
   const db = stateDatabase();
+  if (progressDatabases.has(db)) return db;
   db.exec(`
     CREATE TABLE IF NOT EXISTS stream_progress (
       profile_id TEXT NOT NULL,
@@ -11,6 +17,7 @@ function ensureTable() {
       PRIMARY KEY (profile_id, item_id)
     )
   `);
+  progressDatabases.add(db);
   return db;
 }
 
@@ -44,36 +51,38 @@ export function getStreamProgressMap(profileId: string, itemIds: string[]): Map<
   if (itemIds.length === 0) return result;
   const pid = (profileId || 'default').trim() || 'default';
   const db = ensureTable();
-  const placeholders = itemIds.map(() => '?').join(',');
-  const rows = db
-    .prepare(`SELECT item_id, position_ticks FROM stream_progress WHERE profile_id = ? AND item_id IN (${placeholders})`)
-    .all(pid, ...itemIds) as Array<{ item_id: string; position_ticks: number }>;
-  for (const row of rows) {
-    result.set(row.item_id, Number(row.position_ticks) || 0);
+  // Bound SQLite parameters and avoid repeated work for duplicate catalog IDs.
+  const uniqueIds = [...new Set(itemIds)];
+  for (let offset = 0; offset < uniqueIds.length; offset += 500) {
+    const batch = uniqueIds.slice(offset, offset + 500);
+    const placeholders = batch.map(() => '?').join(',');
+    const rows = db
+      .prepare(`SELECT item_id, position_ticks FROM stream_progress WHERE profile_id = ? AND item_id IN (${placeholders})`)
+      .all(pid, ...batch) as Array<{ item_id: string; position_ticks: number }>;
+    for (const row of rows) result.set(row.item_id, Number(row.position_ticks) || 0);
   }
   return result;
 }
 
 // Keep catalog streams separate from imported-library watch state.
-import { TmdbClient } from './tmdb';
-import type { MediaItem } from '@/types';
-
 function resumeTable() {
   const db = ensureTable();
+  if (resumeDatabases.has(db)) return db;
   db.exec(`CREATE TABLE IF NOT EXISTS stream_resume_metadata (
     profile_id TEXT NOT NULL, item_id TEXT NOT NULL, metadata_json TEXT NOT NULL,
     duration_ticks INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (profile_id, item_id)
   )`);
+  resumeDatabases.add(db);
   return db;
 }
 
 export function isCatalogStreamId(id: string): boolean {
-  return /^(?:tmdb|seerr)-(?:movie-|tv-|ep-)?\d+(?:-\d+-\d+)?$/.test(id);
+  return /^tmdb-(?:movie-|tv-|ep-)?\d+(?:-\d+-\d+)?$/.test(id);
 }
 
 async function catalogStreamItem(id: string): Promise<MediaItem | null> {
-  const match = /^(?:tmdb|seerr)-(?:(movie|tv|ep)-)?(\d+)(?:-(\d+)-(\d+))?$/.exec(id);
+  const match = /^tmdb-(?:(movie|tv|ep)-)?(\d+)(?:-(\d+)-(\d+))?$/.exec(id);
   if (!match) return null;
   const tmdbId = Number(match[2]);
   const tv = match[1] === 'tv' || match[1] === 'ep' || Boolean(match[3]);

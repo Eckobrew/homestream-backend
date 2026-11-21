@@ -24,7 +24,7 @@ async function handleGET(request: HttpRequest) {
   const cast = searchParams.get('receiver') === 'cast';
 
   const isDl = itemId.startsWith('dl-');
-  const isVirtual = itemId.startsWith('seerr-') || itemId.startsWith('tmdb-') || Boolean(searchParams.get('tmdbId'));
+  const isVirtual = itemId.startsWith('tmdb-') || Boolean(searchParams.get('tmdbId'));
 
   if (isDl || isVirtual) {
     if (isDl) {
@@ -38,14 +38,14 @@ async function handleGET(request: HttpRequest) {
     const title = searchParams.get('title') || '';
 
     if (!tmdbId) {
-      const epMatch = /^(?:seerr|tmdb)-(?:tv|ep)-(\d+)-(\d+)-(\d+)$/.exec(itemId);
+      const epMatch = /^tmdb-(?:tv|ep)-(\d+)-(\d+)-(\d+)$/.exec(itemId);
       if (epMatch) {
         tmdbId = Number(epMatch[1]);
         type = 'tv';
         season = season ?? Number(epMatch[2]);
         episode = episode ?? Number(epMatch[3]);
       } else {
-        const match = /^(?:seerr|tmdb)-(?:(movie|tv)-)?(\d+)$/.exec(itemId);
+        const match = /^tmdb-(?:(movie|tv)-)?(\d+)$/.exec(itemId);
         if (match) {
           if (match[1]) type = match[1];
           tmdbId = Number(match[2]);

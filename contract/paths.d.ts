@@ -2687,9 +2687,8 @@ export interface components {
             genres: string[];
             seasonsCount?: number;
             /** @enum {string} */
-            source: "demo" | "jellyfin" | "native" | "seerr" | "tmdb" | "youtube";
-            jellyfinId?: string;
-            seerrId?: number;
+            source: "demo" | "native" | "tmdb" | "youtube";
+            nativeId?: string;
             tmdbId?: number;
             playableEpisodeId?: string;
             versions?: components["schemas"]["MediaVersion"][];
@@ -2771,7 +2770,7 @@ export interface components {
             totalDurationTicks?: number;
             progressPercent?: number;
             played?: boolean;
-            jellyfinId?: string;
+            nativeId?: string;
             videoStreamUrl?: string;
             downloadStreamUrl?: string;
             airDate?: string;
@@ -2824,7 +2823,7 @@ export interface components {
             initials: string;
             avatarUrl?: string;
             isAdministrator?: boolean;
-            jellyfinUserId?: string;
+            historyUserId?: string;
             accountId?: string;
         };
         ProfilesResponse: {
@@ -2865,19 +2864,12 @@ export interface components {
         PublicConfig: {
             appName: string;
             isConfigured: boolean;
-            /** @enum {string} */
-            mediaEngine?: "jellyfin" | "native";
-            jellyfinUrl: string;
-            hasJellyfinKey: boolean;
-            jellyfinUserId: string;
-            seerrUrl: string;
-            hasSeerrKey: boolean;
+            /** @constant */
+            mediaEngine?: "native";
             qbittorrentUrl?: string;
             qbittorrentUsername?: string;
             hasQbittorrentPassword: boolean;
             downloadsPath: string;
-            isJellyfinConfigured: boolean;
-            isSeerrConfigured: boolean;
             isQbittorrentConfigured: boolean;
             isSetupNeeded: boolean;
             profilesCount: number;
@@ -2886,7 +2878,6 @@ export interface components {
             apiVersion: number;
             appName: string;
             cast: boolean;
-            jellyfinLogin?: boolean;
             canManageIntegrations?: boolean;
         };
         RequestMediaPayload: {
@@ -2996,7 +2987,7 @@ export interface components {
             /** @enum {string} */
             kind: "movie" | "music" | "tv";
             /** @enum {string} */
-            source: "bookshelf" | "qbittorrent" | "radarr" | "seerr" | "slskd" | "sonarr" | "tmdb";
+            source: "bookshelf" | "qbittorrent" | "radarr" | "slskd" | "sonarr" | "tmdb";
             status: string;
             artist?: string;
             posterUrl?: string;
@@ -3014,7 +3005,7 @@ export interface components {
         };
         IntegrationSummary: {
             /** @enum {string} */
-            id: "bookshelf" | "jellyfin" | "qbittorrent" | "radarr" | "seerr" | "slskd" | "sonarr" | "spotify" | "tmdb";
+            id: "bookshelf" | "qbittorrent" | "radarr" | "slskd" | "sonarr" | "spotify" | "tmdb";
             name: string;
             url: string;
             configured: boolean;
@@ -3704,7 +3695,7 @@ export interface operations {
         parameters: {
             query?: {
                 userId?: string;
-                action?: "save" | "test-jellyfin" | "test-seerr" | "test-qbittorrent" | "test-radarr" | "test-sonarr" | "test-tmdb";
+                action?: "save" | "test-qbittorrent" | "test-radarr" | "test-sonarr" | "test-tmdb";
             };
             header?: never;
             path?: never;
@@ -3714,11 +3705,6 @@ export interface operations {
             content: {
                 "application/json": {
                     appName?: string;
-                    jellyfinUrl?: string;
-                    jellyfinApiKey?: string;
-                    jellyfinUserId?: string;
-                    seerrUrl?: string;
-                    seerrApiKey?: string;
                     qbittorrentUrl?: string;
                     qbittorrentUsername?: string;
                     qbittorrentPassword?: string;
@@ -5059,13 +5045,10 @@ export interface operations {
                     profileId?: string;
                     name?: string;
                     userIds?: string[];
-                    jellyfinUserIds?: string[];
-                    jellyfinUserId?: string;
                     paletteIndex?: number;
                     avatarId?: string;
                     /** @enum {string} */
                     mode?: "existing" | "new" | "native";
-                    jellyfinName?: string;
                     password?: string;
                     isKids?: boolean;
                     kidsDateOfBirth?: string;
@@ -15742,7 +15725,7 @@ export interface operations {
             content: {
                 "application/json": {
                     /** @enum {string} */
-                    integration: "jellyfin" | "seerr" | "qbittorrent" | "slskd" | "bookshelf" | "radarr" | "sonarr" | "tmdb" | "spotify";
+                    integration: "qbittorrent" | "slskd" | "bookshelf" | "radarr" | "sonarr" | "tmdb" | "spotify";
                     /** @enum {string} */
                     action: "save" | "test";
                     url?: string;
@@ -33288,7 +33271,7 @@ export interface operations {
             content: {
                 "application/json": {
                     /** @enum {string} */
-                    integration: "jellyfin" | "seerr" | "qbittorrent" | "slskd" | "bookshelf" | "radarr" | "sonarr" | "tmdb" | "spotify";
+                    integration: "qbittorrent" | "slskd" | "bookshelf" | "radarr" | "sonarr" | "tmdb" | "spotify";
                     /** @enum {string} */
                     action: "save" | "test";
                     url?: string;
@@ -40427,7 +40410,6 @@ export interface operations {
                         cast?: boolean;
                         pairing?: string;
                         localPairing?: boolean;
-                        jellyfinLogin?: boolean;
                     } & {
                         [key: string]: unknown;
                     };
@@ -41576,13 +41558,10 @@ export interface operations {
                     profileId?: string;
                     name?: string;
                     userIds?: string[];
-                    jellyfinUserIds?: string[];
-                    jellyfinUserId?: string;
                     paletteIndex?: number;
                     avatarId?: string;
                     /** @enum {string} */
                     mode?: "existing" | "new" | "native";
-                    jellyfinName?: string;
                     password?: string;
                     isKids?: boolean;
                     kidsDateOfBirth?: string;

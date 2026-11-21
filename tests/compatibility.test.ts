@@ -9,13 +9,13 @@ import { createApp } from '../src/app';
 function normalize(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(normalize);
   if (!value || typeof value !== 'object') return value;
-  return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, ['posterUrl','backdropUrl','thumbnailUrl'].includes(key) && typeof child === 'string' && child.startsWith('http') ? key === 'backdropUrl' ? '/demo-backdrop.svg' : '/demo-poster.svg' : child === 'Top 10 on HomeFlix Today' ? 'Top 10 on HomeStream Today' : normalize(child)]));
+  return Object.fromEntries(Object.entries(value).filter(([key]) => !['jellyfinLogin', 'jellyfinConnected', 'seerrConnected'].includes(key)).map(([key, child]) => [key, ['posterUrl','backdropUrl','thumbnailUrl'].includes(key) && typeof child === 'string' && child.startsWith('http') ? key === 'backdropUrl' ? '/demo-backdrop.svg' : '/demo-poster.svg' : child === 'Top 10 on HomeFlix Today' ? 'Top 10 on HomeStream Today' : normalize(child)]));
 }
 test('legacy responses match fixtures captured from the original monolith', async () => {
   const fixtures = JSON.parse(await readFile(new URL('./fixtures/legacy-api.json', import.meta.url), 'utf8')) as { path: string; status: number; body: unknown }[];
   const directory = await mkdtemp(join(tmpdir(), 'homestream-parity-'));
   const token = 'baseline-test-token-at-least-32-characters';
-  Object.assign(process.env, { DATA_DIR: directory, HOMESTREAM_DEMO_MODE: 'true', HOMESTREAM_MOBILE_TOKEN: token, HOMESTREAM_SESSION_SECRET: token, HOMESTREAM_TRUSTED_PROXIES: '', JELLYFIN_URL: '', JELLYFIN_API_KEY: '', SEERR_URL: '', SEERR_API_KEY: '', QBITTORRENT_URL: '', NEXT_PUBLIC_JELLYFIN_URL: '', NEXT_PUBLIC_SEERR_URL: '', NEXT_PUBLIC_QBITTORRENT_URL: '' });
+  Object.assign(process.env, { DATA_DIR: directory, HOMESTREAM_DEMO_MODE: 'true', HOMESTREAM_MOBILE_TOKEN: token, HOMESTREAM_SESSION_SECRET: token, HOMESTREAM_TRUSTED_PROXIES: '', QBITTORRENT_URL: '', NEXT_PUBLIC_QBITTORRENT_URL: '' });
   const app = createApp();
   try {
     for (const fixture of fixtures) {

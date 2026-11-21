@@ -12,7 +12,7 @@ Part of the [HomeStream](https://github.com/Eckobrew/homestream) platform.
   - **TMDB** for metadata, episode names, and age ratings.
   - **Radarr & Sonarr** with live `/api/v3/qualityprofile` selection.
   - **slskd (Soulseek)** with configurable audio quality (`mp3-320`, `flac`, `any-lossless`, `mp3-any`) and Spotify/Exportify playlist import.
-  - **qBittorrent**, **Bookshelf**, **YouTube (`yt-dlp`)**, and optional legacy **Jellyfin** fallback.
+  - **qBittorrent**, **Bookshelf**, **YouTube (`yt-dlp`)**.
 - **Security & Profiles**: Signed session cookies, LAN/proxy-aware auth (`withParentalControls`), Kids profile restrictions, and SyncPlay room membership checks.
 
 ## Documentation

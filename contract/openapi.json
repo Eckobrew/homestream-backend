@@ -1423,8 +1423,6 @@
               "type": "string",
               "enum": [
                 "save",
-                "test-jellyfin",
-                "test-seerr",
                 "test-qbittorrent",
                 "test-radarr",
                 "test-sonarr",
@@ -1441,26 +1439,6 @@
                 "type": "object",
                 "properties": {
                   "appName": {
-                    "type": "string",
-                    "maxLength": 8192
-                  },
-                  "jellyfinUrl": {
-                    "type": "string",
-                    "maxLength": 8192
-                  },
-                  "jellyfinApiKey": {
-                    "type": "string",
-                    "maxLength": 8192
-                  },
-                  "jellyfinUserId": {
-                    "type": "string",
-                    "maxLength": 8192
-                  },
-                  "seerrUrl": {
-                    "type": "string",
-                    "maxLength": 8192
-                  },
-                  "seerrApiKey": {
                     "type": "string",
                     "maxLength": 8192
                   },
@@ -4783,21 +4761,6 @@
                       "pattern": "^[a-zA-Z0-9_-]+$"
                     }
                   },
-                  "jellyfinUserIds": {
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "minLength": 1,
-                      "maxLength": 128,
-                      "pattern": "^[a-zA-Z0-9_-]+$"
-                    }
-                  },
-                  "jellyfinUserId": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 128,
-                    "pattern": "^[a-zA-Z0-9_-]+$"
-                  },
                   "paletteIndex": {
                     "type": "integer",
                     "minimum": 0,
@@ -4814,10 +4777,6 @@
                       "new",
                       "native"
                     ]
-                  },
-                  "jellyfinName": {
-                    "type": "string",
-                    "maxLength": 8192
                   },
                   "password": {
                     "type": "string",
@@ -31275,8 +31234,6 @@
                   "integration": {
                     "type": "string",
                     "enum": [
-                      "jellyfin",
-                      "seerr",
                       "qbittorrent",
                       "slskd",
                       "bookshelf",
@@ -74200,8 +74157,6 @@
                   "integration": {
                     "type": "string",
                     "enum": [
-                      "jellyfin",
-                      "seerr",
                       "qbittorrent",
                       "slskd",
                       "bookshelf",
@@ -91337,9 +91292,6 @@
                     },
                     "localPairing": {
                       "type": "boolean"
-                    },
-                    "jellyfinLogin": {
-                      "type": "boolean"
                     }
                   },
                   "required": [],
@@ -94130,21 +94082,6 @@
                       "pattern": "^[a-zA-Z0-9_-]+$"
                     }
                   },
-                  "jellyfinUserIds": {
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "minLength": 1,
-                      "maxLength": 128,
-                      "pattern": "^[a-zA-Z0-9_-]+$"
-                    }
-                  },
-                  "jellyfinUserId": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 128,
-                    "pattern": "^[a-zA-Z0-9_-]+$"
-                  },
                   "paletteIndex": {
                     "type": "integer",
                     "minimum": 0,
@@ -94161,10 +94098,6 @@
                       "new",
                       "native"
                     ]
-                  },
-                  "jellyfinName": {
-                    "type": "string",
-                    "maxLength": 8192
                   },
                   "password": {
                     "type": "string",
@@ -101443,19 +101376,14 @@
           "source": {
             "enum": [
               "demo",
-              "jellyfin",
               "native",
-              "seerr",
               "tmdb",
               "youtube"
             ],
             "type": "string"
           },
-          "jellyfinId": {
+          "nativeId": {
             "type": "string"
-          },
-          "seerrId": {
-            "type": "number"
           },
           "tmdbId": {
             "type": "number"
@@ -101751,7 +101679,7 @@
           "played": {
             "type": "boolean"
           },
-          "jellyfinId": {
+          "nativeId": {
             "type": "string"
           },
           "videoStreamUrl": {
@@ -101967,7 +101895,7 @@
           "isAdministrator": {
             "type": "boolean"
           },
-          "jellyfinUserId": {
+          "historyUserId": {
             "type": "string"
           },
           "accountId": {
@@ -102126,26 +102054,8 @@
             "type": "boolean"
           },
           "mediaEngine": {
-            "enum": [
-              "jellyfin",
-              "native"
-            ],
+            "const": "native",
             "type": "string"
-          },
-          "jellyfinUrl": {
-            "type": "string"
-          },
-          "hasJellyfinKey": {
-            "type": "boolean"
-          },
-          "jellyfinUserId": {
-            "type": "string"
-          },
-          "seerrUrl": {
-            "type": "string"
-          },
-          "hasSeerrKey": {
-            "type": "boolean"
           },
           "qbittorrentUrl": {
             "type": "string"
@@ -102158,12 +102068,6 @@
           },
           "downloadsPath": {
             "type": "string"
-          },
-          "isJellyfinConfigured": {
-            "type": "boolean"
-          },
-          "isSeerrConfigured": {
-            "type": "boolean"
           },
           "isQbittorrentConfigured": {
             "type": "boolean"
@@ -102178,18 +102082,11 @@
         "required": [
           "appName",
           "downloadsPath",
-          "hasJellyfinKey",
           "hasQbittorrentPassword",
-          "hasSeerrKey",
           "isConfigured",
-          "isJellyfinConfigured",
           "isQbittorrentConfigured",
-          "isSeerrConfigured",
           "isSetupNeeded",
-          "jellyfinUrl",
-          "jellyfinUserId",
-          "profilesCount",
-          "seerrUrl"
+          "profilesCount"
         ]
       },
       "Capabilities": {
@@ -102202,9 +102099,6 @@
             "type": "string"
           },
           "cast": {
-            "type": "boolean"
-          },
-          "jellyfinLogin": {
             "type": "boolean"
           },
           "canManageIntegrations": {
@@ -102648,7 +102542,6 @@
               "bookshelf",
               "qbittorrent",
               "radarr",
-              "seerr",
               "slskd",
               "sonarr",
               "tmdb"
@@ -102722,10 +102615,8 @@
           "id": {
             "enum": [
               "bookshelf",
-              "jellyfin",
               "qbittorrent",
               "radarr",
-              "seerr",
               "slskd",
               "sonarr",
               "spotify",

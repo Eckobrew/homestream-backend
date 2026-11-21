@@ -58,3 +58,23 @@ test('catalog streams persist per-profile movie and episode resume state in the 
     closeStateDatabases(); await rm(directory, { recursive: true, force: true });
   }
 });
+
+test('progress lookup batches large catalogs, deduplicates IDs and survives database reopen', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'homestream-progress-batches-'));
+  process.env.DATA_DIR = directory;
+  const { saveStreamProgress, getStreamProgressMap } = await import('../src/lib/stream-progress');
+  try {
+    const ids = Array.from({ length: 1100 }, (_, index) => `tmdb-movie-${index + 1}`);
+    saveStreamProgress('viewer', ids[0], 123);
+    saveStreamProgress('viewer', ids[1000], 456);
+    saveStreamProgress('other', ids[0], 999);
+    assert.deepEqual(getStreamProgressMap('viewer', [...ids, ids[0]]), new Map([[ids[0], 123], [ids[1000], 456]]));
+    closeStateDatabases();
+    assert.equal(getStreamProgressMap('viewer', ids).get(ids[1000]), 456);
+    saveStreamProgress('viewer', ids[0], 0);
+    assert.equal(getStreamProgressMap('viewer', ids).has(ids[0]), false);
+  } finally {
+    closeStateDatabases();
+    await rm(directory, { recursive: true, force: true });
+  }
+});

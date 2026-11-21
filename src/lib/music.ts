@@ -7,7 +7,7 @@ import { fetch } from '@/upstream';
 import { readState, stateDatabase, dataDirectory } from '@/state/database';
 import { getServerConfig } from './config';
 import { SlskdClient, type SlskdTransfer } from './slskd';
-import { extractSpotifyTargets, getSpotifyPlaylist, getSpotifyUserPlaylists, SpotifyPlaylistMeta } from './spotify';
+import { extractSpotifyTargets, getSpotifyPlaylist, getSpotifyUserPlaylists } from './spotify';
 import { isExportifyCsv, parseExportifyCsv, parseExportifyZip } from './exportify';
 import type { MusicAlbum, MusicTrack, RequestedItem, Playlist, PlaylistTrack } from '@/types';
 
@@ -2339,20 +2339,6 @@ async function executeTrackSearchAndDownload(track: any) {
     .run(bestUser, bestFile.filename, bestFile.size, track.id);
   noteProgress(track.id, 'enqueue');
   await slskd.enqueue(bestUser, [bestFile]).catch(() => {});
-}
-
-/**
- * Backward compatibility wrapper that triggers the rate-limited queue.
- */
-export async function dispatchTrackDownload(
-  playlistTrackId: string,
-  artist: string,
-  title: string,
-  album: string,
-  playlistId: string,
-  profileId: string
-) {
-  processNextPlaylistTrack();
 }
 
 /**

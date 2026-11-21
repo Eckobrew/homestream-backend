@@ -14,11 +14,11 @@ const list = (items: Schema = object()): Schema => ({ type: 'array', items });
 const success = object({ success: boolean, message: text });
 const profile = object({ id, name: text, isKids: boolean, kidsRating: { type:'string',enum:['U','PG','12','15','18'] } });
 const media = object({ id, title: text, type: { type:'string',enum:['Movie','Series','Episode'] } });
-const profilesBody = object({ action: { type:'string',enum:['create','import','delete','select','update'] }, profileId:id, name:{type:'string',minLength:1,maxLength:64}, userIds:list(id), jellyfinUserIds:list(id), jellyfinUserId:id, paletteIndex:integer, avatarId:text, mode:{type:'string',enum:['existing','new','native']}, jellyfinName:text, password:text, isKids:boolean, kidsDateOfBirth:text, parentPin:{type:'string',pattern:'^\\d{4,8}$'} });
+const profilesBody = object({ action: { type:'string',enum:['create','import','delete','select','update'] }, profileId:id, name:{type:'string',minLength:1,maxLength:64}, userIds:list(id), paletteIndex:integer, avatarId:text, mode:{type:'string',enum:['existing','new','native']}, password:text, isKids:boolean, kidsDateOfBirth:text, parentPin:{type:'string',pattern:'^\\d{4,8}$'} });
 const progress = object({ itemId:id, userId:id, positionTicks:integer, isPaused:boolean, isStopped:boolean, isStarted:boolean, action:{type:'string',enum:['startOver','hideContinueWatching']}, recordedAt:integer },['itemId']);
 const request = object({ mediaType:{type:'string',enum:['movie','tv']},mediaId:{...integer,minimum:1}, seasons:{anyOf:[{type:'string',const:'all'},list(integer)]},is4k:boolean,profileId:{type:'integer',minimum:-1,maximum:Number.MAX_SAFE_INTEGER},serverId:integer },['mediaType','mediaId']);
 const login = object({ username:{type:'string',minLength:1,maxLength:200},password:text,action:{type:'string',enum:['login','logout']} });
-const configFields = Object.fromEntries(['appName','jellyfinUrl','jellyfinApiKey','jellyfinUserId','seerrUrl','seerrApiKey','qbittorrentUrl','qbittorrentUsername','qbittorrentPassword','bookshelfUrl','bookshelfApiKey','booksPath','downloadsPath','radarrUrl','radarrApiKey','sonarrUrl','sonarrApiKey','tmdbApiKey','url','apiKey','userId','username','password','parentPin'].map(key => [key,text]));
+const configFields = Object.fromEntries(['appName','qbittorrentUrl','qbittorrentUsername','qbittorrentPassword','bookshelfUrl','bookshelfApiKey','booksPath','downloadsPath','radarrUrl','radarrApiKey','sonarrUrl','sonarrApiKey','tmdbApiKey','url','apiKey','userId','username','password','parentPin'].map(key => [key,text]));
 const operations: Operation[] = [];
 function add(path: string, method: string, response: Schema, query: Record<string,Schema> = {}, body?: Schema, extra: Partial<Operation> = {}) {
   operations.push({ path,method,response,query:{userId:id,...query},body,...extra });
@@ -26,7 +26,7 @@ function add(path: string, method: string, response: Schema, query: Record<strin
 add('auth','GET',object({requiresAuth:boolean,isAuthenticated:boolean,isLocalOrTailscale:boolean,canManageIntegrations:boolean,users:list(profile)}),{action:{type:'string',enum:['users']}},undefined,{public:true});
 add('auth','POST',success,{},login,{public:true});
 add('config','GET',object(),{},undefined,{responseModel:'PublicConfig'});
-add('config','POST',object({success:boolean,config:object(),error:text}),{action:{type:'string',enum:['save','test-jellyfin','test-seerr','test-qbittorrent','test-radarr','test-sonarr','test-tmdb']}},object({...configFields,action:text}));
+add('config','POST',object({success:boolean,config:object(),error:text}),{action:{type:'string',enum:['save','test-qbittorrent','test-radarr','test-sonarr','test-tmdb']}},object({...configFields,action:text}));
 add('home','GET',object(),{},undefined,{responseModel:'HomeResponse'});
 add('library/{type}','GET',object(),{search:text,letter:{type:'string',maxLength:1}},undefined,{responseModel:'LibraryResponse'});
 add('categories/{type}','GET',object({type:text,sections:list()}));
@@ -89,7 +89,7 @@ add('music/playlist/track','POST',success,{},object({playlistId:id,trackId:id},[
 add('music/playlist/track','DELETE',success,{playlistId:id,trackId:id},undefined,{requiredQuery:['playlistId','trackId']});
 add('requested','GET',object(),{},undefined,{responseModel:'RequestedResponse'});
 add('integrations','GET',object(),{},undefined,{responseModel:'IntegrationsResponse'});
-add('integrations','POST',object(),{},object({integration:{type:'string',enum:['jellyfin','seerr','qbittorrent','slskd','bookshelf','radarr','sonarr','tmdb','spotify']},action:{type:'string',enum:['save','test']},url:text,secret:text,username:text,downloadsPath:text,booksPath:text,musicPath:text,parentPin:text,qualityProfileId:integer,qualityPreference:{type:'string',enum:['mp3-320','flac','any-lossless','mp3-any']}},['integration','action']));
+add('integrations','POST',object(),{},object({integration:{type:'string',enum:['qbittorrent','slskd','bookshelf','radarr','sonarr','tmdb','spotify']},action:{type:'string',enum:['save','test']},url:text,secret:text,username:text,downloadsPath:text,booksPath:text,musicPath:text,parentPin:text,qualityProfileId:integer,qualityPreference:{type:'string',enum:['mp3-320','flac','any-lossless','mp3-any']}},['integration','action']));
 add('youtube/search','GET',object(),{q:text},undefined,{responseModel:'YouTubeSearchResponse'});
 add('youtube/mix','GET',object({title:text,items:list()}),{listId:text,seedId:id,profileId:id},undefined,{requiredQuery:['listId']});
 add('youtube/stream','GET',object(),{videoId:id},undefined,{requiredQuery:['videoId'],responseModel:'YouTubeStreamResponse'});
@@ -133,7 +133,7 @@ export const mobileOperations: Operation[] = operations.filter(({ path }) =>
     || path === 'books' || path.startsWith('books/')
 ).map(operation => ({...operation}));
 function native(path:string,method:string,response:Schema,query:Record<string,Schema>={},body?:Schema,extra:Partial<Operation>={}) { mobileOperations.push({path,method,response,query:{userId:id,...query},body,...extra}); }
-native('discovery','GET',object({apiVersion:integer,appName:text,cast:boolean,pairing:text,localPairing:boolean,jellyfinLogin:boolean}),{},undefined,{public:true});
+native('discovery','GET',object({apiVersion:integer,appName:text,cast:boolean,pairing:text,localPairing:boolean}),{},undefined,{public:true});
 native('capabilities','GET',object(),{},undefined,{responseModel:'Capabilities'});
 native('auth/users','GET',object({users:list(profile)}),{},undefined,{public:true});
 native('auth/login','POST',object({user:profile,token:text}),{},object({username:{type:'string',minLength:1,maxLength:200},password:text},['username','password']),{public:true});

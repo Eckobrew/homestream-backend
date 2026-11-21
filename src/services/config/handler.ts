@@ -22,11 +22,6 @@ async function handleGET(_request: HttpRequest) {
 
   return HttpResponse.json({
     appName: config.appName || 'HomeStream',
-    jellyfinUrl: '',
-    hasJellyfinKey: false,
-    jellyfinUserId: '',
-    seerrUrl: '',
-    hasSeerrKey: false,
     hasTmdbKey: isTmdbConfigured,
     isTmdbConfigured,
     qbittorrentUrl: config.qbittorrentUrl,
@@ -39,8 +34,6 @@ async function handleGET(_request: HttpRequest) {
     hasSonarrKey: Boolean(config.sonarrApiKey),
     isConfigured,
     mediaEngine: 'native',
-    isJellyfinConfigured: false,
-    isSeerrConfigured: false,
     isQbittorrentConfigured,
     isRadarrConfigured,
     isSonarrConfigured,

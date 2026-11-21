@@ -11,12 +11,12 @@ async function handleGET(request: HttpRequest, { params }: { params: Promise<{ i
   const { id } = await params;
   const query = request.nextUrl.searchParams;
   let type: 'movie' | 'tv' =
-    /^(tv|Series|Episode)$/.test(query.get('type') || '') || id.startsWith('seerr-tv-') || id.startsWith('tmdb-tv-')
+    /^(tv|Series|Episode)$/.test(query.get('type') || '') || id.startsWith('tmdb-tv-')
       ? 'tv'
       : 'movie';
   let tmdb =
     Number(query.get('tmdbId')) ||
-    Number(/^(?:seerr|tmdb)-(?:movie-|tv-)?(\d+)$/.exec(id)?.[1]) ||
+    Number(/^tmdb-(?:movie-|tv-)?(\d+)$/.exec(id)?.[1]) ||
     (/^\d+$/.test(id) ? Number(id) : 0);
   if (!Number.isSafeInteger(tmdb) || tmdb < 0) {
     return HttpResponse.json({ error: 'Invalid TMDB ID' }, { status: 400 });
@@ -61,7 +61,7 @@ async function handleGET(request: HttpRequest, { params }: { params: Promise<{ i
     const available = getNativeTmdbIdMap();
     recommendations = recommendations.map(item => {
       const local = available.get(item.tmdbId || 0);
-      return local ? { ...item, id: local, jellyfinId: local, status: 'available' as const } : item;
+      return local ? { ...item, id: local, nativeId: local, status: 'available' as const } : item;
     });
   } else if (seed && sourceId.startsWith('nat-')) {
     source = 'native';

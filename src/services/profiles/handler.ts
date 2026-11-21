@@ -33,7 +33,7 @@ async function handleGET(request: HttpRequest) {
         needsSetup: false,
         canSwitchProfile: false,
         isExternal: true,
-        availableJellyfinUsers: [],
+        availableAccounts: [],
       });
     }
 
@@ -55,7 +55,7 @@ async function handleGET(request: HttpRequest) {
       needsSetup,
       canSwitchProfile: true,
       isExternal: !netCheck.isLocalOrTailscale,
-      availableJellyfinUsers: availableAccounts,
+      availableAccounts: availableAccounts,
     });
 
     if (activeProfileId && !cookieProfileId) {

@@ -5,7 +5,7 @@ export interface TvVideoCapability {
   profiles: string[];
 }
 
-/** Bounded device input: never pass arbitrary profile conditions to Jellyfin. */
+/** Bounded device input: never pass arbitrary profile conditions to the media engine. */
 export function parseTvCapabilities(raw: string | null): TvVideoCapability[] {
   if (!raw || raw.length > 8192) return [];
   try {

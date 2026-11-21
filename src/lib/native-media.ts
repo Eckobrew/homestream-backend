@@ -1138,7 +1138,7 @@ export async function scanNativeLibraries(libraryId?: string): Promise<ScanStatu
       }
     }
 
-    // Backfill missing ratings from TMDB / Seerr for existing matched items
+    // Backfill missing ratings from TMDB for existing matched items
     const missingRatings = db
       .prepare("SELECT id, type, tmdb_id FROM native_media_items WHERE tmdb_id IS NOT NULL AND COALESCE(rating, '') = ''")
       .all() as Array<{ id: string; type: string; tmdb_id: number }>;

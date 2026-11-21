@@ -12,7 +12,6 @@ import { saveUserRequest } from '../src/lib/user-requests';
 const mbid = '11111111-1111-4111-8111-111111111111';
 test('music requests, authenticated range streaming, all-media queue and admin credential separation', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'homestream-music-'));
-  let streamHits = 0;
   const upstream = createServer(async (req, res) => {
     const url = new URL(req.url!, 'http://fixture');
     res.setHeader('content-type', 'application/json');
@@ -216,7 +215,7 @@ test('music requests, authenticated range streaming, all-media queue and admin c
     assert.equal((await app.inject({ url: '/api/mobile/v1/capabilities', headers: { authorization: 'Bearer ' + mobileAdmin } })).json().canManageIntegrations, true);
 
     assert.equal((await app.inject({ url: '/api/v1/music/stream?trackId=track-1', remoteAddress: '203.0.113.8' })).statusCode, 401);
-    writeState('profiles', [{ id: 'child', jellyfinUserId: 'child', name: 'Child', isKids: true, kidsRating: 'PG' }]);
+    writeState('profiles', [{ id: 'child', historyUserId: 'child', name: 'Child', isKids: true, kidsRating: 'PG' }]);
     const child = await createSession({ id: 'child', name: 'Child' }, 'web');
     assert.equal(
       (await app.inject({ url: '/api/v1/music/stream?trackId=track-1', remoteAddress: '203.0.113.8', headers: { cookie: 'homeflix_session=' + child, range: 'bytes=0-3' } })).statusCode,

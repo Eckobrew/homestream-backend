@@ -24,10 +24,10 @@ export async function activeProfile(request: HttpRequest): Promise<UserProfile |
       request.nextUrl.searchParams.get('profileId') ||
       request.cookies.get('homeflix_profile_id')?.value;
     if (candidateId) {
-      const chosen = profiles.find(p => p.id === candidateId || p.jellyfinUserId === candidateId);
+      const chosen = profiles.find(p => p.id === candidateId || p.historyUserId === candidateId);
       if (chosen) return chosen;
     }
-    return profiles.find(p => p.id === session.id || p.jellyfinUserId === session.id) || profiles[0] || {
+    return profiles.find(p => p.id === session.id || p.historyUserId === session.id) || profiles[0] || {
       id: session.id,
       name: session.name,
       avatarColor: '',
@@ -45,7 +45,7 @@ export async function activeProfile(request: HttpRequest): Promise<UserProfile |
       return kids[0];
     }
     const requested = request.nextUrl.searchParams.get('userId');
-    const chosen = profiles.find(p => p.id === requested || p.jellyfinUserId === requested) || profiles[0];
+    const chosen = profiles.find(p => p.id === requested || p.historyUserId === requested) || profiles[0];
     if (chosen) selectDeviceProfile(bearer, chosen.id);
     return chosen || null;
   }
@@ -62,7 +62,7 @@ function route(request: HttpRequest) {
 }
 
 async function permit(id: string, profile: UserProfile, type: 'movie' | 'tv' = 'movie'): Promise<number> {
-  const match = /^(?:seerr|tmdb)-(?:(movie|tv)-)?(\d+)$/.exec(id);
+  const match = /^tmdb-(?:(movie|tv)-)?(\d+)$/.exec(id);
   const rating = match
     ? await catalogCertification(Number(match[2]), match[1] === 'tv' ? 'tv' : type)
     : /^\d+$/.test(id)
@@ -152,12 +152,12 @@ export async function filterKidsJson(value: unknown, profile: UserProfile): Prom
         result = (async () => {
           if (item.source === 'demo') return { allowed: false, age: 1000 };
           let rating = typeof item.rating === 'string' ? item.rating : null;
-          const discoveryEpisode = /^(?:seerr|tmdb)-ep-(\d+)-\d+-\d+$/.exec(id);
+          const discoveryEpisode = /^tmdb-ep-(\d+)-\d+-\d+$/.exec(id);
           if (discoveryEpisode) {
             rating = await catalogCertification(Number(discoveryEpisode[1]), 'tv');
-          } else if (id.startsWith('seerr-') || id.startsWith('tmdb-') || item.source === 'seerr' || item.source === 'tmdb') {
+          } else if (id.startsWith('tmdb-') || item.source === 'tmdb') {
             if (++lookups > 48 || Date.now() > deadline) return { allowed: false, age: 1000 };
-            const tmdb = Number(item.tmdbId) || Number(/^(?:seerr|tmdb)-(?:movie-|tv-)?(\d+)$/.exec(id)?.[1]);
+            const tmdb = Number(item.tmdbId) || Number(/^tmdb-(?:movie-|tv-)?(\d+)$/.exec(id)?.[1]);
             rating = await catalogCertification(tmdb, item.type === 'Movie' ? 'movie' : 'tv');
           } else if (!rating && typeof item.episodeNumber === 'number') {
             if (++lookups > 96 || Date.now() > deadline) return { allowed: false, age: 1000 };
@@ -187,7 +187,7 @@ export async function filterKidsJson(value: unknown, profile: UserProfile): Prom
 
 export async function pinProfileRequest(request: HttpRequest, profile: UserProfile): Promise<HttpRequest> {
   const url = request.nextUrl.clone();
-  url.searchParams.set('userId', profile.jellyfinUserId || profile.id);
+  url.searchParams.set('userId', profile.historyUserId || profile.id);
   const headersObj = new Headers(request.headers);
   const cookies = request.cookies.getAll().filter(cookie => cookie.name !== 'homeflix_profile_id');
   headersObj.set('cookie', [...cookies.map(cookie => `${cookie.name}=${cookie.value}`), `homeflix_profile_id=${profile.id}`].join('; '));
@@ -195,7 +195,7 @@ export async function pinProfileRequest(request: HttpRequest, profile: UserProfi
   if (!['GET', 'HEAD'].includes(request.method)) {
     const payload = await request.clone().json().catch(() => null);
     if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
-      body = JSON.stringify({ ...payload, userId: profile.jellyfinUserId || profile.id });
+      body = JSON.stringify({ ...payload, userId: profile.historyUserId || profile.id });
     }
   }
   return new HttpRequest(url, { method: request.method, headers: headersObj, body, signal: request.signal });
@@ -223,7 +223,7 @@ export function withParentalControls<Args extends unknown[]>(handler: (...args: 
             }
           }
           if (isKids(profile) && name === 'profiles') {
-            return HttpResponse.json({ profiles: [profile], activeProfileId: profile.id, canSwitchProfile: false, isExternal: true, availableJellyfinUsers: [] });
+            return HttpResponse.json({ profiles: [profile], activeProfileId: profile.id, canSwitchProfile: false, isExternal: true, availableAccounts: [] });
           }
         }
         const response = await handler(...args);

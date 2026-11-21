@@ -113,7 +113,7 @@ async function main(){
   const request={Image:tag+'-backend',Env:environment,WorkingDir:'/app',User:'1001:1001',Cmd:image.Config.Cmd,Entrypoint:image.Config.Entrypoint,Healthcheck:image.Config.Healthcheck,Labels:{...Object.fromEntries(Object.entries(old.Config.Labels||{}).filter(([key])=>!key.startsWith('com.docker.compose.'))),'homestream.upgrade.receipt':receipt},HostConfig:host,NetworkingConfig:{EndpointsConfig:endpoints}};
   if(layout==='monolith'){
    host.NetworkMode=network;host.PortBindings={};delete host.PublishAllPorts;request.NetworkingConfig.EndpointsConfig={[network]:{Aliases:['backend'],IPAMConfig:{IPv4Address:backendIp}}};
-   // Attach old networks for Jellyfin/Seerr/qBittorrent DNS, using fresh addresses for the backend.
+   // Attach old networks for integration DNS, using fresh addresses for the backend.
    for(const net of Object.keys(oldNetworks))request.NetworkingConfig.EndpointsConfig[net]={};
   }
   save(receipt+'/backend-create.json',request);await api('/containers/create?name='+encodeURIComponent(layout==='backend'?name:tag+'-backend'),request);

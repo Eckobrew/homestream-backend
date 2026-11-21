@@ -38,7 +38,7 @@ async function handleGET(
     return HttpResponse.json({ error: 'Native media item not found' }, { status: 404 });
   }
 
-  if (/^(?:tmdb|seerr)-(?:ep|tv)-\d+-\d+-\d+$/.test(id)) {
+  if (/^tmdb-(?:ep|tv)-\d+-\d+-\d+$/.test(id)) {
     const item = await getCatalogStreamDetails(effectiveProfile, id);
     return item ? HttpResponse.json({ item }, { headers: { 'Cache-Control': 'no-store' } })
       : HttpResponse.json({ error: 'Episode not found' }, { status: 404 });
@@ -50,18 +50,18 @@ async function handleGET(
     return HttpResponse.json({ error: 'Download playback has been removed. Open this title from search or the library.' }, { status: 410 });
   }
 
-  if (tmdb.isConfigured() && (id.startsWith('seerr-') || id.startsWith('tmdb-') || /^\d+$/.test(id))) {
+  if (tmdb.isConfigured() && (id.startsWith('tmdb-') || /^\d+$/.test(id))) {
     let tmdbId = 0;
     let explicitType: 'movie' | 'tv' | null = null;
 
-    if (id.startsWith('seerr-movie-') || id.startsWith('tmdb-movie-')) {
+    if (id.startsWith('tmdb-movie-')) {
       explicitType = 'movie';
-      tmdbId = Number(id.replace(/^(?:seerr|tmdb)-movie-/, ''));
-    } else if (id.startsWith('seerr-tv-') || id.startsWith('tmdb-tv-')) {
+      tmdbId = Number(id.replace(/^tmdb-movie-/, ''));
+    } else if (id.startsWith('tmdb-tv-')) {
       explicitType = 'tv';
-      tmdbId = Number(id.replace(/^(?:seerr|tmdb)-tv-/, ''));
-    } else if (id.startsWith('seerr-') || id.startsWith('tmdb-')) {
-      tmdbId = Number(id.replace(/^(?:seerr|tmdb)-/, ''));
+      tmdbId = Number(id.replace(/^tmdb-tv-/, ''));
+    } else if (id.startsWith('tmdb-')) {
+      tmdbId = Number(id.replace(/^tmdb-/, ''));
     } else {
       tmdbId = Number(id);
     }
@@ -77,28 +77,30 @@ async function handleGET(
           if (!natId) return item;
           const nativeDetails = getNativeItemById(natId, effectiveProfile);
           if (!nativeDetails) return item;
-          item.jellyfinId = nativeDetails.id;
+          item.nativeId = nativeDetails.id;
           item.playableEpisodeId = nativeDetails.playableEpisodeId;
           item.videoStreamUrl = nativeDetails.videoStreamUrl;
           item.status = 'available';
           item.source = 'native';
           if (nativeDetails.seasons && nativeDetails.seasons.length > 0) {
             const natSeasons = nativeDetails.seasons;
+            const seasonsByNumber = new Map(natSeasons.map(season => [season.seasonNumber, season]));
             if (item.seasons && item.seasons.length > 0) {
               item.seasons = item.seasons.map((s) => {
-                const natSeason = natSeasons.find((ns) => ns.seasonNumber === s.seasonNumber);
+                const natSeason = seasonsByNumber.get(s.seasonNumber);
                 if (!natSeason) return s;
+                const episodesByNumber = new Map((natSeason.episodes || []).map(episode => [episode.episodeNumber, episode]));
                 return {
                   ...s,
                   overview: s.overview || natSeason.overview,
                   posterUrl: s.posterUrl || natSeason.posterUrl,
                   episodes: (s.episodes || []).map((ep) => {
-                    const natEp = (natSeason.episodes || []).find((ne) => ne.episodeNumber === ep.episodeNumber);
+                    const natEp = episodesByNumber.get(ep.episodeNumber);
                     if (natEp) {
                       return {
                         ...ep,
                         id: natEp.id,
-                        jellyfinId: natEp.id,
+                        nativeId: natEp.id,
                         videoStreamUrl: natEp.videoStreamUrl,
                         downloadStreamUrl: natEp.downloadStreamUrl,
                         played: natEp.played,

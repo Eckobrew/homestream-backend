@@ -144,8 +144,8 @@ async function deleteHomeflixProfileInternal(profileId: string): Promise<boolean
 export async function resolveProfileId(profileId?: string): Promise<string> {
   if (!profileId) return '';
   const currentProfiles = await getHomeflixProfiles();
-  const matched = currentProfiles.find((p) => p.id === profileId || p.jellyfinUserId === profileId);
-  return matched?.jellyfinUserId || matched?.id || profileId;
+  const matched = currentProfiles.find((p) => p.id === profileId || p.historyUserId === profileId);
+  return matched?.historyUserId || matched?.id || profileId;
 }
 
 export function getHomeflixProfiles(): Promise<UserProfile[]> {

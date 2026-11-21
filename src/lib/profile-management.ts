@@ -1,6 +1,6 @@
 import { withProfileTransaction } from './storage';
 import { ratingForBirthDate } from './parental-age';
-import { isKids, KIDS_LIMITS, KidsRating, parentPinConfigured, requireParentPin } from './parental-store';
+import { KIDS_LIMITS, KidsRating, parentPinConfigured, requireParentPin } from './parental-store';
 import crypto from 'crypto';
 import { getHomeflixProfiles, saveHomeflixProfiles, PROFILE_PALETTES, getInitials } from './profiles';
 import { UserProfile } from '@/types';

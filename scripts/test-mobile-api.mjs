@@ -43,8 +43,6 @@ let server;
 async function start(secret) {
   server = spawn(process.execPath, ['dist/server.js'], {
     env: { ...process.env, PORT: String(port), HOSTNAME: '127.0.0.1', DATA_DIR: dir, HOMESTREAM_MOBILE_TOKEN: secret, HOMESTREAM_SESSION_SECRET: token, HOMESTREAM_TRUST_PROXY: 'false', HOMESTREAM_DEMO_MODE: 'true', HOMESTREAM_SETUP_TOKEN: '', HOMESTREAM_DIST_DIR: process.env.MOBILE_TEST_PRODUCTION === '1' ? '.next' : '.next-mobile-test',
-      JELLYFIN_URL: '', NEXT_PUBLIC_JELLYFIN_URL: '', JELLYFIN_API_KEY: '',
-      SEERR_URL: '', NEXT_PUBLIC_SEERR_URL: '', SEERR_API_KEY: '',
       QBITTORRENT_URL: '', NEXT_PUBLIC_QBITTORRENT_URL: '', YOUTUBE_PATH: join(dir, 'downloads'), NEXT_TELEMETRY_DISABLED: '1' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });

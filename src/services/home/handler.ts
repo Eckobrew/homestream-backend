@@ -6,7 +6,6 @@ import { withParentalControls } from '@/lib/parental-controls';
 import { HttpRequest, HttpResponse } from '@/http';
 import { TmdbClient } from '@/lib/tmdb';
 import { SmartRecommendationEngine } from '@/lib/recommendations';
-import { stateDatabase } from '@/state/database';
 import { getNativeUserRequests } from '@/lib/user-requests';
 import { resolveProfileId } from '@/lib/profiles';
 import { getNativeResumeItems, listNativeLibraryItems } from '@/lib/native-media';
@@ -85,8 +84,6 @@ async function handleGET(request: HttpRequest) {
         sections,
         requestSections: demoRequestSections,
         isDemoMode: true,
-        jellyfinConnected: false,
-        seerrConnected: false,
       });
     }
 
@@ -245,8 +242,6 @@ async function handleGET(request: HttpRequest) {
       sections,
       requestSections,
       isDemoMode: false,
-      jellyfinConnected: false,
-      seerrConnected: tmdb.isConfigured(),
     });
   } catch (err: unknown) {
     log.error('Error building home feed:', err);

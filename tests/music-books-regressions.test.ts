@@ -59,7 +59,7 @@ test('non-admin linked profile can Start Over/Hide via viewer progress route and
   try {
     const { createApp } = await import('../src/app');
     const { saveMediaEngineSettings } = await import('../src/lib/media-settings');
-    const { ensureNativeMediaTables, recordNativeWatchProgress } = await import('../src/lib/native-media');
+    const { ensureNativeMediaTables } = await import('../src/lib/native-media');
     const { saveHomeflixProfiles } = await import('../src/lib/profiles');
     const { stateDatabase } = await import('../src/state/database');
 
@@ -87,7 +87,7 @@ test('non-admin linked profile can Start Over/Hide via viewer progress route and
     });
     const accountId = createdAcct.json().account.id as string;
     await saveHomeflixProfiles([
-      { id: 'prof-viewer', jellyfinUserId: 'jf-linked-viewer', accountId, name: 'Viewer', avatarColor: '', avatarBg: '', initials: 'V' },
+      { id: 'prof-viewer', historyUserId: 'jf-linked-viewer', accountId, name: 'Viewer', avatarColor: '', avatarBg: '', initials: 'V' },
     ]);
     const login = await app.inject({
       method: 'POST',

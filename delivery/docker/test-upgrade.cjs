@@ -11,7 +11,7 @@ const script=stage+'/tools/docker/upgrade.cjs';
 async function scenario(failAt){
  const temp=fs.mkdtempSync(path.join(os.tmpdir(),'hs-docker-test-')),receipts=temp+'/receipts',data=temp+'/legacy';fs.mkdirSync(data);fs.mkdirSync(receipts);
  const token='hst_dev_'+'a'.repeat(48);for(const [name,value]of Object.entries({'config.json':{appName:'Existing Home'},'profiles.json':[{id:'keep-profile',name:'Owner'}],'devices.json':{[token]:{token,deviceId:'keep-device',client:'android'}}}))fs.writeFileSync(data+'/'+name,JSON.stringify(value));
- const original={Id:'original-id',Name:'/homestream',State:{Running:true},Config:{Image:'old:latest',Env:['PORT=3000','DATA_DIR=/app/data','JELLYFIN_API_KEY=keep-secret'],Labels:{}},HostConfig:{NetworkMode:'oldnet',PortBindings:{'3000/tcp':[{HostIp:'127.0.0.1',HostPort:'3333'}]},RestartPolicy:{Name:'unless-stopped'},Binds:['state-volume:/app/data','/media:/downloads:ro'],Mounts:[],LogConfig:{Type:'json-file'}},NetworkSettings:{Networks:{oldnet:{Aliases:['homestream'],IPAMConfig:null}}},Mounts:[{Type:'volume',Name:'state-volume',Destination:'/app/data',RW:true},{Type:'bind',Source:'/media',Destination:'/downloads',RW:false,Propagation:'rprivate'}]};
+ const original={Id:'original-id',Name:'/homestream',State:{Running:true},Config:{Image:'old:latest',Env:['PORT=3000','DATA_DIR=/app/data','TMDB_API_KEY=keep-secret'],Labels:{}},HostConfig:{NetworkMode:'oldnet',PortBindings:{'3000/tcp':[{HostIp:'127.0.0.1',HostPort:'3333'}]},RestartPolicy:{Name:'unless-stopped'},Binds:['state-volume:/app/data','/media:/downloads:ro'],Mounts:[],LogConfig:{Type:'json-file'}},NetworkSettings:{Networks:{oldnet:{Aliases:['homestream'],IPAMConfig:null}}},Mounts:[{Type:'volume',Name:'state-volume',Destination:'/app/data',RW:true},{Type:'bind',Source:'/media',Destination:'/downloads',RW:false,Propagation:'rprivate'}]};
  const containers=new Map([['original-id',structuredClone(original)]]),requests=[],removed=[];let injected=false;
  const get=n=>[...containers.values()].find(x=>x.Id===n||x.Name==='/'+n);
  const fake={execFileSync(program,args,opts){
@@ -67,7 +67,7 @@ async function scenario(failAt){
   assert.equal(gateway.NetworkingConfig.EndpointsConfig[gateway.HostConfig.NetworkMode].IPAMConfig.IPv4Address,'172.29.0.2');
   const receipt=receipts+'/'+fs.readdirSync(receipts)[0];
   assert.equal(fs.statSync(receipt+'/nginx.conf').mode & 0o777,0o644,'Unprivileged nginx must read its config');
-  assert(backend.Env.includes('JELLYFIN_API_KEY=keep-secret'));assert(backend.Env.includes('HOMESTREAM_TRUSTED_PROXIES=172.29.0.2'));
+  assert(backend.Env.includes('TMDB_API_KEY=keep-secret'));assert(backend.Env.includes('HOMESTREAM_TRUSTED_PROXIES=172.29.0.2'));
   assert(backend.HostConfig.Mounts.some(m=>m.Source==='/media'&&m.ReadOnly));assert(!backend.HostConfig.Mounts.some(m=>m.Source==='state-volume'));assert.deepEqual(gateway.HostConfig.PortBindings['8080/tcp'],original.HostConfig.PortBindings['3000/tcp']);
   assert.equal(JSON.parse(fs.readFileSync(data+'/profiles.json'))[0].id,'keep-profile');
   await context.rollback(receipts+'/'+fs.readdirSync(receipts)[0]);assert(get('original-id').State.Running);assert.equal(get('original-id').Name,'/homestream');assert(!removed.includes('original-id'));
