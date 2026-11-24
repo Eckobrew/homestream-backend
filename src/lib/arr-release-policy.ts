@@ -71,6 +71,34 @@ export function isArrReleaseApproved(release: ArrRelease): boolean {
     !(release.rejections || []).some(reason => reason.trim().length > 0);
 }
 
+function parseResolutionText(text: string): number {
+  if (/\b2160p\b/i.test(text)) return 2160;
+  if (/\b1080[pi]\b/i.test(text)) return 1080;
+  if (/\b720p\b/i.test(text)) return 720;
+  if (/\b576p\b/i.test(text)) return 576;
+  if (/\b480p\b/i.test(text)) return 480;
+  if (/\b(?:4k|uhd)\b/i.test(text)) return 2160;
+  return 0;
+}
+
+export function getReleaseResolution(release: Pick<ArrRelease, 'title' | 'quality'>): number {
+  const explicit = release.quality?.quality?.resolution;
+  if (typeof explicit === 'number' && Number.isFinite(explicit) && explicit > 0) return explicit;
+  const fromName = release.quality?.quality?.name ? parseResolutionText(release.quality.quality.name) : 0;
+  if (fromName > 0) return fromName;
+  return parseResolutionText(release.title || '');
+}
+
+/** Prefer 1080p, then 720p, then SD/unknown; only fall back to >1080p (4K) when nothing else exists. */
+function streamingResolutionTier(release: Pick<ArrRelease, 'title' | 'quality'>): number {
+  const resolution = getReleaseResolution(release);
+  if (resolution === 1080) return 4;
+  if (resolution === 720) return 3;
+  if (resolution > 0 && resolution < 1080) return 2;
+  if (resolution === 0) return 1;
+  return 0;
+}
+
 /** Sizes are compared per covered minute, so a season pack is not treated as one episode. */
 export function rankArrReleases<T extends ArrRelease>(releases: T[], policy?: ArrReleasePolicy,
   runtimeMinutes?: number, coveredEpisodes: (release: T) => number | undefined = () => 1): T[] {
@@ -98,15 +126,17 @@ export function rankArrReleases<T extends ArrRelease>(releases: T[], policy?: Ar
     const size = rate(release);
     return size === undefined || ((limits.min == null || size >= limits.min) && (limits.max == null || size <= limits.max));
   }).sort((a, b) => {
-    const rank = (release: T) => quality(release)?.rank ?? release.quality?.quality?.resolution ?? 0;
+    const tierDiff = streamingResolutionTier(b) - streamingResolutionTier(a);
+    if (tierDiff) return tierDiff;
+    const seeders = Math.max(0, b.seeders || 0) - Math.max(0, a.seeders || 0);
+    if (seeders) return seeders;
+    const rank = (release: T) => quality(release)?.rank ?? 0;
     const qualityDiff = rank(b) - rank(a);
     if (qualityDiff) return qualityDiff;
     const scoreDiff = (b.customFormatScore || 0) - (a.customFormatScore || 0);
     if (scoreDiff) return scoreDiff;
     const aDistance = distance(a), bDistance = distance(b);
     if (aDistance !== bDistance) return aDistance < bDistance ? -1 : 1;
-    const seeders = (b.seeders || 0) - (a.seeders || 0);
-    if (seeders) return seeders;
     const aCount = coveredEpisodes(a), bCount = coveredEpisodes(b);
     const aSize = aCount ? a.size / aCount : Infinity, bSize = bCount ? b.size / bCount : Infinity;
     if (aSize !== bSize) return aSize < bSize ? -1 : 1;
