@@ -26,7 +26,8 @@ export function ensureYouTubeTables(): void {
     const db = stateDatabase();
     db.exec(`
       CREATE TABLE IF NOT EXISTS youtube_subscriptions (
-        id TEXT PRIMARY KEY,
+        profile_id TEXT NOT NULL DEFAULT 'default',
+        id TEXT NOT NULL,
         title TEXT NOT NULL,
         handle TEXT,
         avatar_url TEXT,
@@ -40,11 +41,13 @@ export function ensureYouTubeTables(): void {
         exclude_keywords TEXT,
         ignore_shorts INTEGER DEFAULT 1,
         last_checked_at TEXT,
-        last_video_id TEXT
+        last_video_id TEXT,
+        PRIMARY KEY (profile_id, id)
       );
 
       CREATE TABLE IF NOT EXISTS youtube_downloads (
-        video_id TEXT PRIMARY KEY,
+        profile_id TEXT NOT NULL DEFAULT 'default',
+        video_id TEXT NOT NULL,
         channel_id TEXT,
         channel_title TEXT,
         title TEXT NOT NULL,
@@ -58,7 +61,8 @@ export function ensureYouTubeTables(): void {
         file_path TEXT,
         error_message TEXT,
         created_at TEXT NOT NULL,
-        completed_at TEXT
+        completed_at TEXT,
+        PRIMARY KEY (profile_id, video_id)
       );
 
       CREATE TABLE IF NOT EXISTS youtube_watch_progress (
@@ -83,6 +87,90 @@ export function ensureYouTubeTables(): void {
       );
 
       CREATE INDEX IF NOT EXISTS idx_youtube_progress_profile ON youtube_watch_progress(profile_id);
+    `);
+
+    // Migrate legacy server-wide youtube_subscriptions / youtube_downloads tables to profile-scoped
+    const subCols = db.prepare('PRAGMA table_info(youtube_subscriptions)').all() as Array<{ name: string }>;
+    if (!subCols.some((c) => c.name === 'profile_id')) {
+      db.exec(`
+        BEGIN IMMEDIATE;
+        CREATE TABLE youtube_subscriptions_new (
+          profile_id TEXT NOT NULL DEFAULT 'default',
+          id TEXT NOT NULL,
+          title TEXT NOT NULL,
+          handle TEXT,
+          avatar_url TEXT,
+          banner_url TEXT,
+          description TEXT,
+          subscribed_at TEXT NOT NULL,
+          auto_download INTEGER DEFAULT 1,
+          min_duration_seconds INTEGER DEFAULT 1800,
+          max_duration_seconds INTEGER,
+          include_keywords TEXT,
+          exclude_keywords TEXT,
+          ignore_shorts INTEGER DEFAULT 1,
+          last_checked_at TEXT,
+          last_video_id TEXT,
+          PRIMARY KEY (profile_id, id)
+        );
+        INSERT INTO youtube_subscriptions_new (
+          profile_id, id, title, handle, avatar_url, banner_url, description,
+          subscribed_at, auto_download, min_duration_seconds, max_duration_seconds,
+          include_keywords, exclude_keywords, ignore_shorts, last_checked_at, last_video_id
+        )
+        SELECT
+          'default', id, title, handle, avatar_url, banner_url, description,
+          subscribed_at, auto_download, min_duration_seconds, max_duration_seconds,
+          include_keywords, exclude_keywords, ignore_shorts, last_checked_at, last_video_id
+        FROM youtube_subscriptions;
+        DROP TABLE youtube_subscriptions;
+        ALTER TABLE youtube_subscriptions_new RENAME TO youtube_subscriptions;
+        COMMIT;
+      `);
+    }
+
+    const dlCols = db.prepare('PRAGMA table_info(youtube_downloads)').all() as Array<{ name: string }>;
+    if (!dlCols.some((c) => c.name === 'profile_id')) {
+      db.exec(`
+        BEGIN IMMEDIATE;
+        CREATE TABLE youtube_downloads_new (
+          profile_id TEXT NOT NULL DEFAULT 'default',
+          video_id TEXT NOT NULL,
+          channel_id TEXT,
+          channel_title TEXT,
+          title TEXT NOT NULL,
+          duration_seconds INTEGER,
+          thumbnail_url TEXT,
+          upload_date TEXT,
+          status TEXT NOT NULL,
+          progress_percent REAL DEFAULT 0,
+          speed_bytes INTEGER DEFAULT 0,
+          eta_seconds INTEGER,
+          file_path TEXT,
+          error_message TEXT,
+          created_at TEXT NOT NULL,
+          completed_at TEXT,
+          PRIMARY KEY (profile_id, video_id)
+        );
+        INSERT INTO youtube_downloads_new (
+          profile_id, video_id, channel_id, channel_title, title, duration_seconds,
+          thumbnail_url, upload_date, status, progress_percent, speed_bytes,
+          eta_seconds, file_path, error_message, created_at, completed_at
+        )
+        SELECT
+          'default', video_id, channel_id, channel_title, title, duration_seconds,
+          thumbnail_url, upload_date, status, progress_percent, speed_bytes,
+          eta_seconds, file_path, error_message, created_at, completed_at
+        FROM youtube_downloads;
+        DROP TABLE youtube_downloads;
+        ALTER TABLE youtube_downloads_new RENAME TO youtube_downloads;
+        COMMIT;
+      `);
+    }
+
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_youtube_subs_profile ON youtube_subscriptions(profile_id);
+      CREATE INDEX IF NOT EXISTS idx_youtube_downloads_profile ON youtube_downloads(profile_id);
     `);
     tablesInitialized = true;
   } catch (err) {
@@ -553,11 +641,13 @@ export async function resolveChannel(input: string): Promise<{
 /**
  * Gets all subscribed channels
  */
-export function getSubscriptions(): YouTubeSubscription[] {
+export function getSubscriptions(profileId = 'default'): YouTubeSubscription[] {
   ensureYouTubeTables();
   try {
     const db = stateDatabase();
-    const rows = db.prepare('SELECT * FROM youtube_subscriptions ORDER BY title ASC').all() as any[];
+    const rows = db
+      .prepare('SELECT * FROM youtube_subscriptions WHERE profile_id = ? ORDER BY title ASC')
+      .all(profileId || 'default') as any[];
     return rows.map((r) => ({
       id: r.id,
       title: r.title,
@@ -585,6 +675,7 @@ export function getSubscriptions(): YouTubeSubscription[] {
  * Subscribes to a channel with optional podcast/keyword filters
  */
 export async function addSubscription(params: {
+  profileId?: string;
   channelInput: string;
   autoDownload?: boolean;
   minDurationSeconds?: number;
@@ -597,6 +688,7 @@ export async function addSubscription(params: {
   const info = await resolveChannel(params.channelInput);
   if (!info) return null;
 
+  const profileId = params.profileId || 'default';
   const now = new Date().toISOString();
   const db = stateDatabase();
 
@@ -608,11 +700,11 @@ export async function addSubscription(params: {
 
   db.prepare(`
     INSERT INTO youtube_subscriptions (
-      id, title, handle, avatar_url, banner_url, description,
+      profile_id, id, title, handle, avatar_url, banner_url, description,
       subscribed_at, auto_download, min_duration_seconds, max_duration_seconds,
       include_keywords, exclude_keywords, ignore_shorts, last_checked_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(profile_id, id) DO UPDATE SET
       title = excluded.title,
       handle = excluded.handle,
       auto_download = excluded.auto_download,
@@ -622,6 +714,7 @@ export async function addSubscription(params: {
       exclude_keywords = excluded.exclude_keywords,
       ignore_shorts = excluded.ignore_shorts
   `).run(
+    profileId,
     info.id,
     info.title,
     info.handle,
@@ -660,12 +753,14 @@ export async function addSubscription(params: {
  */
 export function updateSubscription(
   id: string,
-  updates: Partial<YouTubeSubscription>
+  updates: Partial<YouTubeSubscription>,
+  profileId = 'default'
 ): boolean {
   ensureYouTubeTables();
   try {
     const db = stateDatabase();
-    const current = db.prepare('SELECT * FROM youtube_subscriptions WHERE id = ?').get(id) as any;
+    const pid = profileId || 'default';
+    const current = db.prepare('SELECT * FROM youtube_subscriptions WHERE profile_id = ? AND id = ?').get(pid, id) as any;
     if (!current) return false;
 
     const autoDownload = updates.autoDownload !== undefined ? (updates.autoDownload ? 1 : 0) : current.auto_download;
@@ -679,8 +774,8 @@ export function updateSubscription(
       UPDATE youtube_subscriptions
       SET auto_download = ?, min_duration_seconds = ?, max_duration_seconds = ?,
           include_keywords = ?, exclude_keywords = ?, ignore_shorts = ?
-      WHERE id = ?
-    `).run(autoDownload, minDur, maxDur || null, incKws, excKws, ignoreShorts, id);
+      WHERE profile_id = ? AND id = ?
+    `).run(autoDownload, minDur, maxDur || null, incKws, excKws, ignoreShorts, pid, id);
 
     return true;
   } catch (err) {
@@ -692,11 +787,11 @@ export function updateSubscription(
 /**
  * Removes a channel subscription
  */
-export function deleteSubscription(id: string): boolean {
+export function deleteSubscription(id: string, profileId = 'default'): boolean {
   ensureYouTubeTables();
   try {
     const db = stateDatabase();
-    db.prepare('DELETE FROM youtube_subscriptions WHERE id = ?').run(id);
+    db.prepare('DELETE FROM youtube_subscriptions WHERE profile_id = ? AND id = ?').run(profileId || 'default', id);
     return true;
   } catch (err) {
     log.error('Failed to delete subscription:', err);
@@ -752,14 +847,15 @@ export function evaluateVideoMatch(
 /**
  * Polls a subscribed channel's RSS feed for new uploads and auto-queues matches
  */
-export async function checkChannelNewUploads(channelId: string): Promise<{
+export async function checkChannelNewUploads(channelId: string, profileId = 'default'): Promise<{
   checkedCount: number;
   queuedCount: number;
   skippedCount: number;
 }> {
   ensureYouTubeTables();
   const db = stateDatabase();
-  const subRow = db.prepare('SELECT * FROM youtube_subscriptions WHERE id = ?').get(channelId) as any;
+  const pid = profileId || 'default';
+  const subRow = db.prepare('SELECT * FROM youtube_subscriptions WHERE profile_id = ? AND id = ?').get(pid, channelId) as any;
   if (!subRow) return { checkedCount: 0, queuedCount: 0, skippedCount: 0 };
 
   const sub: YouTubeSubscription = {
@@ -788,7 +884,7 @@ export async function checkChannelNewUploads(channelId: string): Promise<{
     let queuedCount = 0;
     let skippedCount = 0;
 
-    const downloadedIds = getDownloadedVideoIds();
+    const downloadedIds = getDownloadedVideoIds(pid);
 
     for (const block of entryBlocks) {
       const videoIdMatch = block.match(/<yt:videoId>([^<]+)<\/yt:videoId>/);
@@ -818,6 +914,7 @@ export async function checkChannelNewUploads(channelId: string): Promise<{
       const evalRes = evaluateVideoMatch(details, sub);
       if (evalRes.matches && sub.autoDownload) {
         queueVideoDownload({
+          profileId: pid,
           videoId,
           channelId: sub.id,
           channelTitle: sub.title,
@@ -832,8 +929,9 @@ export async function checkChannelNewUploads(channelId: string): Promise<{
       }
     }
 
-    db.prepare('UPDATE youtube_subscriptions SET last_checked_at = ? WHERE id = ?').run(
+    db.prepare('UPDATE youtube_subscriptions SET last_checked_at = ? WHERE profile_id = ? AND id = ?').run(
       new Date().toISOString(),
+      pid,
       channelId
     );
 
@@ -917,10 +1015,14 @@ export async function fetchChannelLatestVideos(channelId: string, limit = 5): Pr
 /**
  * Polls all channels with autoDownload enabled
  */
-export async function pollAllSubscribedChannels(): Promise<void> {
-  const subs = getSubscriptions().filter((s) => s.autoDownload);
-  for (const s of subs) {
-    await checkChannelNewUploads(s.id).catch(() => {});
+export async function pollAllSubscribedChannels(profileId?: string): Promise<void> {
+  ensureYouTubeTables();
+  const db = stateDatabase();
+  const rows = profileId
+    ? (db.prepare('SELECT profile_id, id FROM youtube_subscriptions WHERE auto_download = 1 AND profile_id = ?').all(profileId) as Array<{ profile_id: string; id: string }>)
+    : (db.prepare('SELECT profile_id, id FROM youtube_subscriptions WHERE auto_download = 1').all() as Array<{ profile_id: string; id: string }>);
+  for (const r of rows) {
+    await checkChannelNewUploads(r.id, r.profile_id).catch(() => {});
   }
 }
 
@@ -928,13 +1030,15 @@ export async function pollAllSubscribedChannels(): Promise<void> {
  * Active download worker queue
  */
 let activeDownloadProc: any = null;
-let currentDownloadingId: string | null = null;
+let currentDownloadingKey: string | null = null;
 
-export function getDownloadQueue(): YouTubeDownloadItem[] {
+export function getDownloadQueue(profileId = 'default'): YouTubeDownloadItem[] {
   ensureYouTubeTables();
   try {
     const db = stateDatabase();
-    const rows = db.prepare('SELECT * FROM youtube_downloads ORDER BY created_at DESC LIMIT 50').all() as any[];
+    const rows = db
+      .prepare('SELECT * FROM youtube_downloads WHERE profile_id = ? ORDER BY created_at DESC LIMIT 50')
+      .all(profileId || 'default') as any[];
     return rows.map((r) => ({
       videoId: r.video_id,
       channelId: r.channel_id,
@@ -958,11 +1062,13 @@ export function getDownloadQueue(): YouTubeDownloadItem[] {
   }
 }
 
-export function getDownloadedVideoIds(): Set<string> {
+export function getDownloadedVideoIds(profileId?: string): Set<string> {
   ensureYouTubeTables();
   try {
     const db = stateDatabase();
-    const rows = db.prepare("SELECT video_id FROM youtube_downloads WHERE status = 'completed'").all() as any[];
+    const rows = profileId
+      ? (db.prepare("SELECT video_id FROM youtube_downloads WHERE profile_id = ? AND status = 'completed'").all(profileId) as any[])
+      : (db.prepare("SELECT video_id FROM youtube_downloads WHERE status = 'completed'").all() as any[]);
     return new Set(rows.map((r) => r.video_id));
   } catch {
     return new Set();
@@ -973,6 +1079,7 @@ export function getDownloadedVideoIds(): Set<string> {
  * Adds a video to the download queue
  */
 export function queueVideoDownload(params: {
+  profileId?: string;
   videoId: string;
   channelId?: string;
   channelTitle?: string;
@@ -983,17 +1090,19 @@ export function queueVideoDownload(params: {
 }): void {
   ensureYouTubeTables();
   const db = stateDatabase();
+  const pid = params.profileId || 'default';
   const now = new Date().toISOString();
 
   db.prepare(`
     INSERT INTO youtube_downloads (
-      video_id, channel_id, channel_title, title, duration_seconds,
+      profile_id, video_id, channel_id, channel_title, title, duration_seconds,
       thumbnail_url, upload_date, status, progress_percent, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'queued', 0, ?)
-    ON CONFLICT(video_id) DO UPDATE SET
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', 0, ?)
+    ON CONFLICT(profile_id, video_id) DO UPDATE SET
       status = 'queued',
       error_message = NULL
   `).run(
+    pid,
     params.videoId,
     params.channelId || null,
     params.channelTitle || null,
@@ -1011,17 +1120,19 @@ export function queueVideoDownload(params: {
 /**
  * Removes a video from queue or cancels active download
  */
-export function cancelDownload(videoId: string): boolean {
+export function cancelDownload(videoId: string, profileId = 'default'): boolean {
   ensureYouTubeTables();
-  if (currentDownloadingId === videoId && activeDownloadProc) {
+  const pid = profileId || 'default';
+  const dlKey = `${pid}:${videoId}`;
+  if (currentDownloadingKey === dlKey && activeDownloadProc) {
     try {
       activeDownloadProc.kill('SIGTERM');
     } catch {}
     activeDownloadProc = null;
-    currentDownloadingId = null;
+    currentDownloadingKey = null;
   }
   const db = stateDatabase();
-  db.prepare('DELETE FROM youtube_downloads WHERE video_id = ?').run(videoId);
+  db.prepare('DELETE FROM youtube_downloads WHERE profile_id = ? AND video_id = ?').run(pid, videoId);
   processNextDownload();
   return true;
 }
@@ -1040,8 +1151,12 @@ export function processNextDownload(): void {
 
   if (!next) return;
 
-  currentDownloadingId = next.video_id;
-  db.prepare("UPDATE youtube_downloads SET status = 'downloading' WHERE video_id = ?").run(next.video_id);
+  const nextProfileId = String(next.profile_id || 'default');
+  currentDownloadingKey = `${nextProfileId}:${next.video_id}`;
+  db.prepare("UPDATE youtube_downloads SET status = 'downloading' WHERE profile_id = ? AND video_id = ?").run(
+    nextProfileId,
+    next.video_id
+  );
 
   const baseStorage = getYouTubeStoragePath();
   const channelDirName = (next.channel_title || 'YouTube').replace(/[\\/:*?"<>|]/g, '').trim() || 'General';
@@ -1082,9 +1197,10 @@ export function processNextDownload(): void {
       const etaStr = match[4];
       const etaSec = parseDurationToSeconds(etaStr);
       try {
-        db.prepare('UPDATE youtube_downloads SET progress_percent = ?, eta_seconds = ? WHERE video_id = ?').run(
+        db.prepare('UPDATE youtube_downloads SET progress_percent = ?, eta_seconds = ? WHERE profile_id = ? AND video_id = ?').run(
           pct,
           etaSec,
+          nextProfileId,
           next.video_id
         );
       } catch {}
@@ -1097,7 +1213,7 @@ export function processNextDownload(): void {
 
   activeDownloadProc.on('close', (code: number) => {
     activeDownloadProc = null;
-    currentDownloadingId = null;
+    currentDownloadingKey = null;
 
     if (code === 0) {
       console.info(`[youtube] Download completed for ${next.video_id}`);
@@ -1109,12 +1225,13 @@ export function processNextDownload(): void {
       db.prepare(`
         UPDATE youtube_downloads
         SET status = 'completed', progress_percent = 100, completed_at = ?, file_path = ?
-        WHERE video_id = ?
-      `).run(new Date().toISOString(), finalPath || null, next.video_id);
+        WHERE profile_id = ? AND video_id = ?
+      `).run(new Date().toISOString(), finalPath || null, nextProfileId, next.video_id);
     } else {
       log.error(`[youtube] Download failed for ${next.video_id} with exit code ${code}`);
-      db.prepare("UPDATE youtube_downloads SET status = 'failed', error_message = ? WHERE video_id = ?").run(
+      db.prepare("UPDATE youtube_downloads SET status = 'failed', error_message = ? WHERE profile_id = ? AND video_id = ?").run(
         `yt-dlp exited with code ${code}`,
+        nextProfileId,
         next.video_id
       );
     }
@@ -1127,10 +1244,11 @@ export function processNextDownload(): void {
 /**
  * Scans the local /youtube storage mount for existing downloaded videos
  */
-export function getLocalYouTubeArchive(): YouTubeArchiveItem[] {
+export function getLocalYouTubeArchive(profileId?: string): YouTubeArchiveItem[] {
   const baseStorage = getYouTubeStoragePath();
   if (!fs.existsSync(baseStorage)) return [];
 
+  const allowedVideoIds = profileId ? getDownloadedVideoIds(profileId) : null;
   const items: YouTubeArchiveItem[] = [];
 
   try {
@@ -1167,6 +1285,7 @@ export function getLocalYouTubeArchive(): YouTubeArchiveItem[] {
         // Extract video ID from filename format: "Title [videoId].ext"
         const idMatch = item.fileName.match(/\[([a-zA-Z0-9_-]{11})\]/);
         const id = idMatch ? idMatch[1] : item.fileName.replace(/\.[^/.]+$/, '');
+        if (allowedVideoIds && !allowedVideoIds.has(id)) continue;
         const title = item.fileName.replace(/\s*\[[a-zA-Z0-9_-]{11}\]\.[^/.]+$/, '').replace(/\.[^/.]+$/, '');
 
         // Check for local thumbnail (webp, jpg, png)
@@ -1481,7 +1600,7 @@ export async function getYouTubeRecommendations(profileId?: string, forceRefresh
   }
 
   // 3. Subscribed Channels latest uploads from HomeStream local subscriptions
-  const subs = getSubscriptions();
+  const subs = getSubscriptions(profileId);
   const subUploads: YouTubeSearchResult[] = [];
   if (subs.length > 0) {
     try {
@@ -1497,7 +1616,7 @@ export async function getYouTubeRecommendations(profileId?: string, forceRefresh
   }
 
   // 4. Local NAS archive items formatted as results
-  const archive = getLocalYouTubeArchive();
+  const archive = getLocalYouTubeArchive(profileId);
   const localArchiveResults: YouTubeSearchResult[] = archive.slice(0, 15).map((a) => ({
     id: a.id,
     title: a.title,

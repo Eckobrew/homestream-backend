@@ -165,17 +165,20 @@ async function handleGET(request: HttpRequest) {
   }
 
   if (route === 'youtube/subscriptions') {
-    const subscriptions = getSubscriptions();
+    const profileId = resolveYouTubeProfileId(request);
+    const subscriptions = getSubscriptions(profileId);
     return HttpResponse.json({ subscriptions });
   }
 
   if (route === 'youtube/queue') {
-    const queue = getDownloadQueue();
+    const profileId = resolveYouTubeProfileId(request);
+    const queue = getDownloadQueue(profileId);
     return HttpResponse.json({ queue });
   }
 
   if (route === 'youtube/archive') {
-    const items = getLocalYouTubeArchive();
+    const profileId = resolveYouTubeProfileId(request);
+    const items = getLocalYouTubeArchive(profileId);
     return HttpResponse.json({ items });
   }
 
@@ -255,7 +258,9 @@ async function handlePOST(request: HttpRequest) {
     if (!body || typeof body.videoId !== 'string' || !body.title) {
       return HttpResponse.json({ error: 'videoId and title required' }, { status: 400 });
     }
+    const profileId = resolveYouTubeProfileId(request, body as Record<string, unknown>);
     queueVideoDownload({
+      profileId,
       videoId: body.videoId,
       channelId: body.channelId,
       channelTitle: body.channelTitle,
@@ -272,8 +277,10 @@ async function handlePOST(request: HttpRequest) {
     if (!body || typeof body.channelUrlOrHandle !== 'string' || !body.channelUrlOrHandle.trim()) {
       return HttpResponse.json({ error: 'channelUrlOrHandle required' }, { status: 400 });
     }
+    const profileId = resolveYouTubeProfileId(request, body as Record<string, unknown>);
     try {
       const sub = await addSubscription({
+        profileId,
         channelInput: body.channelUrlOrHandle.trim(),
         autoDownload: body.autoDownload,
         minDurationSeconds: body.minDurationSeconds,
@@ -291,12 +298,13 @@ async function handlePOST(request: HttpRequest) {
 
   if (route === 'youtube/subscriptions/check') {
     const body = await request.json().catch(() => ({}));
+    const profileId = resolveYouTubeProfileId(request, body as Record<string, unknown>);
     const channelId = body?.channelId || request.nextUrl.searchParams.get('channelId');
     if (channelId) {
-      const downloaded = await checkChannelNewUploads(channelId);
+      const downloaded = await checkChannelNewUploads(channelId, profileId);
       return HttpResponse.json({ success: true, downloadedCount: downloaded.queuedCount });
     } else {
-      await pollAllSubscribedChannels();
+      await pollAllSubscribedChannels(profileId);
       return HttpResponse.json({ success: true, message: 'Polled all subscriptions' });
     }
   }
@@ -313,6 +321,7 @@ async function handlePUT(request: HttpRequest) {
     if (!body || typeof body.id !== 'string') {
       return HttpResponse.json({ error: 'Subscription id required' }, { status: 400 });
     }
+    const profileId = resolveYouTubeProfileId(request, body as Record<string, unknown>);
     const updated = updateSubscription(body.id, {
       autoDownload: body.autoDownload,
       minDurationSeconds: body.minDurationSeconds,
@@ -320,7 +329,7 @@ async function handlePUT(request: HttpRequest) {
       includeKeywords: body.includeKeywords,
       excludeKeywords: body.excludeKeywords,
       ignoreShorts: body.ignoreShorts,
-    });
+    }, profileId);
     if (!updated) return HttpResponse.json({ error: 'Subscription not found' }, { status: 404 });
     return HttpResponse.json({ success: true });
   }
@@ -349,14 +358,16 @@ async function handleDELETE(request: HttpRequest) {
   if (route === 'youtube/subscriptions') {
     const id = request.nextUrl.searchParams.get('id');
     if (!id) return HttpResponse.json({ error: 'Subscription id required' }, { status: 400 });
-    const deleted = deleteSubscription(id);
+    const profileId = resolveYouTubeProfileId(request);
+    const deleted = deleteSubscription(id, profileId);
     return HttpResponse.json({ success: deleted });
   }
 
   if (route === 'youtube/queue') {
     const videoId = request.nextUrl.searchParams.get('videoId');
     if (!videoId) return HttpResponse.json({ error: 'videoId required' }, { status: 400 });
-    const cancelled = cancelDownload(videoId);
+    const profileId = resolveYouTubeProfileId(request);
+    const cancelled = cancelDownload(videoId, profileId);
     return HttpResponse.json({ success: cancelled });
   }
 
