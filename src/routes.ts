@@ -30,6 +30,7 @@ import * as service16 from './services/subtitles/handler';
 import * as service17 from './services/trailer/handler';
 import * as service18 from './services/webhook/arr/handler';
 import * as sessions from './services/sessions/handler';
+import * as castBridge from './services/cast-bridge/handler';
 export const routes = [
   {path:'/api/music',methods:['GET'],service:music},
   {path:'/api/music/album',methods:['GET','DELETE'],service:music},
@@ -101,4 +102,8 @@ export const routes = [
   { path: "/api/sessions/heartbeat", methods: ["POST"], service: sessions },
   { path: "/api/sessions/command", methods: ["POST"], service: sessions },
   { path: "/api/sessions/commands", methods: ["GET"], service: sessions },
+  { path: "/api/cast-bridge/devices", methods: ["GET"], service: castBridge },
+  { path: "/api/cast-bridge/status", methods: ["GET"], service: castBridge },
+  { path: "/api/cast-bridge/load", methods: ["POST"], service: castBridge },
+  { path: "/api/cast-bridge/control", methods: ["POST"], service: castBridge },
 ];
