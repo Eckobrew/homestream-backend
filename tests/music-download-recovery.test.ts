@@ -5,7 +5,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ensureMusicTables, monitorActiveDownloads, processNextPlaylistTrack } from '../src/lib/music';
+import { cleanupStaleMusicDownloads, ensureMusicTables, monitorActiveDownloads, processNextPlaylistTrack } from '../src/lib/music';
 import { closeStateDatabases, stateDatabase } from '../src/state/database';
 
 test('resumes saved transfers, rotates peers, and imports only decodable audio for the owner', async (t) => {
@@ -110,5 +110,97 @@ test('resumes saved transfers, rotates peers, and imports only decodable audio f
   assert.equal(track?.file_path, join(library, 'Example Artist', 'Example Album', '01 - Example Song.wav'));
   assert.equal(existsSync(String(track?.file_path)), true);
   assert.equal(existsSync(source), false);
+  assert.equal(existsSync(join(downloads, 'Example Album')), false);
+  assert.equal(existsSync(downloads), true);
   assert.deepEqual(db.prepare('SELECT profile_id FROM profile_music_albums').all().map(row => row.profile_id), ['owner']);
+});
+
+test('cleans up imported source files, empty folders, quarantine files, and completed slskd transfers', async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), 'music-cleanup-'));
+  const downloads = join(directory, 'downloads');
+  const library = join(directory, 'music');
+  const filename = 'Shared\\Cleanup Album\\01 - Track.wav';
+  const sourceDir = join(downloads, 'Cleanup Album');
+  const source = join(sourceDir, '01 - Track.wav');
+  const staleDir = join(downloads, 'Old Empty Album');
+  const brokenFile = join(downloads, 'Broken Album', '.homestream-broken-123');
+  const activeFile = join(downloads, 'Active Album', '02 - Still Downloading.wav');
+  const hasFfmpeg = spawnSync('ffmpeg', ['-version']).status === 0;
+  mkdirSync(sourceDir, { recursive: true });
+  mkdirSync(staleDir, { recursive: true });
+  mkdirSync(join(downloads, 'Broken Album'), { recursive: true });
+  mkdirSync(join(downloads, 'Active Album'), { recursive: true });
+  mkdirSync(library);
+  if (hasFfmpeg) {
+    execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'sine=duration=0.1', source]);
+  } else {
+    const bin = join(directory, 'bin');
+    mkdirSync(bin);
+    writeFileSync(join(bin, 'ffmpeg'), '#!/bin/sh\n[ "$(head -c 4 "$6")" = RIFF ]\n', { mode: 0o755 });
+    process.env.PATH = bin + ':' + process.env.PATH;
+    writeFileSync(source, 'RIFF test fixture');
+  }
+  const size = statSync(source).size;
+  writeFileSync(brokenFile, 'corrupt');
+  writeFileSync(activeFile, 'in progress');
+
+  const deletedTransfers: string[] = [];
+  let transfers: object[] = [
+    { id: 'tx-done', username: 'peer1', filename, size, state: 'Completed, Succeeded' },
+    { id: 'tx-stale', username: 'peer2', filename: 'Shared\\Gone\\01.wav', size: 123, state: 'Completed, Succeeded' },
+    { id: 'tx-active', username: 'peer3', filename: 'Shared\\Active Album\\02 - Still Downloading.wav', size: 11, state: 'InProgress' },
+  ];
+  const upstream = createServer((req, res) => {
+    const url = req.url!;
+    if (req.method === 'DELETE' && url.includes('/transfers/downloads/')) {
+      deletedTransfers.push(url);
+      res.writeHead(204).end();
+      return;
+    }
+    res.setHeader('content-type', 'application/json');
+    if (url.endsWith('/transfers/downloads')) res.end(JSON.stringify(transfers));
+    else res.end(JSON.stringify({}));
+  });
+  await new Promise<void>(resolve => upstream.listen(0, '127.0.0.1', resolve));
+  t.after(() => {
+    upstream.close();
+    closeStateDatabases();
+    rmSync(directory, { recursive: true, force: true });
+  });
+
+  Object.assign(process.env, {
+    DATA_DIR: directory, DOWNLOADS_PATH: downloads, MUSIC_PATH: library, SLSKD_API_KEY: 'fixture',
+    SLSKD_URL: 'http://127.0.0.1:' + (upstream.address() as { port: number }).port,
+  });
+  ensureMusicTables();
+  const db = stateDatabase();
+  const now = new Date().toISOString();
+  db.prepare('INSERT INTO playlists (id,profile_id,name,created_at,updated_at) VALUES (?,?,?,?,?)').run('p1', 'owner', 'Mix', now, now);
+  db.prepare(`INSERT INTO playlist_tracks
+    (id,playlist_id,title,artist,album,status,username,filename,transfer_size,created_at)
+    VALUES ('t1','p1','Track','Artist','Cleanup Album','downloading','peer1',?,?,?)`).run(filename, size, now);
+  db.prepare(`INSERT INTO playlist_tracks
+    (id,playlist_id,title,artist,album,status,username,filename,transfer_size,created_at)
+    VALUES ('t2','p1','Still Downloading','Artist','Active Album','downloading','peer3','Shared\\Active Album\\02 - Still Downloading.wav',11,?)`).run(now);
+
+  await monitorActiveDownloads();
+  assert.equal(existsSync(source), false);
+  assert.equal(existsSync(sourceDir), false);
+  assert.ok(deletedTransfers.some(u => u.includes('/peer1/tx-done?remove=true')));
+
+  // Simulate a leftover file from a previous completed import before cleanup existed
+  mkdirSync(sourceDir, { recursive: true });
+  writeFileSync(source, Buffer.alloc(size));
+  const summary = await cleanupStaleMusicDownloads();
+  assert.equal(existsSync(source), false);
+  assert.equal(existsSync(sourceDir), false);
+  assert.equal(existsSync(staleDir), false);
+  assert.equal(existsSync(brokenFile), false);
+  assert.equal(existsSync(join(downloads, 'Broken Album')), false);
+  assert.equal(existsSync(activeFile), true);
+  assert.equal(existsSync(downloads), true);
+  assert.ok(summary.removedFiles >= 2);
+  assert.ok(summary.removedDirs >= 2);
+  assert.ok(deletedTransfers.some(u => u.includes('/peer2/tx-stale?remove=true')));
+  assert.ok(!deletedTransfers.some(u => u.includes('tx-active')));
 });

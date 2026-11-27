@@ -23,7 +23,7 @@ export function resolveDefaultProfileId(): string {
   return '76a8becc30804c2fb4914e6a6edeb2e2';
 }
 
-let dbInitialized = false;
+let initializedDb: unknown = null;
 
 function seedNathanProfileMusic(db: any) {
   try {
@@ -44,9 +44,9 @@ function seedNathanProfileMusic(db: any) {
 }
 
 export function ensureMusicTables() {
-  if (dbInitialized) return;
   try {
     const db = stateDatabase();
+    if (initializedDb === db) return;
     db.exec(`
       CREATE TABLE IF NOT EXISTS music_albums (
         id TEXT PRIMARY KEY,
@@ -171,7 +171,7 @@ export function ensureMusicTables() {
       db.exec('ALTER TABLE music_download_jobs ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0');
     }
     seedNathanProfileMusic(db);
-    dbInitialized = true;
+    initializedDb = db;
   } catch (err) {
     console.warn('[music] Table initialization failed:', err);
   }
@@ -1429,8 +1429,169 @@ function copyDownloadedFile(source: string, dest: string) {
   }
 }
 
-function removeImportedSource(source: string) {
-  try { fs.unlinkSync(source); } catch (error) { console.warn('[music] Could not remove imported source:', error); }
+function pruneEmptyDirs(dir: string, root: string) {
+  try {
+    if (!fs.existsSync(root)) return;
+    const rootReal = fs.realpathSync(root);
+    let current = path.resolve(dir);
+    while (current !== rootReal && current.startsWith(rootReal + path.sep)) {
+      const entries = fs.readdirSync(current);
+      for (const entry of entries) {
+        if (entry.startsWith('.homestream-broken-')) {
+          try { fs.unlinkSync(path.join(current, entry)); } catch {}
+        }
+      }
+      if (fs.readdirSync(current).length > 0) break;
+      fs.rmdirSync(current);
+      current = path.dirname(current);
+    }
+  } catch { /* ignore races or permission errors */ }
+}
+
+function removeImportedSource(source: string, downloadsRoot = getDownloadsPath()) {
+  try { fs.unlinkSync(source); } catch (error: any) {
+    if (error?.code !== 'ENOENT') console.warn('[music] Could not remove imported source:', error);
+  }
+  pruneEmptyDirs(path.dirname(source), downloadsRoot);
+}
+
+function getActiveTransferKeys(db: any): Set<string> {
+  const active = new Set<string>();
+  const activeAlbums = db.prepare("SELECT username, files_json FROM music_requests WHERE status IN ('downloading', 'importing')").all() as Array<{ username?: string; files_json?: string }>;
+  for (const req of activeAlbums) {
+    if (!req.username || !req.files_json) continue;
+    try {
+      const files = JSON.parse(req.files_json) as Array<{ filename?: string }>;
+      for (const f of files) {
+        if (f?.filename) active.add(`${req.username}\0${f.filename}`);
+      }
+    } catch {}
+  }
+  const activeTracks = db.prepare("SELECT username, filename FROM playlist_tracks WHERE status IN ('downloading', 'importing')").all() as Array<{ username?: string; filename?: string }>;
+  for (const t of activeTracks) {
+    if (t.username && t.filename) active.add(`${t.username}\0${t.filename}`);
+  }
+  return active;
+}
+
+async function cleanupCompletedTransfers(slskd: SlskdClient, transfers: SlskdTransfer[]) {
+  if (!transfers.length || !slskd.isConfigured()) return;
+  const active = getActiveTransferKeys(stateDatabase());
+  for (const transfer of transfers) {
+    if (!isTransferSucceeded(transfer.status)) continue;
+    if (active.has(`${transfer.username}\0${transfer.filename}`)) continue;
+    await slskd.removeDownload(transfer.username, transfer.id).catch(() => {});
+  }
+}
+
+function walkAndPruneDownloads(dir: string, rootReal: string): { removedFiles: number; removedDirs: number } {
+  let removedFiles = 0;
+  let removedDirs = 0;
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return { removedFiles, removedDirs };
+  }
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      const sub = walkAndPruneDownloads(full, rootReal);
+      removedFiles += sub.removedFiles;
+      removedDirs += sub.removedDirs;
+    } else if (entry.isFile() && entry.name.startsWith('.homestream-broken-')) {
+      try {
+        fs.unlinkSync(full);
+        removedFiles++;
+      } catch {}
+    }
+  }
+  if (dir !== rootReal) {
+    try {
+      if (fs.readdirSync(dir).length === 0) {
+        fs.rmdirSync(dir);
+        removedDirs++;
+      }
+    } catch {}
+  }
+  return { removedFiles, removedDirs };
+}
+
+/**
+ * Clean up leftover downloaded files, quarantine files, empty directories,
+ * and completed slskd transfers from prior imports.
+ */
+export async function cleanupStaleMusicDownloads(): Promise<{ removedFiles: number; removedDirs: number; removedTransfers: number }> {
+  ensureMusicTables();
+  const db = stateDatabase();
+  const downloadsRoot = getDownloadsPath();
+  let removedFiles = 0;
+  let removedDirs = 0;
+  let removedTransfers = 0;
+
+  const activeKeys = getActiveTransferKeys(db);
+
+  if (fs.existsSync(downloadsRoot)) {
+    const completedAlbums = db.prepare("SELECT username, files_json FROM music_requests WHERE status='available' AND files_json IS NOT NULL").all() as Array<{ username?: string; files_json: string }>;
+    for (const req of completedAlbums) {
+      try {
+        const files = JSON.parse(req.files_json) as Array<{ filename: string; size: number }>;
+        for (const f of files) {
+          if (req.username && activeKeys.has(`${req.username}\0${f.filename}`)) continue;
+          const source = findDownloadedFile(downloadsRoot, f.filename, f.size);
+          if (source) {
+            removeImportedSource(source, downloadsRoot);
+            removedFiles++;
+          }
+        }
+      } catch {}
+    }
+
+    const completedTracks = db.prepare(`
+      SELECT pt.username, pt.filename, pt.transfer_size, mt.file_path
+      FROM playlist_tracks pt
+      JOIN music_tracks mt ON mt.id = pt.track_id
+      WHERE pt.status = 'completed' AND pt.filename IS NOT NULL
+    `).all() as Array<{ username?: string; filename: string; transfer_size?: number; file_path: string }>;
+    for (const t of completedTracks) {
+      if (t.username && activeKeys.has(`${t.username}\0${t.filename}`)) continue;
+      if (!t.file_path || !fs.existsSync(t.file_path)) continue;
+      const size = Number(t.transfer_size) || 0;
+      const source = size > 0 ? findDownloadedFile(downloadsRoot, t.filename, size) : undefined;
+      if (source) {
+        removeImportedSource(source, downloadsRoot);
+        removedFiles++;
+      }
+    }
+
+    try {
+      const rootReal = fs.realpathSync(downloadsRoot);
+      const pruned = walkAndPruneDownloads(rootReal, rootReal);
+      removedFiles += pruned.removedFiles;
+      removedDirs += pruned.removedDirs;
+    } catch {}
+  }
+
+  const slskd = new SlskdClient();
+  if (slskd.isConfigured()) {
+    const downloads = await slskd.getAllDownloads().catch(() => null);
+    if (downloads) {
+      for (const transfer of downloads) {
+        if (!isTransferSucceeded(transfer.status)) continue;
+        if (activeKeys.has(`${transfer.username}\0${transfer.filename}`)) continue;
+        const stillOnDisk = Boolean(findDownloadedFile(downloadsRoot, transfer.filename, transfer.size));
+        if (!stillOnDisk) {
+          const ok = await slskd.removeDownload(transfer.username, transfer.id).catch(() => false);
+          if (ok) removedTransfers++;
+        }
+      }
+    }
+  }
+
+  if (removedFiles || removedDirs || removedTransfers) {
+    console.log(`[music] Cleaned up stale downloads: ${removedFiles} files, ${removedDirs} empty dirs, ${removedTransfers} slskd transfers`);
+  }
+  return { removedFiles, removedDirs, removedTransfers };
 }
 
 const SEARCH_RETRY_MS = 15 * 60_000;
@@ -1439,7 +1600,8 @@ const MISSING_TRANSFER_MS = 60_000;
 const STALLED_TRANSFER_MS = 30 * 60_000;
 const REMOTE_QUEUE_MS = 6 * 60 * 60_000;
 const MAX_ACTIVE_PLAYLIST_DOWNLOADS = 50;
-const MAX_CONCURRENT_SEARCHES = 5;
+const MAX_CONCURRENT_SEARCHES = 1;
+const SEARCH_PACING_MS = 3000;
 const runMediaCheck = promisify(execFile);
 type DownloadTable = 'music_requests' | 'playlist_tracks';
 
@@ -1558,6 +1720,7 @@ export function startDownloadMonitor() {
     }
   }, 6000);
   downloadMonitorInterval.unref();
+  void cleanupStaleMusicDownloads().catch(error => console.warn('[music] Initial download cleanup failed:', error));
   processNextPlaylistTrack();
 }
 
@@ -1612,6 +1775,7 @@ export async function monitorActiveDownloads() {
           db.prepare(`UPDATE ${table} SET status='importing' WHERE id=?`).run(job.id);
           if (album) await importDownloadedAlbum(job, files);
           else await importDownloadedPlaylistTrack(job, transfers[0]?.size || files[0].size);
+          await cleanupCompletedTransfers(slskd, observed);
         } catch (error: any) {
           console.warn('[music] Import could not finish:', error.message);
           if (error instanceof BrokenDownload || (error instanceof MissingDownload && age >= MISSING_TRANSFER_MS)) {
@@ -2208,7 +2372,7 @@ export async function importSpotifyPlaylists(
 
 /**
  * Rate-limited queue worker for Soulseek playlist track searches and downloads.
- * Ensures max 2 concurrent searches with pacing delay to protect slskd and Soulseek network.
+ * Ensures max 1 concurrent search with a 3s pacing delay to protect slskd and Soulseek network.
  */
 export function processNextPlaylistTrack(): void {
   if (!new SlskdClient().isConfigured()) return;
@@ -2239,7 +2403,7 @@ export function processNextPlaylistTrack(): void {
       const pacing = setTimeout(() => {
         activeSearches = Math.max(0, activeSearches - 1);
         if (downloadMonitorInterval) processNextPlaylistTrack();
-      }, 500);
+      }, SEARCH_PACING_MS);
       pacing.unref();
     });
   }

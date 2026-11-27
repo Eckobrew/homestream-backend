@@ -160,4 +160,8 @@ export class SlskdClient {
     );
     return res.status === 200 || res.status === 204 || res.status === 404;
   }
+
+  async removeDownload(username: string, transferId: string): Promise<boolean> {
+    return this.cancelDownload(username, transferId);
+  }
 }

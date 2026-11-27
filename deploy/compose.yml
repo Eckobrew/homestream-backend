@@ -31,7 +31,7 @@ services:
       DOWNLOADS_PATH: /downloads
     volumes:
       - ${HOMESTREAM_DATA_PATH:-../data}:/app/data
-      - ${HOMESTREAM_DOWNLOADS_PATH:-/mnt/downloads}:/downloads:ro
+      - ${HOMESTREAM_DOWNLOADS_PATH:-/mnt/downloads}:/downloads
     # Optional direct pairing: set this to the host's LAN IP, never a public address.
     ports:
       - "${HOMESTREAM_PAIRING_BIND:-127.0.0.1}:3001:3001"
