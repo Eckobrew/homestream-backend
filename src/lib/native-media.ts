@@ -896,7 +896,6 @@ export async function scanNativeLibraries(libraryId?: string): Promise<ScanStatu
             const existingFile = db
               .prepare('SELECT id, item_id, file_size, file_mtime_ms, nfo_mtime_ms, library_id, source_revision, manual_skip_json, skip_preview_json, trickplay_vtt_path FROM native_media_files WHERE file_path = ?')
               .get(filePath) as { id: string; item_id: string; file_size: number; file_mtime_ms?: number; nfo_mtime_ms?: number; library_id?: string; source_revision?: number; manual_skip_json?: string | null; skip_preview_json?: string | null; trickplay_vtt_path?: string | null } | undefined;
-            const nfo = lib.preferNfo ? readNativeNfo(filePath) : {};
             const nfoMtimeMs = lib.preferNfo ? getNfoMtimeMs(filePath) : 0;
             const videoChanged = !existingFile || existingFile.file_size !== stat.size || (existingFile.file_mtime_ms || 0) !== mtimeMs;
             const nfoChanged = Boolean(existingFile && nfoMtimeMs > 0 && nfoMtimeMs !== (existingFile.nfo_mtime_ms || 0));
@@ -906,13 +905,12 @@ export async function scanNativeLibraries(libraryId?: string): Promise<ScanStatu
                   .run(lib.id, nfoMtimeMs, existingFile.id);
               }
               if (nfoChanged) {
+                const nfo = lib.preferNfo ? readNativeNfo(filePath) : {};
                 applyNfoUpdatePreservingManual(db, existingFile.item_id, nfo);
-              } else if (nfo.rating) {
-                db.prepare("UPDATE native_media_items SET rating = ? WHERE id = ? AND COALESCE(rating, '') = ''")
-                  .run(nfo.rating, existingFile.item_id);
               }
               continue;
             }
+            const nfo = lib.preferNfo ? readNativeNfo(filePath) : {};
 
             const probe = await probeMediaFile(filePath);
             const nfoTmdb = nfo.tmdbId;
